@@ -63,6 +63,9 @@ class CalculationBridge(QObject):
         # Prepare worker CLI script path
         worker_script = os.path.join(STUDIO_DIR, "backend", "worker_cli.py")
         python_exe = sys.executable
+        venv_py = os.path.join(GUI_ROOT, ".venv", "Scripts", "python.exe")
+        if os.path.isfile(venv_py) and ".venv" not in python_exe:
+            python_exe = venv_py
 
         # Serialize params to Base64 JSON (safe across all OS command line interpreters)
         json_bytes = json.dumps(params).encode("utf-8")

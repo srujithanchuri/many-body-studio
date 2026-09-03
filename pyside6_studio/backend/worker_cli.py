@@ -19,6 +19,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+# 1. Force UTF-8 line-buffered stdout/stderr to prevent cp1252 Greek char crashes
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+
 # Ensure project roots are on sys.path
 PROJECT_ROOT = r"C:\Users\sruji\Projects\masters_thesis"
 GUI_ROOT = r"C:\Users\sruji\Projects\masters_thesis_gui"
@@ -39,6 +45,9 @@ except Exception:
         sys.path.insert(0, SE_DIR)
 
 from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
+from pyside6_studio.backend.cuda_env import init_cuda_environment
+
+init_cuda_environment()
 
 
 def emit_status(step_desc: str, phase: str = "running"):
@@ -303,6 +312,176 @@ def run_spectral_function_task(params: dict, out_plots_dir: str, out_data_dir: s
     emit_completed(plot_path=plot_file)
 
 
+def run_phase_diagram_task(params: dict, out_plots_dir: str, out_data_dir: str):
+    """Executes Phase Boundary Bisection Search det[1 - Gamma(q)*chi0(q)] = 0 across the BZ."""
+    mu = float(params.get("mu", 1.0))
+    t = float(params.get("t", 1.0))
+    t1 = float(params.get("t1", 0.0))
+    K = float(params.get("K", 1.0))
+    N = int(params.get("N", 64))
+
+    jk_min = float(params.get("JK_min", params.get("jk_min", 0.0)))
+    jk_max = float(params.get("JK_max", params.get("jk_max", 12.0)))
+    jk_pts = int(params.get("JK_pts", params.get("jk_pts", 200)))
+
+    raw_solver = str(params.get("solver_choice", "gpu")).lower()
+    solver_choice = "cpu" if "cpu" in raw_solver else "gpu64"
+    cpu_limit_str = str(params.get("cpu_limit", "80%")).rstrip("%")
+    try:
+        cpu_limit = float(cpu_limit_str) / 100.0
+    except Exception:
+        cpu_limit = 0.80
+
+    backend_label = "NVIDIA RTX 5060 GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    emit_status(f"Configuring Phase Diagram on {backend_label}: μ={mu}, t={t}, K={K}, N={N}×{N}, JK=[{jk_min:.1f} .. {jk_max:.1f}] ({jk_pts} pts)")
+
+    SUSC_DIR = os.path.join(PROJECT_ROOT, "susceptibility")
+    if SUSC_DIR in sys.path:
+        sys.path.remove(SUSC_DIR)
+    sys.path.insert(0, SUSC_DIR)
+    if "solvers" in sys.modules:
+        del sys.modules["solvers"]
+
+    if solver_choice == "cpu":
+        try:
+            from solvers import set_cpu_threads
+            total = os.cpu_count() or 4
+            workers = max(1, int(round(total * cpu_limit)))
+            set_cpu_threads(workers)
+            emit_status(f"Allocated {workers} of {total} CPU cores for Numba parallel execution.")
+        except Exception:
+            pass
+
+    import phase_diagram
+
+    base_out_dir = os.path.dirname(out_plots_dir)
+    emit_status(f"Solving exact critical boundary instability condition on {backend_label}...")
+
+    def on_status(msg):
+        emit_status(f"{msg}")
+
+    phase_diagram.run_phase_diagram(
+        mu=mu,
+        t=t,
+        t1=t1,
+        K_coupling=K,
+        N=N,
+        JK_min=jk_min,
+        JK_max=jk_max,
+        JK_pts=jk_pts,
+        solver_choice=solver_choice,
+        output_dir=base_out_dir,
+        status_callback=on_status
+    )
+
+    k_tag = "AFM" if K > 0 else "FM"
+    plot_file = os.path.join(out_plots_dir, f"phase_diagram_mu{mu:.2f}_{k_tag}.png")
+    data_file = os.path.join(out_data_dir, f"phase_diagram_mu{mu:.2f}_{k_tag}.npz")
+
+    emit_status("Phase Diagram calculation completed successfully.")
+    emit_completed(plot_path=plot_file if os.path.exists(plot_file) else "", data_path=data_file if os.path.exists(data_file) else "")
+
+
+def run_susceptibility_task(params: dict, out_plots_dir: str, out_data_dir: str):
+    """Executes 2D Static & Dynamic RPA Spin Susceptibility calculations."""
+    mu = float(params.get("mu", 1.0))
+    t = float(params.get("t", 1.0))
+    t1 = float(params.get("t1", 0.0))
+    K = float(params.get("K", 1.0))
+    N = int(params.get("N", 64))
+    num_omega = int(params.get("num_omega", params.get("Nw", 600)))
+    omega_max = float(params.get("omega_max", params.get("w_max", 10.0)))
+    eta = float(params.get("eta", 0.01))
+
+    run_static = bool(params.get("run_static", True))
+    run_dynamic = bool(params.get("run_dynamic", True))
+
+    sweep_mode = params.get("susc_sweep_mode", "JK")
+    sweep_vals = params.get("susc_sweep_vals", [3.0, 6.0, 9.0])
+    if isinstance(sweep_vals, str):
+        sweep_vals = [float(x.strip()) for x in sweep_vals.split(",") if x.strip()]
+
+    fixed_J = float(params.get("fixed_J", 6.0)) if sweep_mode == "JK" else None
+    fixed_JK = float(params.get("fixed_JK", 3.0)) if sweep_mode in ["J", "J_perp"] else None
+
+    raw_solver = str(params.get("solver_choice", "gpu")).lower()
+    solver_choice = "cpu" if "cpu" in raw_solver else "gpu64"
+    cpu_limit_str = str(params.get("cpu_limit", "80%")).rstrip("%")
+    try:
+        cpu_limit = float(cpu_limit_str) / 100.0
+    except Exception:
+        cpu_limit = 0.80
+
+    backend_label = "NVIDIA RTX 5060 GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    modes_str = []
+    if run_static: modes_str.append("Static χ(q)")
+    if run_dynamic: modes_str.append("Dynamic χ(q,ω)")
+    emit_status(f"Configuring RPA Susceptibility ({' + '.join(modes_str)}) on {backend_label}: N={N}×{N}, Nw={num_omega}, values={sweep_vals}")
+
+    SUSC_DIR = os.path.join(PROJECT_ROOT, "susceptibility")
+    if SUSC_DIR in sys.path:
+        sys.path.remove(SUSC_DIR)
+    sys.path.insert(0, SUSC_DIR)
+    if "solvers" in sys.modules:
+        del sys.modules["solvers"]
+
+    if solver_choice == "cpu":
+        try:
+            from solvers import set_cpu_threads
+            total = os.cpu_count() or 4
+            workers = max(1, int(round(total * cpu_limit)))
+            set_cpu_threads(workers)
+            emit_status(f"Allocated {workers} of {total} CPU cores for Numba parallel execution.")
+        except Exception:
+            pass
+
+    import sweeper
+
+    base_out_dir = os.path.dirname(out_plots_dir)
+
+    def on_status(msg):
+        emit_status(f"{msg}")
+
+    sweeper.run_sweep(
+        run_static=run_static,
+        run_dynamic=run_dynamic,
+        sweep_mode=sweep_mode,
+        sweep_values=sweep_vals,
+        fixed_J=fixed_J,
+        fixed_JK=fixed_JK,
+        mu=mu,
+        t=t,
+        t1=t1,
+        K_coupling=K,
+        N=N,
+        omega_max=omega_max,
+        num_omegas=num_omega,
+        eta=eta,
+        solver_choice=solver_choice,
+        output_dir=base_out_dir,
+        status_callback=on_status
+    )
+
+    fixed_str = f"J_{fixed_J}" if sweep_mode == "JK" else f"JK_{fixed_JK}"
+    filename_base = f"sweep_{sweep_mode}_fixed_{fixed_str}_mu_{mu:.2f}"
+    static_plot = os.path.join(out_plots_dir, f"{filename_base}_static.png")
+    dynamic_plot = os.path.join(out_plots_dir, f"{filename_base}_dynamic.png")
+
+    all_plots = []
+    if os.path.exists(static_plot):
+        all_plots.append(static_plot)
+    if os.path.exists(dynamic_plot):
+        all_plots.append(dynamic_plot)
+
+    static_data = os.path.join(out_data_dir, f"{filename_base}_static.npz")
+    dynamic_data = os.path.join(out_data_dir, f"{filename_base}_dynamic.npz")
+    primary_data = static_data if os.path.exists(static_data) else (dynamic_data if os.path.exists(dynamic_data) else "")
+
+    primary_plot = static_plot if os.path.exists(static_plot) else (dynamic_plot if os.path.exists(dynamic_plot) else "")
+    emit_status("RPA Susceptibility calculation completed successfully.")
+    emit_completed(plot_path=primary_plot, data_path=primary_data, all_plots=all_plots)
+
+
 def run_worker(params: dict):
     """Dispatches requested calculation task."""
     task = params.get("task", "spectral_sweep").lower()
@@ -316,7 +495,11 @@ def run_worker(params: dict):
     os.makedirs(out_data_dir, exist_ok=True)
 
     try:
-        if "function" in task or "a(k" in task or "spec" in task and "sweep" not in task:
+        if "phase" in task or "diagram" in task or "bisection" in task:
+            run_phase_diagram_task(params, out_plots_dir, out_data_dir)
+        elif "susc" in task or "rpa" in task or "chi" in task:
+            run_susceptibility_task(params, out_plots_dir, out_data_dir)
+        elif "function" in task or "a(k" in task or ("spec" in task and "sweep" not in task):
             run_spectral_function_task(params, out_plots_dir, out_data_dir)
         else:
             run_spectral_sweep_task(params, out_plots_dir, out_data_dir)

@@ -509,7 +509,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h_min = QHBoxLayout(); h_min.addWidget(QLabel("J_K min:")); h_min.addStretch(); self.s_min = QDoubleSpinBox(); self.s_min.setValue(0.0); self.s_min.setFixedWidth(100); h_min.addWidget(self.s_min); gpd.addLayout(h_min)
         h_max = QHBoxLayout(); h_max.addWidget(QLabel("J_K max:")); h_max.addStretch(); self.s_max = QDoubleSpinBox(); self.s_max.setValue(12.0); self.s_max.setFixedWidth(100); h_max.addWidget(self.s_max); gpd.addLayout(h_max)
         h_pts = QHBoxLayout(); h_pts.addWidget(QLabel("Points:")); h_pts.addStretch(); self.s_pts = QSpinBox(); self.s_pts.setValue(200); self.s_pts.setFixedWidth(100); h_pts.addWidget(self.s_pts); gpd.addLayout(h_pts)
-        btn_pre = QPushButton("⚡ Precompute Bare χ₀ (Bubble)"); btn_pre.clicked.connect(lambda: QMessageBox.information(self, "Precompute", "Precomputed bare bubble χ₀ on GPU!"))
+        btn_pre = QPushButton("⚡ Precompute Bare χ₀ (Bubble)")
+        btn_pre.clicked.connect(self._on_precompute_bubble)
         gpd.addWidget(btn_pre)
         self.param_stack.addWidget(grp_pd)
 
@@ -1184,16 +1185,80 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "spec_custom_k": self.edit_custom_k.text().strip(),
                 "spec_plot_mode": self.cb_layout.currentText()
             }
+        elif self.active_study == self.STUDY_PD:
+            params = {
+                **common_params,
+                "task": "phase_diagram",
+                "JK_min": float(self.s_min.value()),
+                "JK_max": float(self.s_max.value()),
+                "JK_pts": int(self.s_pts.value())
+            }
+
+        elif self.active_study == self.STUDY_SUSC:
+            raw_sweep = self.edit_susc_vals.text().strip()
+            if not raw_sweep:
+                QMessageBox.warning(self, "Validation Error", "Susceptibility coupling values cannot be empty")
+                return
+            try:
+                sweep_vals = [float(x.strip()) for x in raw_sweep.split(",") if x.strip()]
+                if not sweep_vals:
+                    raise ValueError("No valid numeric values in sweep list")
+            except Exception as e:
+                QMessageBox.warning(self, "Validation Error", f"Invalid sweep values: {e}")
+                return
+
+            if not self.chk_static.isChecked() and not self.chk_dynamic.isChecked():
+                QMessageBox.warning(self, "Validation Error", "Please select at least one mode: Static χ(q) or Dynamic χ(q, ω)")
+                return
+
+            params = {
+                **common_params,
+                "task": "susceptibility",
+                "run_static": bool(self.chk_static.isChecked()),
+                "run_dynamic": bool(self.chk_dynamic.isChecked()),
+                "susc_sweep_mode": "JK",
+                "susc_sweep_vals": sweep_vals,
+                "fixed_J": float(self.spin_se_fixed.value())
+            }
         else:
-            QMessageBox.information(
-                self, "Study Under Integration",
-                f"{self.active_study} parameters are staged. Full solver integration for this study will be wired in the next slice."
-            )
+            QMessageBox.warning(self, "Unknown Study", f"Unrecognized calculation study: {self.active_study}")
             return
 
         # Auto-switch bottom drawer to the Live Solver Console so logs are visible
         self.bottom_tabs.setCurrentIndex(1)
 
+        try:
+            self.bridge.start_calculation(params)
+        except RuntimeError as e:
+            QMessageBox.warning(self, "Execution Warning", str(e))
+
+    def _on_precompute_bubble(self):
+        """Precomputes and caches the bare bubble chi0 on the selected backend."""
+        if hasattr(self, "bridge") and self.bridge.is_running():
+            return
+        out_dir = self.edit_out_dir.text().strip() or os.path.join(GUI_ROOT, "results")
+        solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
+        cpu_limit = self.cb_cpu_limit.currentText().split()[0]
+        params = {
+            "task": "susceptibility",
+            "solver_choice": solver_choice,
+            "cpu_limit": cpu_limit,
+            "t": float(self.spin_t.value()),
+            "t1": float(self.spin_t1.value()),
+            "mu": float(self.spin_mu.value()),
+            "K": float(self.spin_k.value()),
+            "N": int(self.spin_n.value()),
+            "num_omega": int(self.spin_nw.value()),
+            "omega_max": float(self.spin_wmax.value()),
+            "eta": float(self.spin_eta.value()),
+            "output_dir": out_dir,
+            "run_static": True,
+            "run_dynamic": False,
+            "susc_sweep_mode": "JK",
+            "susc_sweep_vals": [1.0],
+            "fixed_J": 6.0
+        }
+        self.bottom_tabs.setCurrentIndex(1)
         try:
             self.bridge.start_calculation(params)
         except RuntimeError as e:
