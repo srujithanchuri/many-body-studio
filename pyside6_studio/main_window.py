@@ -15,7 +15,7 @@ import sys
 import os
 import time
 import glob
-from PySide6.QtCore import Qt, QTimer, Slot, QObject, QEvent
+from PySide6.QtCore import Qt, QTimer, Slot, QObject, QEvent, QSize
 from PySide6.QtGui import QAction, QIcon, QPixmap, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QMenu, QStackedWidget, QCheckBox, QScrollArea, QFrame, QSizePolicy
 )
 
-from pyside6_studio.theme import LIGHT_THEME_QSS, DARK_THEME_QSS
+from pyside6_studio.theme import LIGHT_THEME_QSS, DARK_THEME_QSS, create_light_palette, create_dark_palette
 from pyside6_studio.canvas import InteractivePlotCanvas
 from pyside6_studio.backend.bridge import CalculationBridge
 from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
@@ -57,6 +57,20 @@ def get_available_plots(output_dir=None):
     return plots
 
 
+class ModernCard(QGroupBox):
+    """QGroupBox that allows its width to shrink down gracefully without long title text inflating minimumSizeHint."""
+    def minimumSizeHint(self):
+        sz = super().minimumSizeHint()
+        return QSize(min(sz.width(), 240), sz.height())
+
+
+class ModernComboBox(QComboBox):
+    """QComboBox that allows fluid resizing without long text items inflating minimumSizeHint."""
+    def minimumSizeHint(self):
+        sz = super().minimumSizeHint()
+        return QSize(min(sz.width(), 140), sz.height())
+
+
 class DynamicStackedWidget(QStackedWidget):
     """QStackedWidget that reports sizeHint dynamically based on current active page."""
     def sizeHint(self):
@@ -68,7 +82,8 @@ class DynamicStackedWidget(QStackedWidget):
     def minimumSizeHint(self):
         curr = self.currentWidget()
         if curr:
-            return curr.minimumSizeHint()
+            sz = curr.minimumSizeHint()
+            return QSize(min(sz.width(), 240), sz.height())
         return super().minimumSizeHint()
 
 
@@ -114,6 +129,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         app_inst = QApplication.instance()
         if app_inst:
             app_inst.installEventFilter(self.wheel_filter)
+            app_inst.setPalette(create_light_palette())
+            app_inst.setStyleSheet(LIGHT_THEME_QSS)
 
         self.plots = get_available_plots()
         self.is_dark = False
@@ -149,10 +166,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         # Ensure docks start with proper comfortable widths & compact bottom height
         self.resizeDocks([self.dock_bottom], [150], Qt.Vertical)
-        self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 380], Qt.Horizontal)
+        self.resizeDocks([self.dock_nav, self.dock_inspector], [240, 360], Qt.Horizontal)
         QTimer.singleShot(0, lambda: (
             self.resizeDocks([self.dock_bottom], [150], Qt.Vertical),
-            self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 380], Qt.Horizontal)
+            self.resizeDocks([self.dock_nav, self.dock_inspector], [240, 360], Qt.Horizontal)
         ))
 
         # Wire Output Directory text change to dynamically re-populate datasets & plots
@@ -247,7 +264,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.central_container = QWidget()
         self.central_container.setObjectName("CentralWidget")
         layout = QVBoxLayout(self.central_container)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(4, 4, 4, 4)
 
         self.view_splitter = QSplitter(Qt.Horizontal)
 
@@ -271,13 +288,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _build_navigator_dock(self):
         self.dock_nav = QDockWidget("🧭 Study Navigator & Datasets", self)
         self.dock_nav.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        self.dock_nav.setMinimumWidth(260)
+        self.dock_nav.setMinimumWidth(220)
 
         self.nav_stack = QStackedWidget()
 
         # PAGE 1: Simulation Studies Tree
         p_sim = QWidget()
-        l_sim = QVBoxLayout(p_sim); l_sim.setContentsMargins(8, 8, 8, 8)
+        l_sim = QVBoxLayout(p_sim); l_sim.setContentsMargins(4, 4, 4, 4)
         lbl_hint = QLabel("Select active study to configure or past result to view:")
         lbl_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_sim.addWidget(lbl_hint)
@@ -303,13 +320,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         # PAGE 2: Publication Figure Layout Assigner
         p_pub = QWidget()
-        l_pub = QVBoxLayout(p_pub); l_pub.setContentsMargins(8, 8, 8, 8)
+        l_pub = QVBoxLayout(p_pub); l_pub.setContentsMargins(4, 4, 4, 4)
 
-        grp_panels = QGroupBox("Multi-Panel Dataset Assignment")
+        grp_panels = ModernCard("Multi-Panel Dataset Assignment")
         gp_lay = QVBoxLayout(grp_panels)
 
         gp_lay.addWidget(QLabel("Layout Template:"))
-        self.cb_pub_template = QComboBox()
+        self.cb_pub_template = ModernComboBox()
         self.cb_pub_template.addItems([
             "3-Panel Row [DOS (a) | Fermi Surface (b) | Path (c)]",
             "2-Panel Comparison [Static χ(q) | Dynamic χ(q, ω)]",
@@ -320,16 +337,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gp_lay.addWidget(self.cb_pub_template)
 
         gp_lay.addWidget(QLabel("\nPanel (a) Data Source:"))
-        self.cb_panel_a = QComboBox(); self.cb_panel_a.addItems(list(self.plots.keys()))
+        self.cb_panel_a = ModernComboBox(); self.cb_panel_a.addItems(list(self.plots.keys()))
         gp_lay.addWidget(self.cb_panel_a)
 
         gp_lay.addWidget(QLabel("Panel (b) Data Source:"))
-        self.cb_panel_b = QComboBox(); self.cb_panel_b.addItems(list(self.plots.keys()))
+        self.cb_panel_b = ModernComboBox(); self.cb_panel_b.addItems(list(self.plots.keys()))
         if len(self.plots) > 1: self.cb_panel_b.setCurrentIndex(1)
         gp_lay.addWidget(self.cb_panel_b)
 
         gp_lay.addWidget(QLabel("Panel (c) Data Source:"))
-        self.cb_panel_c = QComboBox(); self.cb_panel_c.addItems(list(self.plots.keys()))
+        self.cb_panel_c = ModernComboBox(); self.cb_panel_c.addItems(list(self.plots.keys()))
         if len(self.plots) > 2: self.cb_panel_c.setCurrentIndex(2)
         gp_lay.addWidget(self.cb_panel_c)
 
@@ -351,27 +368,27 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _build_inspector_dock(self):
         self.dock_inspector = QDockWidget("⚙️ Parameter Inspector", self)
         self.dock_inspector.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        self.dock_inspector.setMinimumWidth(380)
+        self.dock_inspector.setMinimumWidth(340)
 
         # Wrap in QScrollArea so cards never overlap or clip beneath the bottom execution center
         self.inspector_scroll = QScrollArea()
         self.inspector_scroll.setWidgetResizable(True)
         self.inspector_scroll.setFrameShape(QFrame.NoFrame)
         self.inspector_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.inspector_scroll.setMinimumWidth(360)
+        self.inspector_scroll.setMinimumWidth(320)
 
         self.inspector_stack = QStackedWidget()
 
         # PAGE 1: Simulation Parameter Inspector
         panel_sim = QWidget()
         lay_sim = QVBoxLayout(panel_sim)
-        lay_sim.setContentsMargins(8, 8, 8, 8)
-        lay_sim.setSpacing(6)
+        lay_sim.setContentsMargins(4, 4, 4, 4)
+        lay_sim.setSpacing(5)
 
         # 1. Active Study Switcher
-        grp_selector = QGroupBox("Active Calculation Study")
+        grp_selector = ModernCard("Active Calculation Study")
         sel_lay = QVBoxLayout(grp_selector)
-        self.cb_active_study = QComboBox()
+        self.cb_active_study = ModernComboBox()
         self.cb_active_study.setObjectName("StudyDropdown")
         self.cb_active_study.addItems([self.STUDY_SE, self.STUDY_SPEC, self.STUDY_PD, self.STUDY_SUSC])
         self.cb_active_study.currentTextChanged.connect(self.set_active_study)
@@ -383,13 +400,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.param_stack.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         # 2a. Spectral Sweep parameters
-        p_se = QWidget(); l_se = QVBoxLayout(p_se); l_se.setContentsMargins(0, 0, 0, 0); l_se.setSpacing(0)
-        grp_se = QGroupBox("Spectral Sweep (DOS / FS / Path) Parameters")
+        grp_se = ModernCard("Spectral Sweep (DOS / FS / Path) Parameters")
         grp_se.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         gse = QVBoxLayout(grp_se)
-        gse.setSpacing(4)
+        gse.setSpacing(5)
         gse.addWidget(QLabel("Sweep Target:"))
-        self.cb_se_mode = QComboBox()
+        self.cb_se_mode = ModernComboBox()
         self.cb_se_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
         self.cb_se_mode.currentIndexChanged.connect(self._on_se_sweep_mode_change)
         gse.addWidget(self.cb_se_mode)
@@ -398,34 +414,34 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.edit_se_vals = QLineEdit("3.0, 6.0, 9.0")
         gse.addWidget(self.edit_se_vals)
 
+        h_se_row = QHBoxLayout()
         self.lbl_se_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
         self.lbl_se_fixed.setStyleSheet("font-weight: 600;")
-        gse.addWidget(self.lbl_se_fixed)
+        h_se_row.addWidget(self.lbl_se_fixed)
+        h_se_row.addStretch()
 
-        self.lbl_se_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across columns")
-        self.lbl_se_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
-        gse.addWidget(self.lbl_se_fixed_desc)
-
-        h_se = QHBoxLayout()
         self.spin_se_fixed = QDoubleSpinBox()
         self.spin_se_fixed.setRange(0.0, 50.0)
         self.spin_se_fixed.setValue(6.0)
         self.spin_se_fixed.setSingleStep(0.5)
-        h_se.addWidget(self.spin_se_fixed)
-        gse.addLayout(h_se)
-        l_se.addWidget(grp_se)
-        l_se.addStretch()
-        self.param_stack.addWidget(p_se)
+        self.spin_se_fixed.setFixedWidth(100)
+        h_se_row.addWidget(self.spin_se_fixed)
+        gse.addLayout(h_se_row)
+
+        self.lbl_se_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across columns")
+        self.lbl_se_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.lbl_se_fixed_desc.setWordWrap(True)
+        gse.addWidget(self.lbl_se_fixed_desc)
+        self.param_stack.addWidget(grp_se)
 
         # 2b. Spectral Function A(k, omega) parameters
-        p_spec = QWidget(); l_spec = QVBoxLayout(p_spec); l_spec.setContentsMargins(0, 0, 0, 0); l_spec.setSpacing(0)
-        grp_spec = QGroupBox("Quasiparticle Spectral Function A(k, ω) & Self-Energy")
+        grp_spec = ModernCard("Quasiparticle Spectral Function A(k, ω) && Self-Energy")
         grp_spec.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         gsp = QVBoxLayout(grp_spec)
-        gsp.setSpacing(4)
+        gsp.setSpacing(5)
 
         gsp.addWidget(QLabel("Sweep Target:"))
-        self.cb_spec_mode = QComboBox()
+        self.cb_spec_mode = ModernComboBox()
         self.cb_spec_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
         self.cb_spec_mode.currentIndexChanged.connect(self._on_spec_sweep_mode_change)
         gsp.addWidget(self.cb_spec_mode)
@@ -434,22 +450,27 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.edit_spec_vals = QLineEdit("3.0, 6.0, 9.0")
         gsp.addWidget(self.edit_spec_vals)
 
+        h_spec_row = QHBoxLayout()
         self.lbl_spec_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
         self.lbl_spec_fixed.setStyleSheet("font-weight: 600;")
-        gsp.addWidget(self.lbl_spec_fixed)
-
-        self.lbl_spec_fixed_desc = QLabel("Constant value held fixed while sweeping coupling")
-        self.lbl_spec_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
-        gsp.addWidget(self.lbl_spec_fixed_desc)
+        h_spec_row.addWidget(self.lbl_spec_fixed)
+        h_spec_row.addStretch()
 
         self.spin_spec_fixed = QDoubleSpinBox()
         self.spin_spec_fixed.setRange(0.0, 50.0)
         self.spin_spec_fixed.setValue(6.0)
         self.spin_spec_fixed.setSingleStep(0.5)
-        gsp.addWidget(self.spin_spec_fixed)
+        self.spin_spec_fixed.setFixedWidth(100)
+        h_spec_row.addWidget(self.spin_spec_fixed)
+        gsp.addLayout(h_spec_row)
+
+        self.lbl_spec_fixed_desc = QLabel("Constant value held fixed while sweeping coupling")
+        self.lbl_spec_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.lbl_spec_fixed_desc.setWordWrap(True)
+        gsp.addWidget(self.lbl_spec_fixed_desc)
 
         gsp.addWidget(QLabel("Target Momentum (k):"))
-        self.cb_mom = QComboBox()
+        self.cb_mom = ModernComboBox()
         self.cb_mom.addItems([
             "Antinodal k_F (π, 0)",
             "Nodal k_F (π/2, π/2)",
@@ -471,40 +492,32 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.box_custom_k.setVisible(False)
 
         gsp.addWidget(QLabel("Observables Layout:"))
-        self.cb_layout = QComboBox()
+        self.cb_layout = ModernComboBox()
         self.cb_layout.addItems([
             "Both (Re Σ, A, Im Σ) [3 Panels]",
             "Self-Energy Only (Re Σ & Im Σ) [2 Panels]",
             "Spectral Function Only A(k, ω) [1 Panel]"
         ])
         gsp.addWidget(self.cb_layout)
-
-        l_spec.addWidget(grp_spec)
-        l_spec.addStretch()
-        self.param_stack.addWidget(p_spec)
+        self.param_stack.addWidget(grp_spec)
 
         # 2c. Phase Diagram parameters
-        p_pd = QWidget(); l_pd = QVBoxLayout(p_pd); l_pd.setContentsMargins(0, 0, 0, 0); l_pd.setSpacing(0)
-        grp_pd = QGroupBox("Phase Boundary Bisection Search")
+        grp_pd = ModernCard("Phase Boundary Bisection Search")
         grp_pd.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         gpd = QVBoxLayout(grp_pd)
-        gpd.setSpacing(4)
-        h_min = QHBoxLayout(); h_min.addWidget(QLabel("J_K min:")); s_min = QDoubleSpinBox(); s_min.setValue(0.0); h_min.addWidget(s_min); gpd.addLayout(h_min)
-        h_max = QHBoxLayout(); h_max.addWidget(QLabel("J_K max:")); s_max = QDoubleSpinBox(); s_max.setValue(12.0); h_max.addWidget(s_max); gpd.addLayout(h_max)
-        h_pts = QHBoxLayout(); h_pts.addWidget(QLabel("Points:")); s_pts = QSpinBox(); s_pts.setValue(200); h_pts.addWidget(s_pts)
-        gpd.addLayout(h_pts)
+        gpd.setSpacing(5)
+        h_min = QHBoxLayout(); h_min.addWidget(QLabel("J_K min:")); h_min.addStretch(); self.s_min = QDoubleSpinBox(); self.s_min.setValue(0.0); self.s_min.setFixedWidth(100); h_min.addWidget(self.s_min); gpd.addLayout(h_min)
+        h_max = QHBoxLayout(); h_max.addWidget(QLabel("J_K max:")); h_max.addStretch(); self.s_max = QDoubleSpinBox(); self.s_max.setValue(12.0); self.s_max.setFixedWidth(100); h_max.addWidget(self.s_max); gpd.addLayout(h_max)
+        h_pts = QHBoxLayout(); h_pts.addWidget(QLabel("Points:")); h_pts.addStretch(); self.s_pts = QSpinBox(); self.s_pts.setValue(200); self.s_pts.setFixedWidth(100); h_pts.addWidget(self.s_pts); gpd.addLayout(h_pts)
         btn_pre = QPushButton("⚡ Precompute Bare χ₀ (Bubble)"); btn_pre.clicked.connect(lambda: QMessageBox.information(self, "Precompute", "Precomputed bare bubble χ₀ on GPU!"))
         gpd.addWidget(btn_pre)
-        l_pd.addWidget(grp_pd)
-        l_pd.addStretch()
-        self.param_stack.addWidget(p_pd)
+        self.param_stack.addWidget(grp_pd)
 
         # 2d. Susceptibility parameters
-        p_susc = QWidget(); l_susc = QVBoxLayout(p_susc); l_susc.setContentsMargins(0, 0, 0, 0); l_susc.setSpacing(0)
-        grp_susc = QGroupBox("RPA Spin Susceptibility Modes")
+        grp_susc = ModernCard("RPA Spin Susceptibility Modes")
         grp_susc.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         gsusc = QVBoxLayout(grp_susc)
-        gsusc.setSpacing(4)
+        gsusc.setSpacing(6)
         self.chk_static = QCheckBox("Compute Static χ(q) (2D BZ Map)")
         self.chk_static.setChecked(True)
         gsusc.addWidget(self.chk_static)
@@ -514,20 +527,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gsusc.addWidget(QLabel("Coupling Values:"))
         self.edit_susc_vals = QLineEdit("3.0, 6.0, 9.0")
         gsusc.addWidget(self.edit_susc_vals)
-        l_susc.addWidget(grp_susc)
-        l_susc.addStretch()
-        self.param_stack.addWidget(p_susc)
+        self.param_stack.addWidget(grp_susc)
 
         lay_sim.addWidget(self.param_stack)
 
         # 3. Compute & Solver Backend Card (Matching Original GUI Architecture)
-        grp_solver = QGroupBox("Compute & Solver Backend")
+        grp_solver = ModernCard("Compute && Solver Backend")
         gsolv = QVBoxLayout(grp_solver)
         gsolv.setSpacing(4)
 
         h_solv = QHBoxLayout()
         h_solv.addWidget(QLabel("Solver Backend:"))
-        self.cb_solver_choice = QComboBox()
+        self.cb_solver_choice = ModernComboBox()
         self.cb_solver_choice.addItems([
             "CUDA GPU (NVIDIA RTX 5060 64-bit)",
             "CPU 64-bit (NumPy / SciPy)"
@@ -541,7 +552,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         lay_cpu = QHBoxLayout(self.box_cpu_limit)
         lay_cpu.setContentsMargins(0, 2, 0, 2)
         lay_cpu.addWidget(QLabel("CPU Core Usage:"))
-        self.cb_cpu_limit = QComboBox()
+        self.cb_cpu_limit = ModernComboBox()
         self.cb_cpu_limit.addItems(["50%", "75%", "80% [Balanced]", "100% [Maximum]"])
         self.cb_cpu_limit.setCurrentIndex(2)  # 80% default
         lay_cpu.addWidget(self.cb_cpu_limit)
@@ -559,12 +570,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         lay_sim.addWidget(grp_solver)
 
         # 4. Numerical Grid & Resolution Presets
-        grp_res = QGroupBox("Numerical Grid & Resolution Presets")
+        grp_res = ModernCard("Numerical Grid && Resolution Presets")
         gres = QVBoxLayout(grp_res)
         gres.setSpacing(4)
 
         gres.addWidget(QLabel("Resolution Preset:"))
-        self.cb_preset = QComboBox()
+        self.cb_preset = ModernComboBox()
         self.cb_preset.addItems([
             "Fast Preview (N=64, Nw=2001)",
             "Standard (N=100, Nw=4801)",
@@ -577,6 +588,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Preset summary badge (shown when a standard preset is active)
         self.lbl_preset_summary = QLabel("⚡ Preset: 64×64 grid | Nw: 2001 | ω_max: 20.0 | η: 0.08")
         self.lbl_preset_summary.setStyleSheet("color: #2563eb; font-size: 11px; font-weight: 600; padding: 2px;")
+        self.lbl_preset_summary.setWordWrap(True)
         gres.addWidget(self.lbl_preset_summary)
 
         # Custom Grid container - strictly collapsed/hidden unless "Custom Grid..." is selected
@@ -587,41 +599,49 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         h_n = QHBoxLayout()
         h_n.addWidget(QLabel("Grid Size (N):"))
+        h_n.addStretch()
         self.spin_n = QSpinBox()
         self.spin_n.setRange(32, 512)
         self.spin_n.setValue(64)
         self.spin_n.setSingleStep(32)
+        self.spin_n.setFixedWidth(100)
         self.spin_n.valueChanged.connect(self._on_custom_grid_edit)
         h_n.addWidget(self.spin_n)
         lay_custom.addLayout(h_n)
 
         h_nw = QHBoxLayout()
         h_nw.addWidget(QLabel("Frequency (N_ω):"))
+        h_nw.addStretch()
         self.spin_nw = QSpinBox()
         self.spin_nw.setRange(501, 12001)
         self.spin_nw.setValue(2001)
         self.spin_nw.setSingleStep(500)
+        self.spin_nw.setFixedWidth(100)
         self.spin_nw.valueChanged.connect(self._on_custom_grid_edit)
         h_nw.addWidget(self.spin_nw)
         lay_custom.addLayout(h_nw)
 
         h_wmax = QHBoxLayout()
         h_wmax.addWidget(QLabel("Cutoff (ω_max):"))
+        h_wmax.addStretch()
         self.spin_wmax = QDoubleSpinBox()
         self.spin_wmax.setRange(5.0, 100.0)
         self.spin_wmax.setValue(20.0)
         self.spin_wmax.setSingleStep(5.0)
+        self.spin_wmax.setFixedWidth(100)
         self.spin_wmax.valueChanged.connect(self._on_custom_grid_edit)
         h_wmax.addWidget(self.spin_wmax)
         lay_custom.addLayout(h_wmax)
 
         h_eta = QHBoxLayout()
         h_eta.addWidget(QLabel("Broadening (η):"))
+        h_eta.addStretch()
         self.spin_eta = QDoubleSpinBox()
         self.spin_eta.setRange(0.001, 0.5)
         self.spin_eta.setValue(0.08)
         self.spin_eta.setSingleStep(0.01)
         self.spin_eta.setDecimals(3)
+        self.spin_eta.setFixedWidth(100)
         self.spin_eta.valueChanged.connect(self._on_custom_grid_edit)
         h_eta.addWidget(self.spin_eta)
         lay_custom.addLayout(h_eta)
@@ -632,53 +652,57 @@ class UnifiedWorkbenchWindow(QMainWindow):
         lay_sim.addWidget(grp_res)
 
         # 5. Common Model Hamiltonian
-        grp_model = QGroupBox("Common Model Hamiltonian")
+        grp_model = ModernCard("Common Model Hamiltonian")
         gm = QVBoxLayout(grp_model)
         gm.setSpacing(4)
 
-        h1 = QHBoxLayout(); h1.addWidget(QLabel("Hopping (t):"))
+        h1 = QHBoxLayout(); h1.addWidget(QLabel("Hopping (t):")); h1.addStretch()
         self.spin_t = QDoubleSpinBox()
         self.spin_t.setMinimum(0.01)
         self.spin_t.setValue(1.0)
         self.spin_t.setSingleStep(0.1)
+        self.spin_t.setFixedWidth(100)
         h1.addWidget(self.spin_t)
         gm.addLayout(h1)
 
-        h2 = QHBoxLayout(); h2.addWidget(QLabel("Next-Nearest (t'):"))
+        h2 = QHBoxLayout(); h2.addWidget(QLabel("Next-Nearest (t'):")); h2.addStretch()
         self.spin_t1 = QDoubleSpinBox()
         self.spin_t1.setRange(-10.0, 10.0)
         self.spin_t1.setValue(0.0)
         self.spin_t1.setSingleStep(0.05)
+        self.spin_t1.setFixedWidth(100)
         h2.addWidget(self.spin_t1)
         gm.addLayout(h2)
 
-        h3 = QHBoxLayout(); h3.addWidget(QLabel("Chemical (μ):"))
+        h3 = QHBoxLayout(); h3.addWidget(QLabel("Chemical (μ):")); h3.addStretch()
         self.spin_mu = QDoubleSpinBox()
         self.spin_mu.setRange(-20.0, 20.0)
         self.spin_mu.setValue(1.0)
         self.spin_mu.setSingleStep(0.1)
+        self.spin_mu.setFixedWidth(100)
         h3.addWidget(self.spin_mu)
         gm.addLayout(h3)
 
-        h4 = QHBoxLayout(); h4.addWidget(QLabel("Exchange (K):"))
+        h4 = QHBoxLayout(); h4.addWidget(QLabel("Exchange (K):")); h4.addStretch()
         self.spin_k = QDoubleSpinBox()
         self.spin_k.setRange(-10.0, 10.0)
         self.spin_k.setValue(1.0)
         self.spin_k.setSingleStep(0.5)
+        self.spin_k.setFixedWidth(100)
         h4.addWidget(self.spin_k)
         gm.addLayout(h4)
 
         lay_sim.addWidget(grp_model)
 
         # 6. Output Directory Card
-        grp_out = QGroupBox("Results Output Directory")
+        grp_out = ModernCard("Results Output Directory")
         gout = QVBoxLayout(grp_out)
         gout.setSpacing(4)
         h_out = QHBoxLayout()
         self.edit_out_dir = QLineEdit(r"C:\Users\sruji\Projects\masters_thesis_gui\results")
         h_out.addWidget(self.edit_out_dir)
         b_browse = QPushButton("📁 Browse...")
-        b_browse.setMinimumWidth(90)
+        b_browse.setFixedWidth(85)
         b_browse.setStyleSheet("padding: 4px 8px; font-size: 11px;")
         b_browse.clicked.connect(self._browse_output_dir)
         h_out.addWidget(b_browse)
@@ -690,12 +714,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         # PAGE 2: Publication Figure Styling & Typography
         panel_pub = QWidget()
-        lay_pub = QVBoxLayout(panel_pub); lay_pub.setContentsMargins(8, 8, 8, 8)
+        lay_pub = QVBoxLayout(panel_pub); lay_pub.setContentsMargins(4, 4, 4, 4)
 
-        grp_journal = QGroupBox("Journal Dimensions & Standards")
+        grp_journal = ModernCard("Journal Dimensions && Standards")
         gj = QVBoxLayout(grp_journal)
         gj.addWidget(QLabel("Target Journal Standard:"))
-        self.cb_target_journal = QComboBox()
+        self.cb_target_journal = ModernComboBox()
         self.cb_target_journal.addItems([
             "Physical Review B (Single Column • 86 mm)",
             "Physical Review B (Double Column • 178 mm)",
@@ -705,25 +729,25 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gj.addWidget(self.cb_target_journal)
 
         gj.addWidget(QLabel("Font Family:"))
-        self.cb_font_family = QComboBox()
+        self.cb_font_family = ModernComboBox()
         self.cb_font_family.addItems(["Computer Modern (LaTeX Serif)", "Times New Roman", "Helvetica / Arial", "Segoe UI"])
         gj.addWidget(self.cb_font_family)
 
         gj.addWidget(QLabel("Label Font Size:"))
-        self.cb_pub_font_size = QComboBox()
+        self.cb_pub_font_size = ModernComboBox()
         self.cb_pub_font_size.addItems(["9 pt (Standard Journal)", "10 pt (Thesis Standard)", "12 pt (Presentation)"])
         gj.addWidget(self.cb_pub_font_size)
         lay_pub.addWidget(grp_journal)
 
-        grp_style = QGroupBox("Colormaps & Aesthetics")
+        grp_style = ModernCard("Colormaps && Aesthetics")
         gs = QVBoxLayout(grp_style)
         gs.addWidget(QLabel("Colormap Palette:"))
-        self.cb_cmap = QComboBox()
+        self.cb_cmap = ModernComboBox()
         self.cb_cmap.addItems(["Magma (Standard)", "Viridis (High Contrast)", "Plasma", "Inferno", "Physical Review Monochrome (B&W)"])
         gs.addWidget(self.cb_cmap)
 
         gs.addWidget(QLabel("Subpanel Tags:"))
-        self.cb_tags = QComboBox()
+        self.cb_tags = ModernComboBox()
         self.cb_tags.addItems(["(a), (b), (c) [Bold Lowercase]", "(A), (B), (C) [Uppercase]", "None"])
         gs.addWidget(self.cb_tags)
 
@@ -732,7 +756,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gs.addWidget(self.chk_latex_ticks)
         lay_pub.addWidget(grp_style)
 
-        grp_exp = QGroupBox("Export & LaTeX Integration")
+        grp_exp = ModernCard("Export && LaTeX Integration")
         ge = QVBoxLayout(grp_exp)
         b_pdf = QPushButton("📄 Save Vector PDF for Thesis")
         b_pdf.setObjectName("PrimaryBtn")
@@ -892,8 +916,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.table_queue = QTableWidget(0, 6)
         self.table_queue.setHorizontalHeaderLabels(["#", "Study", "Parameters Snapshot", "Solver", "Progress", "Status"])
-        self.table_queue.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.table_queue.verticalHeader().setDefaultSectionSize(24)
+        qh = self.table_queue.horizontalHeader()
+        qh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        qh.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        qh.setSectionResizeMode(2, QHeaderView.Stretch)
+        qh.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        qh.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.table_queue.setColumnWidth(4, 120)
+        qh.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table_queue.verticalHeader().setDefaultSectionSize(26)
         self.table_queue.verticalHeader().setVisible(False)
         ql.addWidget(self.table_queue)
         self.bottom_tabs.addTab(queue_tab, "📋 Batch Execution Queue")
@@ -1052,6 +1083,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         study_map = {self.STUDY_SE: 0, self.STUDY_SPEC: 1, self.STUDY_PD: 2, self.STUDY_SUSC: 3}
         self.param_stack.setCurrentIndex(study_map.get(study_name, 0))
+        curr = self.param_stack.currentWidget()
+        if curr:
+            self.param_stack.setFixedHeight(curr.sizeHint().height())
+        if hasattr(self, "inspector_stack") and self.inspector_stack.count() > 0:
+            p = self.inspector_stack.widget(0)
+            if p and p.layout():
+                p.layout().activate()
         self.param_stack.updateGeometry()
 
         if self.current_perspective == "simulation":
@@ -1303,13 +1341,43 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def add_to_queue(self):
         row = self.table_queue.rowCount()
         self.table_queue.insertRow(row)
-        summary = f"μ = {self.spin_mu.value()}, t = {self.spin_t.value()}, N = {self.spin_n.value()}"
-        self.table_queue.setItem(row, 0, QTableWidgetItem(str(row + 1)))
-        self.table_queue.setItem(row, 1, QTableWidgetItem(self.active_study))
-        self.table_queue.setItem(row, 2, QTableWidgetItem(summary))
-        self.table_queue.setItem(row, 3, QTableWidgetItem("NVIDIA RTX 5060"))
-        prog = QProgressBar(); prog.setValue(0); self.table_queue.setCellWidget(row, 4, prog)
-        self.table_queue.setItem(row, 5, QTableWidgetItem("⏳ Pending"))
+
+        if self.active_study == self.STUDY_SE:
+            summary = f"Sweep: [{self.edit_se_vals.text()}], Fixed J_⊥ = {self.spin_se_fixed.value():.1f}, μ = {self.spin_mu.value():.1f}, N = {self.spin_n.value()}"
+        elif self.active_study == self.STUDY_SPEC:
+            summary = f"k = {self.cb_mom.currentText().split()[0]}, [{self.edit_spec_vals.text()}], J_⊥ = {self.spin_spec_fixed.value():.1f}, N = {self.spin_n.value()}"
+        elif self.active_study == self.STUDY_PD:
+            summary = f"Bisection J_K ∈ [{self.s_min.value():.1f}, {self.s_max.value():.1f}], pts = {self.s_pts.value()}, μ = {self.spin_mu.value():.1f}"
+        else:
+            modes = []
+            if self.chk_static.isChecked(): modes.append("Static χ(q)")
+            if self.chk_dynamic.isChecked(): modes.append("Dynamic χ(q,ω)")
+            mode_str = "+".join(modes) if modes else "None"
+            summary = f"{mode_str}, vals = [{self.edit_susc_vals.text()}], N = {self.spin_n.value()}"
+
+        item_num = QTableWidgetItem(str(row + 1))
+        item_num.setTextAlignment(Qt.AlignCenter)
+        self.table_queue.setItem(row, 0, item_num)
+
+        item_study = QTableWidgetItem(self.active_study)
+        self.table_queue.setItem(row, 1, item_study)
+
+        item_snap = QTableWidgetItem(summary)
+        self.table_queue.setItem(row, 2, item_snap)
+
+        solver_str = "NVIDIA RTX 5060 (GPU)" if self.cb_solver_choice.currentIndex() == 0 else f"CPU ({self.cb_cpu_limit.currentText().split()[0]} Cores)"
+        item_solver = QTableWidgetItem(solver_str)
+        item_solver.setTextAlignment(Qt.AlignCenter)
+        self.table_queue.setItem(row, 3, item_solver)
+
+        prog = QProgressBar()
+        prog.setValue(0)
+        self.table_queue.setCellWidget(row, 4, prog)
+
+        item_status = QTableWidgetItem("⏳ Pending")
+        item_status.setTextAlignment(Qt.AlignCenter)
+        self.table_queue.setItem(row, 5, item_status)
+
         self.lbl_status.setText(f"Added {self.active_study} as Job #{row + 1} to queue.")
         self.bottom_tabs.setCurrentIndex(0)
         self._adjust_bottom_dock_height()
@@ -1353,7 +1421,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def toggle_theme(self):
         self.is_dark = not self.is_dark
-        self.setStyleSheet(DARK_THEME_QSS if self.is_dark else LIGHT_THEME_QSS)
+        theme_qss = DARK_THEME_QSS if self.is_dark else LIGHT_THEME_QSS
+        theme_pal = create_dark_palette() if self.is_dark else create_light_palette()
+        self.setStyleSheet(theme_qss)
+        app_inst = QApplication.instance()
+        if app_inst:
+            app_inst.setPalette(theme_pal)
+            app_inst.setStyleSheet(theme_qss)
         self.canvas_left.set_theme(self.is_dark)
         self.canvas_right.set_theme(self.is_dark)
 

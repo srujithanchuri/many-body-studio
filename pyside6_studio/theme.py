@@ -32,7 +32,35 @@ QLabel {
     color: #1e293b;
 }
 
-QCheckBox, QRadioButton {
+QCheckBox {
+    background-color: transparent;
+    background: transparent;
+    color: #1e293b;
+    spacing: 8px;
+    font-size: 12px;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid #94a3b8;
+    border-radius: 4px;
+    background-color: #ffffff;
+}
+QCheckBox::indicator:hover {
+    border-color: #2563eb;
+    background-color: #f8fafc;
+}
+QCheckBox::indicator:checked {
+    background-color: #2563eb;
+    border: 1.5px solid #2563eb;
+    image: url("@ICONS_DIR@/checkbox_checked_light.png");
+}
+QCheckBox::indicator:checked:hover {
+    background-color: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+QRadioButton {
     background-color: transparent;
     background: transparent;
     color: #1e293b;
@@ -57,6 +85,22 @@ QToolBar {
     spacing: 8px;
 }
 
+QMainWindow::separator {
+    width: 2px;
+    height: 2px;
+    background: #e2e8f0;
+}
+QMainWindow::separator:hover {
+    background: #3b82f6;
+}
+
+QSplitter::handle {
+    background: #e2e8f0;
+}
+QSplitter::handle:hover {
+    background: #3b82f6;
+}
+
 QDockWidget {
     font-weight: 600;
     titlebar-close-icon: url(none);
@@ -64,9 +108,10 @@ QDockWidget {
 }
 QDockWidget::title {
     background: #e2e8f0;
-    padding: 7px 12px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
     font-weight: 600;
+    font-size: 11px;
     color: #334155;
 }
 
@@ -78,11 +123,12 @@ QTabWidget::pane {
 QTabBar::tab {
     background: #f1f5f9;
     color: #475569;
-    padding: 8px 18px;
+    padding: 6px 14px;
     margin-right: 2px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
     font-weight: 500;
+    font-size: 12px;
 }
 QTabBar::tab:selected {
     background: #ffffff;
@@ -100,21 +146,68 @@ QGroupBox {
     background-color: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    margin-top: 6px;
-    padding: 26px 12px 10px 12px;
+    margin-top: 4px;
+    padding: 22px 8px 8px 8px;
     font-weight: 600;
     color: #0f172a;
 }
 QGroupBox::title {
     subcontrol-origin: padding;
     subcontrol-position: top left;
-    padding-top: 6px;
+    padding-top: 4px;
     padding-left: 2px;
     background-color: transparent;
     background: transparent;
     color: #2563eb;
     font-weight: 700;
     font-size: 11px;
+}
+
+QMenu {
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px;
+}
+QMenu::item {
+    background-color: transparent;
+    color: #0f172a;
+    padding: 6px 20px 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+QMenu::item:selected {
+    background-color: #2563eb;
+    color: #ffffff;
+}
+
+QDialog, QMessageBox {
+    background-color: #ffffff;
+    color: #0f172a;
+}
+QMessageBox QLabel {
+    color: #0f172a;
+    background: transparent;
+}
+QMessageBox QPushButton {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 5px 16px;
+    min-width: 60px;
+    color: #0f172a;
+    font-weight: 500;
+}
+QMessageBox QPushButton:hover {
+    background: #e2e8f0;
+}
+
+QToolTip {
+    background-color: #0f172a;
+    color: #ffffff;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 8px;
 }
 QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton {
     background-color: transparent;
@@ -441,7 +534,35 @@ QLabel {
     color: #f1f5f9;
 }
 
-QCheckBox, QRadioButton {
+QCheckBox {
+    background-color: transparent;
+    background: transparent;
+    color: #f1f5f9;
+    spacing: 8px;
+    font-size: 12px;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid #64748b;
+    border-radius: 4px;
+    background-color: #1e293b;
+}
+QCheckBox::indicator:hover {
+    border-color: #60a5fa;
+    background-color: #334155;
+}
+QCheckBox::indicator:checked {
+    background-color: #2563eb;
+    border: 1.5px solid #2563eb;
+    image: url("@ICONS_DIR@/checkbox_checked_light.png");
+}
+QCheckBox::indicator:checked:hover {
+    background-color: #3b82f6;
+    border: 1.5px solid #3b82f6;
+}
+
+QRadioButton {
     background-color: transparent;
     background: transparent;
     color: #f1f5f9;
@@ -466,14 +587,31 @@ QToolBar {
     spacing: 8px;
 }
 
+QMainWindow::separator {
+    width: 2px;
+    height: 2px;
+    background: #334155;
+}
+QMainWindow::separator:hover {
+    background: #60a5fa;
+}
+
+QSplitter::handle {
+    background: #334155;
+}
+QSplitter::handle:hover {
+    background: #60a5fa;
+}
+
 QDockWidget {
     font-weight: 600;
 }
 QDockWidget::title {
     background: #1e293b;
-    padding: 7px 12px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
     font-weight: 600;
+    font-size: 11px;
     color: #94a3b8;
 }
 
@@ -485,11 +623,12 @@ QTabWidget::pane {
 QTabBar::tab {
     background: #0f172a;
     color: #94a3b8;
-    padding: 8px 18px;
+    padding: 6px 14px;
     margin-right: 2px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
     font-weight: 500;
+    font-size: 12px;
 }
 QTabBar::tab:selected {
     background: #1e293b;
@@ -507,21 +646,68 @@ QGroupBox {
     background-color: #1e293b;
     border: 1px solid #334155;
     border-radius: 8px;
-    margin-top: 6px;
-    padding: 26px 12px 10px 12px;
+    margin-top: 4px;
+    padding: 22px 8px 8px 8px;
     font-weight: 600;
     color: #f1f5f9;
 }
 QGroupBox::title {
     subcontrol-origin: padding;
     subcontrol-position: top left;
-    padding-top: 6px;
+    padding-top: 4px;
     padding-left: 2px;
     background-color: transparent;
     background: transparent;
     color: #60a5fa;
     font-weight: 700;
     font-size: 11px;
+}
+
+QMenu {
+    background-color: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    padding: 4px;
+}
+QMenu::item {
+    background-color: transparent;
+    color: #f8fafc;
+    padding: 6px 20px 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+QMenu::item:selected {
+    background-color: #2563eb;
+    color: #ffffff;
+}
+
+QDialog, QMessageBox {
+    background-color: #1e293b;
+    color: #f8fafc;
+}
+QMessageBox QLabel {
+    color: #f8fafc;
+    background: transparent;
+}
+QMessageBox QPushButton {
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    padding: 5px 16px;
+    min-width: 60px;
+    color: #f8fafc;
+    font-weight: 500;
+}
+QMessageBox QPushButton:hover {
+    background: #475569;
+}
+
+QToolTip {
+    background-color: #0f172a;
+    color: #ffffff;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 8px;
 }
 QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton {
     background-color: transparent;
@@ -824,3 +1010,35 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
 
 LIGHT_THEME_QSS = LIGHT_THEME_QSS.replace("@ICONS_DIR@", ICONS_DIR)
 DARK_THEME_QSS = DARK_THEME_QSS.replace("@ICONS_DIR@", ICONS_DIR)
+
+from PySide6.QtGui import QPalette, QColor
+
+def create_light_palette() -> QPalette:
+    pal = QPalette()
+    pal.setColor(QPalette.Window, QColor("#f8fafc"))
+    pal.setColor(QPalette.WindowText, QColor("#0f172a"))
+    pal.setColor(QPalette.Base, QColor("#ffffff"))
+    pal.setColor(QPalette.AlternateBase, QColor("#f1f5f9"))
+    pal.setColor(QPalette.ToolTipBase, QColor("#0f172a"))
+    pal.setColor(QPalette.ToolTipText, QColor("#ffffff"))
+    pal.setColor(QPalette.Text, QColor("#0f172a"))
+    pal.setColor(QPalette.Button, QColor("#f1f5f9"))
+    pal.setColor(QPalette.ButtonText, QColor("#0f172a"))
+    pal.setColor(QPalette.Highlight, QColor("#2563eb"))
+    pal.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    return pal
+
+def create_dark_palette() -> QPalette:
+    pal = QPalette()
+    pal.setColor(QPalette.Window, QColor("#0f172a"))
+    pal.setColor(QPalette.WindowText, QColor("#f8fafc"))
+    pal.setColor(QPalette.Base, QColor("#1e293b"))
+    pal.setColor(QPalette.AlternateBase, QColor("#0f172a"))
+    pal.setColor(QPalette.ToolTipBase, QColor("#0f172a"))
+    pal.setColor(QPalette.ToolTipText, QColor("#ffffff"))
+    pal.setColor(QPalette.Text, QColor("#f8fafc"))
+    pal.setColor(QPalette.Button, QColor("#334155"))
+    pal.setColor(QPalette.ButtonText, QColor("#f8fafc"))
+    pal.setColor(QPalette.Highlight, QColor("#2563eb"))
+    pal.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    return pal

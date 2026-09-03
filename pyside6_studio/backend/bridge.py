@@ -184,9 +184,9 @@ class CalculationBridge(QObject):
 
     def cancel_calculation(self):
         """
-        Executes 2-stage cancellation:
-        Stage 1: QProcess.terminate() soft interrupt
-        Stage 2: kill_process_tree native Windows process kill and GPU VRAM flush.
+        Executes non-blocking 2-stage cancellation:
+        Stage 1: QProcess.kill() instant non-blocking OS process termination
+        Stage 2: Asynchronous background process tree sweep and VRAM flush to prevent GUI thread freezes.
         """
         if not self.is_running():
             return  # Safe no-op when idle
@@ -194,15 +194,16 @@ class CalculationBridge(QObject):
         self._was_cancelled = True
         pid_to_kill = self.pid
 
-        # Stage 1: Soft terminate
+        # Immediate non-blocking kill on active QProcess
         if self._process and self._process.state() != QProcess.NotRunning:
-            self._process.terminate()
+            self._process.kill()
 
-        # Stage 2: Ensure hard kill if still alive
+        # Run auxiliary process tree taskkill and VRAM flush asynchronously in background thread
+        # so the GUI event loop never stalls or freezes
+        import threading
         if pid_to_kill:
-            kill_process_tree(pid_to_kill)
-
-        flush_gpu_vram()
+            threading.Thread(target=kill_process_tree, args=(pid_to_kill,), daemon=True).start()
+        threading.Thread(target=flush_gpu_vram, daemon=True).start()
 
         self._running = False
         self.sig_cancelled.emit()
@@ -225,7 +226,8 @@ class CalculationBridge(QObject):
             self.parse_line(self._stdout_buffer.strip())
             self._stdout_buffer = ""
 
-        flush_gpu_vram()
+        import threading
+        threading.Thread(target=flush_gpu_vram, daemon=True).start()
 
         was_running = self._running
         self._running = False
@@ -244,5 +246,6 @@ class CalculationBridge(QObject):
         if self._was_cancelled:
             return
         self._running = False
-        flush_gpu_vram()
+        import threading
+        threading.Thread(target=flush_gpu_vram, daemon=True).start()
         self.sig_error.emit(f"Process execution error: {error}")
