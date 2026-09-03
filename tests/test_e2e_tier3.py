@@ -337,6 +337,84 @@ class TestTier3CrossFeatureInteractions(unittest.TestCase):
         self.assertNotIn("%", window.lbl_status.text())
         self.assertIn("Completed", window.lbl_status.text())
 
+    def test_wheel_scroll_redirect_prevents_accidental_value_change(self):
+        """Cross-Feature: Scrolling mouse wheel over spinbox redirects to inspector scroll without changing values."""
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtGui import QWheelEvent
+        from PySide6.QtWidgets import QApplication
+        from pyside6_studio.main_window import UnifiedWorkbenchWindow
+
+        window = UnifiedWorkbenchWindow()
+        window.resize(1400, 900)
+        window.show()
+        self.addCleanup(window.close)
+        QApplication.processEvents()
+
+        spin = window.spin_t
+        scroll = window.inspector_scroll
+
+        initial_val = spin.value()
+        initial_scroll = scroll.verticalScrollBar().value()
+
+        # Send wheel event to spinbox
+        we = QWheelEvent(QPoint(10, 10), QPoint(10, 10), QPoint(0, 0), QPoint(0, -120), Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False)
+        QApplication.sendEvent(spin, we)
+        QApplication.processEvents()
+
+        # Value MUST be unchanged, and scroll position MUST move down
+        self.assertEqual(spin.value(), initial_val)
+        self.assertGreater(scroll.verticalScrollBar().value(), initial_scroll)
+
+    def test_study_dropdown_theme_styling(self):
+        """Cross-Feature: Study dropdown follows theme without hardcoded inline overrides."""
+        from pyside6_studio.main_window import UnifiedWorkbenchWindow
+
+        window = UnifiedWorkbenchWindow()
+        window.show()
+        self.addCleanup(window.close)
+
+        # Check objectName for QSS targeting
+        self.assertEqual(window.cb_active_study.objectName(), "StudyDropdown")
+        # Ensure no hardcoded setStyleSheet on the widget
+        self.assertEqual(window.cb_active_study.styleSheet(), "")
+
+        # Test theme toggle
+        window.toggle_theme()
+        self.assertTrue(window.is_dark)
+        window.toggle_theme()
+        self.assertFalse(window.is_dark)
+
+    def test_execution_center_dynamic_height_scaling_on_adding_sweeps(self):
+        """Cross-Feature: Execution center automatically expands as sweeps are added and contracts when cleared."""
+        from PySide6.QtWidgets import QApplication
+        from pyside6_studio.main_window import UnifiedWorkbenchWindow
+
+        window = UnifiedWorkbenchWindow()
+        window.resize(1440, 900)
+        window.show()
+        self.addCleanup(window.close)
+        QApplication.processEvents()
+
+        initial_h = window.dock_bottom.height()
+
+        # Add 1st sweep
+        window.add_to_queue()
+        QApplication.processEvents()
+        h_1 = window.dock_bottom.height()
+        self.assertGreater(h_1, initial_h)
+
+        # Add 2nd sweep
+        window.add_to_queue()
+        QApplication.processEvents()
+        h_2 = window.dock_bottom.height()
+        self.assertGreater(h_2, h_1)
+
+        # Clear queue -> contracts back down
+        window.clear_queue()
+        QApplication.processEvents()
+        h_cleared = window.dock_bottom.height()
+        self.assertLess(h_cleared, h_2)
+
 
 if __name__ == "__main__":
     unittest.main()

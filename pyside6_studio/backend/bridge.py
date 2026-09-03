@@ -156,29 +156,29 @@ class CalculationBridge(QObject):
         except (json.JSONDecodeError, ValueError):
             pass
 
-        # Plain text log message - inspect for accurate physics milestones without arbitrary percentages
+        # Plain text log message - inspect for accurate physics milestones without arbitrary percentages or clutter
         if "Starting 1-Loop FFT" in line:
-            self.sig_status.emit("Evaluating 1-Loop Self-Energy (Real-Time Keldysh FFT)...")
+            self.sig_status.emit("Evaluating 1-Loop Self-Energy...")
             self.sig_progress.emit(0, "Evaluating 1-Loop Self-Energy...")
         elif "1-Loop FFT completed" in line:
             self.sig_status.emit("1-Loop Self-Energy finished. Initializing 3-Loop...")
             self.sig_progress.emit(0, "1-Loop Self-Energy finished...")
         elif "Starting 3-Loop FFT" in line:
-            self.sig_status.emit("Evaluating 3-Loop Self-Energy (3-Boson Real-Time FFT)...")
+            self.sig_status.emit("Evaluating 3-Loop Self-Energy...")
             self.sig_progress.emit(0, "Evaluating 3-Loop Self-Energy...")
         elif "3-Loop FFT completed" in line:
-            self.sig_status.emit("Self-Energy convolutions completed. Scaling across couplings...")
-            self.sig_progress.emit(0, "Self-Energy convolutions completed...")
+            self.sig_status.emit("Self-Energy calculations finished. Preparing scaling...")
+            self.sig_progress.emit(0, "Self-Energy calculations finished...")
         elif "Scaling for" in line:
             coupling_label = line.strip().split(">>>")[-1].strip()
-            self.sig_status.emit(f"Computing Spectral Observables ({coupling_label})...")
-            self.sig_progress.emit(0, f"Computing Spectral Observables ({coupling_label})...")
+            self.sig_status.emit(f"Computing Spectral Observables: {coupling_label}...")
+            self.sig_progress.emit(0, f"Computing Spectral Observables: {coupling_label}...")
         elif "Generating Sweep Plots" in line:
-            self.sig_status.emit("Rendering Composite Sweep Plots (DOS • FS • Path)...")
+            self.sig_status.emit("Rendering Composite Sweep Plots...")
             self.sig_progress.emit(0, "Rendering Composite Sweep Plots...")
         elif "[CACHE HIT]" in line:
-            self.sig_status.emit("Precomputed self-energy found in cache. Loading plots...")
-            self.sig_progress.emit(0, "Precomputed self-energy found in cache...")
+            self.sig_status.emit("Precomputed Self-Energy found in cache. Loading plots...")
+            self.sig_progress.emit(0, "Precomputed Self-Energy found in cache...")
 
         self.sig_log.emit(line)
 

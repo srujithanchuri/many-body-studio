@@ -15,7 +15,7 @@ import sys
 import os
 import time
 import glob
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, QTimer, Slot, QObject, QEvent
 from PySide6.QtGui import QAction, QIcon, QPixmap, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -33,16 +33,27 @@ from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
 from pyside6_studio.core.hardware import get_hardware_info
 from pyside6_studio.core import config
 
-PROJECT_ROOT = config.PHYSICS_REPO_ROOT
-MANY_BODY_ROOT = config.MANY_BODY_RESULTS
+DEFAULT_RESULTS_DIR = r"C:\Users\sruji\Projects\masters_thesis_gui\results"
 
 
-def get_available_plots():
-    """Scans many_body_results for real sample plots."""
+def get_available_plots(output_dir=None):
+    """
+    Scans the configured output directory for real simulation plots.
+    Inspects output_dir/plots (or output_dir directly), filtering strictly for physics observables.
+    """
     plots = {}
-    pattern = os.path.join(MANY_BODY_ROOT, "**", "*.png")
-    for f in glob.glob(pattern, recursive=True):
-        plots[os.path.basename(f)] = f
+    target_dir = output_dir or DEFAULT_RESULTS_DIR
+    if not os.path.isdir(target_dir):
+        return plots
+
+    sub_plots = os.path.join(target_dir, "plots")
+    search_dir = sub_plots if os.path.isdir(sub_plots) else target_dir
+
+    for f in glob.glob(os.path.join(search_dir, "*.png")):
+        bname = os.path.basename(f)
+        if bname.startswith(("sweep_", "both_", "spectral_", "phase_", "chi_")):
+            plots[bname] = os.path.normpath(f)
+
     return plots
 
 
@@ -61,6 +72,32 @@ class DynamicStackedWidget(QStackedWidget):
         return super().minimumSizeHint()
 
 
+class WheelScrollRedirectFilter(QObject):
+    """
+    Prevents accidental value changes when scrolling through parameter panels.
+    Redirects wheel events over QSpinBox, QDoubleSpinBox, and QComboBox
+    to the nearest parent QScrollArea viewport so vertical scrolling is smooth and uninterrupted.
+    """
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel:
+            if isinstance(obj, (QSpinBox, QDoubleSpinBox, QComboBox)):
+                # If a QComboBox popup is currently visible, allow normal wheel navigation within it
+                if isinstance(obj, QComboBox) and obj.view() and obj.view().isVisible():
+                    return False
+
+                # Redirect wheel event directly to the nearest parent QScrollArea viewport
+                parent = obj.parent()
+                while parent:
+                    if isinstance(parent, QScrollArea):
+                        QApplication.sendEvent(parent.viewport(), event)
+                        return True
+                    parent = parent.parent()
+
+                # If not inside a scroll area, safely ignore the event to prevent unwanted value modifications
+                return True
+        return super().eventFilter(obj, event)
+
+
 class UnifiedWorkbenchWindow(QMainWindow):
     STUDY_SE = "⚡ Spectral Sweep (DOS / FS / Path)"
     STUDY_SPEC = "🌊 Spectral Function A(k, ω)"
@@ -71,6 +108,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Many-Body Studio Pro • Alpha v1")
         self.resize(1440, 920)
+
+        # Install wheel scroll redirect filter to eliminate accidental value changes
+        self.wheel_filter = WheelScrollRedirectFilter(self)
+        app_inst = QApplication.instance()
+        if app_inst:
+            app_inst.installEventFilter(self.wheel_filter)
 
         self.plots = get_available_plots()
         self.is_dark = False
@@ -104,9 +147,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.dock_nav.setMaximumWidth(320)
 
-        # Ensure docks start with proper comfortable widths
+        # Ensure docks start with proper comfortable widths & compact bottom height
+        self.resizeDocks([self.dock_bottom], [150], Qt.Vertical)
         self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 380], Qt.Horizontal)
-        QTimer.singleShot(0, lambda: self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 380], Qt.Horizontal))
+        QTimer.singleShot(0, lambda: (
+            self.resizeDocks([self.dock_bottom], [150], Qt.Vertical),
+            self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 380], Qt.Horizontal)
+        ))
+
+        # Wire Output Directory text change to dynamically re-populate datasets & plots
+        self.edit_out_dir.textChanged.connect(self.refresh_dataset_tree)
+        self.refresh_dataset_tree()
 
         # Initialize default state
         self.set_active_study(self.STUDY_SE)
@@ -315,15 +366,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
         panel_sim = QWidget()
         lay_sim = QVBoxLayout(panel_sim)
         lay_sim.setContentsMargins(8, 8, 8, 8)
-        lay_sim.setSpacing(10)
+        lay_sim.setSpacing(6)
 
         # 1. Active Study Switcher
         grp_selector = QGroupBox("Active Calculation Study")
         sel_lay = QVBoxLayout(grp_selector)
         self.cb_active_study = QComboBox()
+        self.cb_active_study.setObjectName("StudyDropdown")
         self.cb_active_study.addItems([self.STUDY_SE, self.STUDY_SPEC, self.STUDY_PD, self.STUDY_SUSC])
         self.cb_active_study.currentTextChanged.connect(self.set_active_study)
-        self.cb_active_study.setStyleSheet("font-weight: 700; color: #2563eb; padding: 6px;")
         sel_lay.addWidget(self.cb_active_study)
         lay_sim.addWidget(grp_selector)
 
@@ -627,6 +678,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.edit_out_dir = QLineEdit(r"C:\Users\sruji\Projects\masters_thesis_gui\results")
         h_out.addWidget(self.edit_out_dir)
         b_browse = QPushButton("📁 Browse...")
+        b_browse.setMinimumWidth(90)
+        b_browse.setStyleSheet("padding: 4px 8px; font-size: 11px;")
         b_browse.clicked.connect(self._browse_output_dir)
         h_out.addWidget(b_browse)
         gout.addLayout(h_out)
@@ -752,6 +805,30 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if folder:
             self.edit_out_dir.setText(folder)
 
+    def refresh_dataset_tree(self):
+        """Refreshes the '📁 PREVIOUS DATASETS & PLOTS' tree from the currently configured output directory."""
+        out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
+        self.plots = get_available_plots(out_dir)
+
+        if hasattr(self, "grp_results"):
+            # Clear previous items
+            while self.grp_results.childCount() > 0:
+                self.grp_results.removeChild(self.grp_results.child(0))
+
+            # Populate with plots from the active output directory
+            for name in sorted(self.plots.keys()):
+                QTreeWidgetItem(self.grp_results, [name])
+
+        # Also update publication panel comboboxes if they exist
+        if hasattr(self, "cb_panel_a"):
+            plot_names = list(self.plots.keys())
+            for cb in [self.cb_panel_a, self.cb_panel_b, self.cb_panel_c]:
+                prev_text = cb.currentText()
+                cb.clear()
+                cb.addItems(plot_names)
+                if prev_text in plot_names:
+                    cb.setCurrentText(prev_text)
+
     def _on_solver_backend_changed(self, index):
         """Updates UI and hardware badge when toggling between GPU and CPU."""
         if index == 0:  # GPU
@@ -801,20 +878,23 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _build_bottom_drawer_dock(self):
         self.dock_bottom = QDockWidget("📋 Execution Center & Process Console", self)
         self.dock_bottom.setAllowedAreas(Qt.BottomDockWidgetArea)
+        self.dock_bottom.setMaximumHeight(380)
         self.bottom_tabs = QTabWidget()
 
         # Tab 1: Batch Queue
         queue_tab = QWidget()
-        ql = QVBoxLayout(queue_tab); ql.setContentsMargins(6, 6, 6, 6)
-        row = QHBoxLayout()
-        btn_start = QPushButton("▶ Start Queue"); btn_start.setObjectName("PrimaryBtn"); btn_start.clicked.connect(self.start_queue); row.addWidget(btn_start)
-        btn_pause = QPushButton("⏸ Pause"); btn_pause.clicked.connect(self.pause_queue); row.addWidget(btn_pause)
-        btn_clear = QPushButton("🗑 Clear Finished"); btn_clear.clicked.connect(self.clear_queue); row.addWidget(btn_clear)
+        ql = QVBoxLayout(queue_tab); ql.setContentsMargins(4, 4, 4, 4); ql.setSpacing(4)
+        row = QHBoxLayout(); row.setSpacing(6)
+        btn_start = QPushButton("▶ Start Queue"); btn_start.setObjectName("PrimaryBtn"); btn_start.setStyleSheet("padding: 4px 10px; font-size: 11px;"); btn_start.clicked.connect(self.start_queue); row.addWidget(btn_start)
+        btn_pause = QPushButton("⏸ Pause"); btn_pause.setStyleSheet("padding: 4px 10px; font-size: 11px;"); btn_pause.clicked.connect(self.pause_queue); row.addWidget(btn_pause)
+        btn_clear = QPushButton("🗑 Clear Finished"); btn_clear.setStyleSheet("padding: 4px 10px; font-size: 11px;"); btn_clear.clicked.connect(self.clear_queue); row.addWidget(btn_clear)
         row.addStretch(); ql.addLayout(row)
 
         self.table_queue = QTableWidget(0, 6)
         self.table_queue.setHorizontalHeaderLabels(["#", "Study", "Parameters Snapshot", "Solver", "Progress", "Status"])
         self.table_queue.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table_queue.verticalHeader().setDefaultSectionSize(24)
+        self.table_queue.verticalHeader().setVisible(False)
         ql.addWidget(self.table_queue)
         self.bottom_tabs.addTab(queue_tab, "📋 Batch Execution Queue")
 
@@ -1165,13 +1245,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if not all_plots and primary_plot:
             all_plots = [primary_plot]
 
-        # Register all generated plots (DOS, FS, Path) into Study Navigator tree
-        for p_path in all_plots:
-            if p_path and os.path.exists(p_path):
-                base_name = os.path.basename(p_path)
-                if base_name not in self.plots:
-                    self.plots[base_name] = p_path
-                    QTreeWidgetItem(self.grp_results, [base_name])
+        self.refresh_dataset_tree()
 
         if primary_plot and os.path.exists(primary_plot):
             self.canvas_left.load_image(primary_plot)
@@ -1216,6 +1290,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
         flush_gpu_vram()
         event.accept()
 
+    def _adjust_bottom_dock_height(self):
+        """Automatically expands/contracts Execution Center vertical height based on queued sweep jobs."""
+        n_rows = self.table_queue.rowCount()
+        base_h = 145
+        row_h = 26
+        max_allowed = min(360, int(self.height() * 0.42))
+        desired_h = min(max_allowed, base_h + (n_rows * row_h))
+        self.dock_bottom.setMaximumHeight(max_allowed + 30)
+        self.resizeDocks([self.dock_bottom], [desired_h], Qt.Vertical)
+
     def add_to_queue(self):
         row = self.table_queue.rowCount()
         self.table_queue.insertRow(row)
@@ -1227,6 +1311,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         prog = QProgressBar(); prog.setValue(0); self.table_queue.setCellWidget(row, 4, prog)
         self.table_queue.setItem(row, 5, QTableWidgetItem("⏳ Pending"))
         self.lbl_status.setText(f"Added {self.active_study} as Job #{row + 1} to queue.")
+        self.bottom_tabs.setCurrentIndex(0)
+        self._adjust_bottom_dock_height()
 
     def start_queue(self):
         if self.table_queue.rowCount() == 0: self.add_to_queue()
@@ -1252,6 +1338,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def clear_queue(self):
         self.table_queue.setRowCount(0)
+        self._adjust_bottom_dock_height()
         self.lbl_status.setText("Batch queue cleared.")
 
     def toggle_split_view(self, checked):
