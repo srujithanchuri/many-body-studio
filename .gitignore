@@ -1,0 +1,25 @@
+# Python virtual environment
+.venv/
+env/
+venv/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test and coverage caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local results and plots (keep data directory gitignored, keep README or structure if needed)
+results/plots/
+results/data/
+results/*.png
+results/*.pdf
+
+# IDE and agents
+.agents/
+.vscode/
+.idea/
