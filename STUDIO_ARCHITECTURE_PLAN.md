@@ -58,9 +58,22 @@
 | **Physical Coordinate Crosshair** | Translates screen pixel coordinates under the cursor into actual physics units in the status bar. | Read exact values: Frequency $\omega$ and $A(\omega)$ on DOS; momentum $(k_x/\pi, k_y/\pi)$ on Fermi surfaces; $(J_K, J_c)$ on phase boundaries. |
 | **Export Actions** | Context menu actions: `Copy Image to Clipboard`, `Save High-Res PNG`, `Open in System Viewer`. | Instant sharing into presentations or messaging without manual file searching. |
 
+### 2.4 The Core Paradigm Shift: Static PNGs vs. Native Interactive Data
+
+In the legacy Tkinter alpha build, every calculation completed by writing a flat `.png` bitmap to disk, which the GUI rendered as a static image. In **Many-Body Studio Pro**, calculations generate and preserve **raw numerical NumPy arrays** (`omega`, `Atot_loc`, `Atot_path`, `Atot_w0`, `chi0`, `J_c_curve`, `spectral_maps`).
+
+Rather than confining analysis to flat raster pictures, the Studio architecture leverages native, hardware-accelerated interactive scientific data visualization (via `pyqtgraph` and hardware-accelerated embedded Matplotlib Qt canvases) with four flagship priority features:
+
+| Priority Feature | Architectural Implementation & Mechanism | Research Benefit |
+|---|---|---|
+| **Interactive Crosshairs & Peak Readout** | Binds mouse cursor hover events over the 1D & 2D spectral arrays ($A(\mathbf{k}, \omega)$, $\operatorname{Im}\Sigma(\mathbf{k}, \omega)$, $\chi(\mathbf{q}, \omega)$). Real-time interpolation displays the exact numerical frequency $\omega$, quasiparticle energy shifts $\operatorname{Re}\Sigma$, scattering rates, and peak heights directly in the viewport readout HUD. | Quantitative extraction of quasiparticle lifetimes and peak positions on the fly without manual raw data exports. |
+| **Interactive Brillouin Zone Cutlines** | An interactive vector line tool drawn across the 2D Static Susceptibility $\chi(\mathbf{q})$ Brillouin zone map. Slicing through the underlying 2D array dynamically extracts and plots the 1D intensity profile $\chi(q)$ along that custom trajectory in a companion sub-view in real time. | Real-time exploration of incommensurate nesting peaks and directional anisotropy along arbitrary BZ paths. |
+| **Instant Parametric Sliders (Zero-Wait Physics)** | Because the bare bubble $\chi_0(\mathbf{q}, \omega)$ is computationally intensive but completely independent of $J_K$ and $J_\perp$, it is cached in RAM/disk. Dragging real-time interactive sliders for $J_K$ evaluates the scalar RPA inversion formula $\chi = \chi_0 / [1 - \Gamma \chi_0]$ instantaneously at **60 FPS** without recomputing the bubble. | Zero-wait physical exploration of magnetic phase boundaries and peak divergences in real time. |
+| **Vector Export on Demand** | One-click export of native figure elements to vector formats (**`.pdf`**, **`.svg`**, **`.eps`**) with embedded LaTeX fonts and scalable vector line art directly from the underlying data. | Thesis-ready, publication-grade vector graphics that scale infinitely in LaTeX documents without bitmap rasterization artifacts. |
+
 ---
 
-### 2.4 Stability, Security & Crash Protection
+### 2.5 Stability, Security & Crash Protection
 
 | Feature | Description | Benefit |
 |---|---|---|
@@ -71,7 +84,7 @@
 
 ---
 
-### 2.5 Execution Lifecycle & Stop Execution (GPU Memory Release)
+### 2.6 Execution Lifecycle & Stop Execution (GPU Memory Release)
 
 | Feature | Description | Benefit |
 |---|---|---|
@@ -81,7 +94,7 @@
 
 ---
 
-### 2.6 Batch Queue Management
+### 2.7 Batch Queue Management
 
 | Feature | Description | Benefit |
 |---|---|---|
@@ -144,15 +157,22 @@ masters_thesis_gui/
 4. Automatically load the newly generated plot into the interactive canvas upon completion.
 5. Verify cancellation: verify that clicking "Stop" halts computation within 1 second and flushes all GPU memory.
 
-### Phase 3: Scaling to Remaining Physics Studies
+### Phase 3: Scaling to Remaining Physics Studies (Current Focus)
 1. Connect `Spectral Function A(k, ω)` (`self_energy.run_spectral`).
 2. Connect `Phase Diagram Bisection` (`susceptibility.phase_diagram`).
 3. Connect `RPA Susceptibility Sweep` (`susceptibility.sweeper`).
+4. Rigorous verification of all 4 solvers across both GPU (`gpu64`) and CPU (`cpu`) backends.
 
 ### Phase 4: Smart Caching & Batch Queue
-1. Implement `core/cache_manager.py` with SHA-256 hashing.
+1. Implement `core/cache_manager.py` with SHA-256 parameter hashing.
 2. Build instant cache hit detection in the UI.
 3. Wire the persistent batch queue table with in-cell animated progress bars.
+
+### Phase 5: Native Interactive Data & Scientific Analysis Tools (Top Priority Track)
+1. **Interactive Crosshairs & Peak Readout**: Real-time HUD displaying numerical $\omega, A(\mathbf{k}, \omega), \operatorname{Re}\Sigma, \operatorname{Im}\Sigma, \chi(\mathbf{q}, \omega)$ on cursor hover.
+2. **Interactive Brillouin Zone Cutlines**: Free-hand or guided vector slice tool on 2D Static $\chi(\mathbf{q})$ maps extracting real-time 1D intensity cuts.
+3. **Instant Parametric Sliders (Zero-Wait Physics)**: GPU/RAM-cached bubble $\chi_0$ enables continuous 60 FPS slider manipulation of $J_K / J_\perp$ with instant RPA inversion.
+4. **Vector Export on Demand**: Direct export of figures to `.pdf`, `.svg`, and `.eps` with embedded LaTeX typography for thesis publication.
 
 ---
 
