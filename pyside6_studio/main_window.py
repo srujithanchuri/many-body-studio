@@ -824,17 +824,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.txt_console = QTextEdit(); self.txt_console.setReadOnly(True)
         self.txt_console.setStyleSheet("""
             QTextEdit {
-                background-color: #0b1120;
-                color: #e2e8f0;
-                font-family: 'Consolas', 'Cascadia Code', monospace;
+                background-color: #012456;
+                color: #ffffff;
+                font-family: 'Consolas', 'Cascadia Mono', 'Courier New', monospace;
                 font-size: 11px;
-                line-height: 1.4;
-                border: 1px solid #1e293b;
-                border-radius: 6px;
+                line-height: 1.35;
+                border: 1px solid #001b44;
+                border-radius: 4px;
                 padding: 6px;
             }
         """)
-        self.txt_console.append("<div style='color: #38bdf8; font-family: monospace; font-weight: 600;'>[System Ready] Studio initialized with RTX 5060 QProcess execution engine.</div>")
+        self.txt_console.append("<span style='color: #00ffff; font-family: Consolas, monospace; font-weight: bold;'>Windows PowerShell [Studio Calculation Engine]</span>")
+        self.txt_console.append("<span style='color: #ffffff; font-family: Consolas, monospace;'>Ready. NVIDIA RTX 5060 QProcess execution bridge initialized.</span><br>")
         cl.addWidget(self.txt_console)
         self.bottom_tabs.addTab(console_tab, "💻 Live Solver Console")
 
@@ -1089,7 +1090,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel.setText("⏳ Stopping...")
         self.lbl_status.setText("⏳ Stopping simulation & releasing GPU VRAM...")
         self.txt_console.append(
-            f"<div style='color: #f59e0b; font-family: monospace; font-weight: bold; margin: 4px 0;'>"
+            f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ⏹ [CANCEL REQUESTED] Terminating process tree & purging VRAM cache..."
             f"</div>"
         )
@@ -1104,7 +1105,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         backend_name = "NVIDIA RTX 5060 GPU" if getattr(self, "cb_solver_choice", None) and self.cb_solver_choice.currentIndex() == 0 else "Host CPU"
         self.lbl_status.setText(f"⏳ Running: Initializing {backend_name} solver for {self.active_study}...")
         self.txt_console.append(
-            f"<div style='color: #38bdf8; font-family: monospace; font-weight: bold; margin: 6px 0 2px 0;'>"
+            f"<div style='color: #00ffff; font-family: Consolas, monospace; font-weight: bold; margin: 6px 0 2px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ⚡ Started {self.active_study} on {backend_name} via isolated QProcess."
             f"</div>"
         )
@@ -1112,27 +1113,28 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_calc_log(self, text: str):
         import html
         escaped = html.escape(text)
-        # Context-aware color styling
+
+        # Authentic PowerShell / Terminal Stream Colors
         if any(w in text for w in ["[STDERR]", "Traceback", "Error", "Exception", "failed"]):
-            color = "#f87171"  # Soft red
+            color = "#ff6b68"  # PowerShell Error Red
             weight = "bold"
-        elif any(w in text for w in ["SWEEPING", "===", "Starting", "Building"]):
-            color = "#38bdf8"  # Sky blue
+        elif any(w in text for w in ["SWEEPING", "===", "Starting", "Building", "⚡"]):
+            color = "#00ffff"  # PowerShell Cyan / Host Accent
             weight = "bold"
         elif any(w in text for w in ["GPU ACTIVE", "CUDA", "Active Backend"]):
-            color = "#86efac"  # Mint green
+            color = "#4ade80"  # Terminal Green
             weight = "bold"
-        elif any(w in text for w in ["completed", "Saved", "finished", "success"]):
-            color = "#4ade80"  # Bright green
+        elif any(w in text for w in ["completed", "Saved", "finished", "success", "✅"]):
+            color = "#4ade80"  # Terminal Green
             weight = "normal"
-        elif "Scaling for" in text or "progress" in text:
-            color = "#fcd34d"  # Amber
+        elif any(w in text for w in ["CACHE HIT", "Warning", "Scaling for"]):
+            color = "#ffff00"  # PowerShell Yellow
             weight = "normal"
         else:
-            color = "#cbd5e1"  # Clean slate text
+            color = "#ffffff"  # Default PowerShell White
             weight = "normal"
 
-        self.txt_console.append(f"<div style='color: {color}; font-family: monospace; font-weight: {weight};'>{escaped}</div>")
+        self.txt_console.append(f"<span style='color: {color}; font-family: Consolas, monospace; font-weight: {weight};'>{escaped}</span>")
         sb = self.txt_console.verticalScrollBar()
         if sb:
             sb.setValue(sb.maximum())
@@ -1153,7 +1155,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"✅ Completed: {self.active_study} finished • Loaded into viewport.")
         self.txt_console.append(
-            f"<div style='color: #4ade80; font-family: monospace; font-weight: bold; margin: 4px 0;'>"
+            f"<div style='color: #4ade80; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ Calculation completed successfully."
             f"</div>"
         )
@@ -1189,7 +1191,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"❌ Error: {error_msg}")
         self.txt_console.append(
-            f"<div style='color: #f87171; font-family: monospace; font-weight: bold; margin: 4px 0;'>"
+            f"<div style='color: #ff6b68; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ❌ [ERROR] {error_msg}"
             f"</div>"
         )
@@ -1201,7 +1203,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText("⏹ Stopped: Execution cancelled by user • GPU VRAM purged.")
         self.txt_console.append(
-            f"<div style='color: #10b981; font-family: monospace; font-weight: bold; margin: 4px 0;'>"
+            f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."
             f"</div>"
         )

@@ -100,7 +100,7 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
         cpu_limit=cpu_limit
     )
 
-    emit_status(f"Evaluating Dyson real-time FFT convolutions on {backend_label}...")
+    emit_status(f"Evaluating 1-Loop & 3-Loop Self-Energy via Real-Time FFT on {backend_label}...")
 
     is_jperp_sweep = ("Interlayer" in sweep_mode or "J_⊥" in sweep_mode)
     if is_jperp_sweep:
