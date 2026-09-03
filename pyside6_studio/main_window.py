@@ -83,6 +83,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.bridge = CalculationBridge(self)
         self.bridge.sig_started.connect(self._on_calc_started)
         self.bridge.sig_log.connect(self._on_calc_log)
+        self.bridge.sig_status.connect(self._on_calc_status)
         self.bridge.sig_progress.connect(self._on_calc_progress)
         self.bridge.sig_completed.connect(self._on_calc_completed)
         self.bridge.sig_error.connect(self._on_calc_error)
@@ -1101,7 +1102,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel.setEnabled(True)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         backend_name = "NVIDIA RTX 5060 GPU" if getattr(self, "cb_solver_choice", None) and self.cb_solver_choice.currentIndex() == 0 else "Host CPU"
-        self.lbl_status.setText(f"⏳ Running {self.active_study} on {backend_name}...")
+        self.lbl_status.setText(f"⏳ Running: Initializing {backend_name} solver for {self.active_study}...")
         self.txt_console.append(
             f"<div style='color: #38bdf8; font-family: monospace; font-weight: bold; margin: 6px 0 2px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ⚡ Started {self.active_study} on {backend_name} via isolated QProcess."
@@ -1136,29 +1137,43 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if sb:
             sb.setValue(sb.maximum())
 
+    def _on_calc_status(self, message: str):
+        """Displays accurate, informative physics execution stage without fake percentages."""
+        if message:
+            self.lbl_status.setText(f"⏳ Running: {message}")
+
     def _on_calc_progress(self, percent: int, step: str):
-        self.lbl_status.setText(f"[{percent}%] {step}")
+        """Updates status cleanly without arbitrary percentage prefixes."""
+        if step:
+            self.lbl_status.setText(f"⏳ Running: {step}")
 
     def _on_calc_completed(self, payload: dict):
         self.btn_run.setEnabled(True)
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
-        self.lbl_status.setText("✅ Calculation completed successfully! Loaded plot.")
+        self.lbl_status.setText(f"✅ Completed: {self.active_study} finished • Loaded into viewport.")
         self.txt_console.append(
             f"<div style='color: #4ade80; font-family: monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ Calculation completed successfully."
             f"</div>"
         )
 
-        plot_path = payload.get("plot_path")
-        if plot_path and os.path.exists(plot_path):
-            self.canvas_left.load_image(plot_path)
+        all_plots = payload.get("all_plots", [])
+        primary_plot = payload.get("plot_path", "")
+        if not all_plots and primary_plot:
+            all_plots = [primary_plot]
+
+        # Register all generated plots (DOS, FS, Path) into Study Navigator tree
+        for p_path in all_plots:
+            if p_path and os.path.exists(p_path):
+                base_name = os.path.basename(p_path)
+                if base_name not in self.plots:
+                    self.plots[base_name] = p_path
+                    QTreeWidgetItem(self.grp_results, [base_name])
+
+        if primary_plot and os.path.exists(primary_plot):
+            self.canvas_left.load_image(primary_plot)
             self.canvas_left.fit_in_view()
-            # Register in plots list and update nav tree
-            base_name = os.path.basename(plot_path)
-            if base_name not in self.plots:
-                self.plots[base_name] = plot_path
-                QTreeWidgetItem(self.grp_results, [base_name])
 
         # Auto-reset status label to Ready after 4 seconds
         QTimer.singleShot(4000, self._reset_status_to_ready)
@@ -1184,7 +1199,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_run.setEnabled(True)
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
-        self.lbl_status.setText("⏹ Calculation stopped by user. GPU VRAM released.")
+        self.lbl_status.setText("⏹ Stopped: Execution cancelled by user • GPU VRAM purged.")
         self.txt_console.append(
             f"<div style='color: #10b981; font-family: monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."

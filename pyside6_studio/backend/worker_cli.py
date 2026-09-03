@@ -41,25 +41,31 @@ except Exception:
 from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
 
 
-def emit_progress(percent: int, step_desc: str):
-    """Emits structured JSON progress protocol line on stdout."""
-    msg = json.dumps({"progress": int(percent), "step": str(step_desc)})
+def emit_status(step_desc: str, phase: str = "running"):
+    """Emits structured JSON status protocol line on stdout (no inaccurate percentages)."""
+    msg = json.dumps({"type": "status", "phase": phase, "message": str(step_desc), "step": str(step_desc)})
     print(msg, flush=True)
 
 
-def emit_completed(plot_path: str = "", data_path: str = ""):
+def emit_progress(percent: int, step_desc: str):
+    """Backward-compatible wrapper for status emission."""
+    emit_status(step_desc)
+
+
+def emit_completed(plot_path: str = "", data_path: str = "", all_plots: list = None):
     """Emits completion message on stdout."""
     msg = json.dumps({
         "type": "completed",
         "success": True,
         "plot_path": plot_path,
-        "data_path": data_path
+        "data_path": data_path,
+        "all_plots": all_plots or ([plot_path] if plot_path else [])
     })
     print(msg, flush=True)
 
 
 def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str):
-    """Executes the full-BZ Spectral Sweep (DOS, FS, Path)."""
+    """Executes the full-BZ Spectral Sweep (DOS, FS, Path) with cache optimization and multi-plot delivery."""
     t = float(params.get("t", 1.0))
     t1 = float(params.get("t1", 0.0))
     mu = float(params.get("mu", 1.0))
@@ -81,12 +87,12 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
         cpu_limit = 0.80
 
     backend_label = "NVIDIA RTX 5060 GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
-    emit_progress(15, f"Configured parameters on {backend_label}: t={t}, mu={mu}, K={K}, N={N}x{N}, Nw={num_omega}")
+    emit_status(f"Configuring parameters on {backend_label}: t={t}, mu={mu}, K={K}, N={N}×{N}, Nw={num_omega}")
 
     from parameters import ModelParameters
     import sweep_core
 
-    emit_progress(25, f"Building Hamiltonian and numerical grids on {backend_label}...")
+    emit_status(f"Building Hamiltonian & numerical grids on {backend_label}...")
     p = ModelParameters(
         t=t, t1=t1, mu=mu, K=K,
         N=N, num_omega=num_omega, omega_max=omega_max, eta=eta,
@@ -94,18 +100,19 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
         cpu_limit=cpu_limit
     )
 
-    emit_progress(45, f"Executing Dyson real-time FFT convolutions on {backend_label}...")
+    emit_status(f"Evaluating Dyson real-time FFT convolutions on {backend_label}...")
 
-    if "Interlayer" in sweep_mode or "J_⊥" in sweep_mode:
+    is_jperp_sweep = ("Interlayer" in sweep_mode or "J_⊥" in sweep_mode)
+    if is_jperp_sweep:
         res = sweep_core.run_J_perp_sweep(
             j_perp_values=jk_vals,
             fixed_jk=fixed_jperp,
             mu=mu,
             p=p,
             output_dir=out_plots_dir,
-            use_cache=False
+            use_cache=True
         )
-        expected_plot = os.path.join(out_plots_dir, f"sweep_DOS_atJ_K_{fixed_jperp:.1f}_mu_{mu:.1f}.png")
+        safe_suffix = f"atJ_K_{fixed_jperp:.1f}_mu_{mu:.1f}".replace("$", "").replace("\\", "").replace(" ", "").replace("=", "_").replace("{", "").replace("}", "").replace(",", "_").replace("/", "_")
     else:
         res = sweep_core.run_J_k_sweep(
             j_k_values=jk_vals,
@@ -113,22 +120,26 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
             mu=mu,
             p=p,
             output_dir=out_plots_dir,
-            use_cache=False
+            use_cache=True
         )
-        expected_plot = os.path.join(out_plots_dir, f"sweep_DOS_atJ_perp_{fixed_jperp:.1f}_mu_{mu:.1f}.png")
+        safe_suffix = f"atJ_perp_{fixed_jperp:.1f}_mu_{mu:.1f}".replace("$", "").replace("\\", "").replace(" ", "").replace("=", "_").replace("{", "").replace("}", "").replace(",", "_").replace("/", "_")
 
-    emit_progress(90, "Locating generated composite spectral plots...")
-    plot_path = ""
-    if os.path.isfile(expected_plot):
-        plot_path = expected_plot
-    else:
+    emit_status("Locating and verifying generated composite spectral plots...")
+
+    dos_plot = os.path.join(out_plots_dir, f"sweep_DOS_{safe_suffix}.png")
+    fs_plot = os.path.join(out_plots_dir, f"sweep_FS_{safe_suffix}.png")
+    path_plot = os.path.join(out_plots_dir, f"sweep_Path_{safe_suffix}.png")
+
+    all_plots = [p_path for p_path in [dos_plot, fs_plot, path_plot] if os.path.isfile(p_path)]
+    if not all_plots:
         for f in sorted(os.listdir(out_plots_dir), reverse=True):
             if f.endswith(".png") and "sweep" in f:
-                plot_path = os.path.join(out_plots_dir, f)
-                break
+                all_plots.append(os.path.join(out_plots_dir, f))
 
-    emit_progress(100, "Spectral Sweep finished successfully.")
-    emit_completed(plot_path=plot_path)
+    primary_plot = dos_plot if os.path.isfile(dos_plot) else (all_plots[0] if all_plots else "")
+
+    emit_status("Spectral Sweep completed successfully.")
+    emit_completed(plot_path=primary_plot, all_plots=all_plots)
 
 
 def run_spectral_function_task(params: dict, out_plots_dir: str, out_data_dir: str):

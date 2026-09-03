@@ -300,6 +300,43 @@ class TestTier3CrossFeatureInteractions(unittest.TestCase):
         self.assertEqual(window.btn_cancel.text(), "⏹ Cancel / Stop")
         self.assertIn("stopped", window.lbl_status.text().lower())
 
+    def test_accurate_status_text_and_no_percentages(self):
+        """Cross-Feature: Status messages accurately reflect physics stages with zero fake percentages."""
+        from pyside6_studio.main_window import UnifiedWorkbenchWindow
+
+        window = UnifiedWorkbenchWindow()
+        window.show()
+        self.addCleanup(window.close)
+
+        # 1. Idle status
+        self.assertIn("Ready", window.lbl_status.text())
+        self.assertNotIn("%", window.lbl_status.text())
+
+        # 2. Status message update
+        window._on_calc_status("Evaluating 1-Loop Dyson Real-Time FFT convolutions...")
+        self.assertNotIn("%", window.lbl_status.text())
+        self.assertIn("Evaluating 1-Loop Dyson", window.lbl_status.text())
+
+        # 3. Progress message update (backward compatibility)
+        window._on_calc_progress(45, "Executing Dyson FFT convolutions...")
+        self.assertNotIn("%", window.lbl_status.text())
+        self.assertIn("Executing Dyson FFT", window.lbl_status.text())
+
+        # 4. Multi-plot completion
+        mock_payload = {
+            "type": "completed",
+            "success": True,
+            "plot_path": "sweep_DOS_atJ_perp_6.0_mu_1.0.png",
+            "all_plots": [
+                "sweep_DOS_atJ_perp_6.0_mu_1.0.png",
+                "sweep_FS_atJ_perp_6.0_mu_1.0.png",
+                "sweep_Path_atJ_perp_6.0_mu_1.0.png"
+            ]
+        }
+        window._on_calc_completed(mock_payload)
+        self.assertNotIn("%", window.lbl_status.text())
+        self.assertIn("Completed", window.lbl_status.text())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,7 @@ class CalculationBridge(QObject):
     """Coordinates isolated child process execution via QProcess."""
 
     sig_started = Signal()
+    sig_status = Signal(str)
     sig_progress = Signal(int, str)
     sig_log = Signal(str)
     sig_completed = Signal(dict)
@@ -130,7 +131,7 @@ class CalculationBridge(QObject):
                 self.sig_log.emit(f"[STDERR] {line}")
 
     def parse_line(self, line: str):
-        """Parses stdout line; routes JSON progress or plain log lines."""
+        """Parses stdout line; routes JSON status or plain log lines."""
         if not line:
             return
 
@@ -138,8 +139,15 @@ class CalculationBridge(QObject):
         try:
             payload = json.loads(line)
             if isinstance(payload, dict):
-                if "progress" in payload and "step" in payload:
-                    self.sig_progress.emit(int(payload["progress"]), str(payload["step"]))
+                if payload.get("type") == "status":
+                    msg = str(payload.get("message", payload.get("step", "")))
+                    self.sig_status.emit(msg)
+                    self.sig_progress.emit(100, msg)
+                    return
+                elif "progress" in payload and "step" in payload:
+                    msg = str(payload["step"])
+                    self.sig_status.emit(msg)
+                    self.sig_progress.emit(int(payload["progress"]), msg)
                     return
                 elif payload.get("type") == "completed":
                     self._running = False
@@ -148,19 +156,29 @@ class CalculationBridge(QObject):
         except (json.JSONDecodeError, ValueError):
             pass
 
-        # Plain text log message - inspect for progress milestones to advance progress bar smoothly
+        # Plain text log message - inspect for accurate physics milestones without arbitrary percentages
         if "Starting 1-Loop FFT" in line:
-            self.sig_progress.emit(50, "Solving 1-Loop Dyson FFT on RTX 5060...")
+            self.sig_status.emit("Evaluating 1-Loop Dyson Real-Time FFT convolutions...")
+            self.sig_progress.emit(0, "Evaluating 1-Loop Dyson Real-Time FFT convolutions...")
         elif "1-Loop FFT completed" in line:
-            self.sig_progress.emit(60, "1-Loop FFT completed. Starting 3-Loop...")
+            self.sig_status.emit("1-Loop FFT finished. Initializing 3-Loop convolutions...")
+            self.sig_progress.emit(0, "1-Loop FFT finished. Initializing 3-Loop...")
         elif "Starting 3-Loop FFT" in line:
-            self.sig_progress.emit(65, "Solving 3-Loop Dyson FFT on RTX 5060...")
+            self.sig_status.emit("Evaluating 3-Loop Self-Energy Vertex Corrections...")
+            self.sig_progress.emit(0, "Evaluating 3-Loop Vertex Corrections...")
         elif "3-Loop FFT completed" in line:
-            self.sig_progress.emit(75, "FFT convolutions finished. Scaling self-energies...")
+            self.sig_status.emit("Dyson convolutions finished. Preparing scaling...")
+            self.sig_progress.emit(0, "Dyson convolutions finished. Preparing scaling...")
         elif "Scaling for" in line:
-            self.sig_progress.emit(80, "Applying Kondo/interlayer coupling scaling...")
+            coupling_label = line.strip().split(">>>")[-1].strip()
+            self.sig_status.emit(f"Computing Spectral Observables ({coupling_label})...")
+            self.sig_progress.emit(0, f"Computing Spectral Observables ({coupling_label})...")
         elif "Generating Sweep Plots" in line:
-            self.sig_progress.emit(90, "Rendering composite high-resolution plots...")
+            self.sig_status.emit("Rendering composite publication plots (DOS • FS • Path)...")
+            self.sig_progress.emit(0, "Rendering composite publication plots (DOS • FS • Path)...")
+        elif "[CACHE HIT]" in line:
+            self.sig_status.emit("Precomputed data found in cache. Loading plots...")
+            self.sig_progress.emit(0, "Precomputed data found in cache...")
 
         self.sig_log.emit(line)
 
