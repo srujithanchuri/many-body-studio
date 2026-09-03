@@ -418,18 +418,22 @@ QPushButton#ModeInactive:hover {
 
 QHeaderView::section {
     background: #f8fafc;
-    padding: 6px;
+    padding: 6px 8px;
     border: none;
-    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #cbd5e1;
     font-weight: 600;
     color: #475569;
 }
 QTableWidget, QTreeWidget, QTableView {
     background: #ffffff;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
-    gridline-color: #f1f5f9;
+    gridline-color: #e2e8f0;
     color: #0f172a;
+}
+QTableWidget::item {
+    padding: 4px 8px;
 }
 QTableWidget::item:selected, QTreeWidget::item:selected {
     background: #eff6ff;
@@ -917,9 +921,10 @@ QPushButton#ModeInactive:hover {
 
 QHeaderView::section {
     background: #0f172a;
-    padding: 6px;
+    padding: 6px 8px;
     border: none;
-    border-bottom: 1px solid #334155;
+    border-right: 1px solid #334155;
+    border-bottom: 1px solid #475569;
     font-weight: 600;
     color: #94a3b8;
 }
@@ -929,6 +934,9 @@ QTableWidget, QTreeWidget, QTableView {
     border-radius: 6px;
     gridline-color: #334155;
     color: #f8fafc;
+}
+QTableWidget::item {
+    padding: 4px 8px;
 }
 QTableWidget::item:selected, QTreeWidget::item:selected {
     background: #1e3a8a;

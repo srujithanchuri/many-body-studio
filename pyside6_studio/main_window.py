@@ -16,7 +16,7 @@ import os
 import time
 import glob
 from PySide6.QtCore import Qt, QTimer, Slot, QObject, QEvent, QSize
-from PySide6.QtGui import QAction, QIcon, QPixmap, QCloseEvent
+from PySide6.QtGui import QAction, QIcon, QPixmap, QCloseEvent, QColor, QFont
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QDockWidget, QTabWidget, QSplitter, QGroupBox, QLabel, QLineEdit,
@@ -926,6 +926,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         qh.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.table_queue.verticalHeader().setDefaultSectionSize(26)
         self.table_queue.verticalHeader().setVisible(False)
+        self.table_queue.setShowGrid(True)
         ql.addWidget(self.table_queue)
         self.bottom_tabs.addTab(queue_tab, "📋 Batch Execution Queue")
 
@@ -1360,9 +1361,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.table_queue.setItem(row, 0, item_num)
 
         item_study = QTableWidgetItem(self.active_study)
+        font_study = item_study.font()
+        font_study.setBold(True)
+        item_study.setFont(font_study)
+        item_study.setForeground(QColor("#60a5fa") if self.is_dark else QColor("#2563eb"))
         self.table_queue.setItem(row, 1, item_study)
 
         item_snap = QTableWidgetItem(summary)
+        item_snap.setTextAlignment(Qt.AlignCenter)
+        item_snap.setForeground(QColor("#94a3b8") if self.is_dark else QColor("#475569"))
         self.table_queue.setItem(row, 2, item_snap)
 
         solver_str = "NVIDIA RTX 5060 (GPU)" if self.cb_solver_choice.currentIndex() == 0 else f"CPU ({self.cb_cpu_limit.currentText().split()[0]} Cores)"
@@ -1430,6 +1437,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
             app_inst.setStyleSheet(theme_qss)
         self.canvas_left.set_theme(self.is_dark)
         self.canvas_right.set_theme(self.is_dark)
+        study_col = QColor("#60a5fa") if self.is_dark else QColor("#2563eb")
+        snap_col = QColor("#94a3b8") if self.is_dark else QColor("#475569")
+        for r in range(self.table_queue.rowCount()):
+            it_s = self.table_queue.item(r, 1)
+            if it_s: it_s.setForeground(study_col)
+            it_p = self.table_queue.item(r, 2)
+            if it_p: it_p.setForeground(snap_col)
 
     def reset_active_zoom(self):
         self.canvas_left.fit_in_view()
