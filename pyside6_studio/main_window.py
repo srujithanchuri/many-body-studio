@@ -2091,12 +2091,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self._update_cache_badge()
         if hasattr(self, "analytical_lab") and self.analytical_lab:
             self.analytical_lab.scan_caches()
+        if hasattr(self, "gallery") and self.gallery:
+            self.gallery.refresh_gallery()
 
         if primary_plot and os.path.exists(primary_plot):
             self.current_view_plot_path = primary_plot
             self.canvas_left.load_image(primary_plot)
             self.canvas_left.fit_in_view()
-            if hasattr(self, "gallery"):
+            if hasattr(self, "gallery") and self.gallery:
                 self.gallery.select_plot(primary_plot)
             if hasattr(self, "cb_active_plot"):
                 for i in range(self.cb_active_plot.count()):
@@ -2258,6 +2260,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             if self.active_queue_row >= self.table_queue.rowCount():
                 self.queue_timer.stop()
                 self.lbl_status.setText("🎉 Batch queue completed successfully!")
+                self.refresh_dataset_tree()
+                self._update_cache_badge()
+                if hasattr(self, "analytical_lab") and self.analytical_lab:
+                    self.analytical_lab.scan_caches()
+                if hasattr(self, "gallery") and self.gallery:
+                    self.gallery.refresh_gallery()
 
     def pause_queue(self):
         self.queue_timer.stop()

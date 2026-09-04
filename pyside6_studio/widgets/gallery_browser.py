@@ -254,17 +254,24 @@ class CompactRowCard(QFrame):
         self.is_selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setFrameShape(QFrame.StyledPanel)
-        self.setFixedHeight(44)
+        self.setFixedHeight(46)
         self.setObjectName("CompactRowCard")
 
         self.title, self.params_str, self.cat_tag, self.obs_type, self.fname = parse_plot_metadata(self.plot_path)
+
+        # Formatted timestamp
+        try:
+            mtime = os.path.getmtime(self.plot_path)
+            self.time_str = datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")
+        except Exception:
+            self.time_str = ""
 
         self._build_ui()
         self.update_style()
 
     def _build_ui(self):
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(6, 3, 6, 3)
+        lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(6)
 
         # Icon based on observable
@@ -288,17 +295,31 @@ class CompactRowCard(QFrame):
         # Text column
         t_lay = QVBoxLayout()
         t_lay.setContentsMargins(0, 0, 0, 0)
-        t_lay.setSpacing(1)
+        t_lay.setSpacing(2)
 
         self.lbl_title = QLabel(self.title)
         self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
         t_lay.addWidget(self.lbl_title)
 
+        # Row 2: Parameters on left + Timestamp on bottom right
+        r2 = QHBoxLayout()
+        r2.setContentsMargins(0, 0, 0, 0)
+        r2.setSpacing(6)
+
         if self.params_str:
             self.lbl_p = QLabel(self.params_str)
             self.lbl_p.setStyleSheet("font-size: 9px; color: #0284c7; font-weight: 600;")
-            t_lay.addWidget(self.lbl_p)
+            r2.addWidget(self.lbl_p)
 
+        r2.addStretch()
+
+        if self.time_str:
+            self.lbl_time = QLabel(self.time_str)
+            self.lbl_time.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
+            r2.addWidget(self.lbl_time)
+
+        t_lay.addLayout(r2)
         lay.addLayout(t_lay, 1)
 
     def set_selected(self, selected: bool):
@@ -315,6 +336,8 @@ class CompactRowCard(QFrame):
                 }
             """)
             self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #1d4ed8;")
+            if hasattr(self, "lbl_time"):
+                self.lbl_time.setStyleSheet("font-size: 9px; color: #3b82f6; font-weight: 600;")
         else:
             self.setStyleSheet("""
                 #CompactRowCard {
@@ -328,6 +351,8 @@ class CompactRowCard(QFrame):
                 }
             """)
             self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
+            if hasattr(self, "lbl_time"):
+                self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -421,17 +446,29 @@ class PlotGalleryWidget(QWidget):
         self.edit_search.textChanged.connect(self._filter_and_render_cards)
         r1.addWidget(self.edit_search, 1)
 
-        self.btn_refresh = QToolButton()
-        self.btn_refresh.setText("🔄")
+        self.btn_refresh = QPushButton("↻")
         self.btn_refresh.setToolTip("Refresh plot and data catalog")
         self.btn_refresh.setCursor(Qt.PointingHandCursor)
         self.btn_refresh.setFixedSize(28, 28)
         self.btn_refresh.setStyleSheet("""
-            QToolButton {
-                background: #ffffff; border: 1px solid #cbd5e1;
-                border-radius: 14px; font-size: 11px;
+            QPushButton {
+                background: #ffffff;
+                border: 1px solid #cbd5e1;
+                border-radius: 14px;
+                font-size: 16px;
+                font-weight: 800;
+                color: #334155;
+                padding: 0px;
+                margin: 0px;
             }
-            QToolButton:hover { background: #f1f5f9; border-color: #94a3b8; }
+            QPushButton:hover {
+                background: #f1f5f9;
+                border-color: #94a3b8;
+                color: #0f172a;
+            }
+            QPushButton:pressed {
+                background: #e2e8f0;
+            }
         """)
         self.btn_refresh.clicked.connect(self.refresh_gallery)
         r1.addWidget(self.btn_refresh)
@@ -634,8 +671,7 @@ class PlotGalleryWidget(QWidget):
                 "Density of States (DOS)",
                 "Fermi Surface (FS)",
                 "Band Dispersion (Path)",
-                "Quasiparticle Spectral A(k, ω)",
-                "IBZ vs Full BZ DOS Comparison"
+                "Quasiparticle Spectral A(k, ω)"
             ]
         elif category in ("Susceptibility Results", "Susceptibility", "Phase Diagram"):
             subcats = [
@@ -653,8 +689,7 @@ class PlotGalleryWidget(QWidget):
                 "Quasiparticle Spectral A(k, ω)",
                 "Dynamic Susceptibility χ(q, ω)",
                 "Static Susceptibility χ(q, 0)",
-                "Magnetic Phase Diagram",
-                "IBZ vs Full BZ DOS Comparison"
+                "Magnetic Phase Diagram"
             ]
         self.cb_observable.addItems(subcats)
         self.cb_observable.blockSignals(False)
