@@ -372,10 +372,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_queue.clicked.connect(self.add_to_queue)
         self.action_queue = self.tb.addWidget(self.btn_queue)
 
-        self.btn_split = QPushButton("⚏ Split View (Compare)")
+        self.btn_split = QPushButton("⚏ Split View (Compare)", parent=self)
         self.btn_split.setCheckable(True)
         self.btn_split.toggled.connect(self.toggle_split_view)
-        self.action_split = self.tb.addWidget(self.btn_split)
+        self.btn_split.setVisible(False)
+        self.action_split = None
 
         # Publication Studio Toolbar Actions (Hidden by default in Simulation Mode)
         self.btn_export_pdf = QPushButton("📄 Save Vector PDF for LaTeX (300 DPI)")
@@ -533,7 +534,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.central_view_stack.setCurrentIndex(mode_idx)
         self.btn_canvas_figure.setChecked(mode_idx == 0)
         self.btn_canvas_lab.setChecked(mode_idx == 1)
-        if hasattr(self, "action_split"):
+        if hasattr(self, "action_split") and self.action_split:
             self.action_split.setVisible(mode_idx == 0)
 
     def copy_current_plot_to_clipboard(self):
@@ -1646,7 +1647,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.action_run.setVisible(True)
             self.action_cancel.setVisible(True)
             self.action_queue.setVisible(True)
-            self.action_split.setVisible(True)
+            if self.action_split:
+                self.action_split.setVisible(True)
             self.action_export_pdf.setVisible(False)
             self.action_copy_latex.setVisible(False)
 
@@ -1674,7 +1676,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.action_run.setVisible(False)
             self.action_cancel.setVisible(False)
             self.action_queue.setVisible(False)
-            self.action_split.setVisible(False)
+            if self.action_split:
+                self.action_split.setVisible(False)
             self.action_export_pdf.setVisible(True)
             self.action_copy_latex.setVisible(True)
 
