@@ -3,27 +3,27 @@ band_dispersion_mode.py
 -----------------------
 Mode: Energy-Momentum Band Dispersion [A(k_path, ω)].
 Features:
-  - Dual-panel layout:
-      * Left: 2D Band Dispersion Heatmap A(k_path, ω) along high-symmetry directions:
+  - Full-width single-panel layout matching source plotter.py:
+      * 2D Band Dispersion Heatmap A(k_path, ω) along high-symmetry directions:
         Γ(0, 0) -> M(π, π) -> X(π, 0) -> Γ(0, 0)
-        Overlaid with non-interacting bare band dispersion ξ(k) (dashed curve)
-        and high-symmetry boundary dividers.
-      * Right: 1D Energy Cut A(k_probe, ω) at the probed momentum along the path,
-        revealing the sharp quasiparticle resonance, hybridization gaps, and Hubbard bands.
+      * Bare non-interacting tight-binding dispersion ξ(k) overlaid (dashed curve)
+      * High-symmetry boundary dividers and Fermi level (ω = 0)
+      * Exact publication color scaling: magma colormap with logarithmic normalization,
+        vmin=0.005, dynamic vmax, and exact LogLocator colorbar ticks.
   - Performance:
       * Exact 1/8th IBZ boundary mapping (all points lie directly on the IBZ perimeter).
       * Zero-copy vectorized matrix construction (< 8 ms on N=256, N_ω=8001).
       * Smooth 60+ FPS in-place artist updates during continuous J_K dragging.
   - Interactivity:
-      * Left-click or drag on the 2D map: moves the probed momentum k_probe and updates the 1D cut.
-      * Double-click on 2D map: jumps to Mode 0 (Spectral Function) at that exact (kx, ky) coordinate.
-      * Right-click on 2D map: resets the probed point to X(π, 0).
+      * Mouse wheel: smooth bidirectional zoom centered at cursor.
+      * Left-click drag: pan through energy and momentum space when zoomed in.
+      * Right-click: resets zoom/pan to auto-fit view.
+      * Motion hover: live status bar readout of path segment, coordinates, and energy.
 """
 
 import numpy as np
 import matplotlib.colors as mcolors
 import matplotlib.ticker as ticker
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
 from pyside6_studio.core.cache_manager import get_ibz_indices_and_map, LazyIBZArray
@@ -38,7 +38,6 @@ class BandDispersionMode(BaseAnalyticalMode):
 
     def __init__(self, lab):
         super().__init__(lab)
-        self.selected_path_idx: int = None
         self.w_max: float = 8.0
 
         # Cached path geometry
@@ -58,24 +57,27 @@ class BandDispersionMode(BaseAnalyticalMode):
         self._sig_r_ibz = None
         self._sig_i_ibz = None
 
-        # Viewport limits
+        # Viewport limits for interactive zoom/pan
+        self._user_xlim = None
         self._user_ylim = None
+
+        # Panning state
+        self._is_panning = False
+        self._pan_start_x = 0.0
+        self._pan_start_y = 0.0
+        self._pan_start_xlim = None
+        self._pan_start_ylim = None
 
         # Matplotlib handles
         self.ax_disp = None
-        self.ax_cut = None
         self.im_disp = None
         self.line_bare = None
-        self.line_probe = None
-        self.line_cut = None
-        self.line_cut_bare = None
         self.cbar = None
-        self._is_dragging_probe = False
 
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
         self.lab.container_slice.setVisible(False)
-        self.lab.lbl_map_tip.setText("💡 Tip: Click or drag along path to inspect 1D A(ω) • Right-click resets to X")
+        self.lab.lbl_map_tip.setText("💡 Tip: Band dispersion along high-symmetry path Γ(0, 0) → M(π, π) → X(π, 0) → Γ(0, 0) • Scroll to zoom, drag to pan")
         self.lab.lbl_map_tip.setVisible(True)
         if hasattr(self.lab, "container_wmax"):
             self.lab.container_wmax.setVisible(True)
@@ -84,9 +86,10 @@ class BandDispersionMode(BaseAnalyticalMode):
         self.lab.lbl_live_mass.setVisible(False)
 
     def fit_view(self):
+        self._user_xlim = None
         self._user_ylim = None
         self.render()
-        self.lab.sig_status_msg.emit("View reset to auto-fit.")
+        self.lab.sig_status_msg.emit("Band dispersion view reset to full path.")
 
     def reset_view(self):
         self.fit_view()
@@ -138,10 +141,6 @@ class BandDispersionMode(BaseAnalyticalMode):
         num_points = len(path_ix)
         self._path_ticks = [0, len_GM - 1, len_GM + len_MX - 1, num_points - 1]
         self._path_tick_labels = [r"$\Gamma(0, 0)$", r"$M(\pi, \pi)$", r"$X(\pi, 0)$", r"$\Gamma(0, 0)$"]
-
-        if self.selected_path_idx is None or self.selected_path_idx >= num_points:
-            # Default probed point to X(pi, 0)
-            self.selected_path_idx = len_GM + len_MX - 1
 
         self._cached_path_id = cache_id
 
@@ -198,18 +197,8 @@ class BandDispersionMode(BaseAnalyticalMode):
         A_path = -(1.0 / np.pi) * (si_eval * np.float32(scale_fac) - np.float32(eta)) / np.maximum(denom, 1e-12)
 
         num_points = len(self._path_ix)
-        probe_idx = int(np.clip(self.selected_path_idx, 0, num_points - 1))
-        A_cut = A_path[:, probe_idx]
-        xi_probe = float(self._xi_path[probe_idx])
-        kx_probe = float(self._kx_path[probe_idx])
-        ky_probe = float(self._ky_path[probe_idx])
 
         # Exact source code plotting settings from plotter.py:
-        # vmin_path = 0.005
-        # positive = Atot_path[np.isfinite(Atot_path) & (Atot_path > 0)]
-        # vmax = max(np.percentile(positive, 100.0), vmin_path * 10.0) if positive.size > 0 else 1.0
-        # clean_path = np.clip(Atot_path, a_min=vmin_path, a_max=None)
-        # norm = mcolors.LogNorm(vmin=vmin_path, vmax=vmax)
         positive = A_path[np.isfinite(A_path) & (A_path > 0)]
         vmin_path = 0.005
         vmax = float(max(np.percentile(positive, 100.0), vmin_path * 10.0)) if positive.size > 0 else 1.0
@@ -217,16 +206,12 @@ class BandDispersionMode(BaseAnalyticalMode):
 
         can_update_inplace = (
             self.ax_disp is not None
-            and self.ax_cut is not None
             and self.ax_disp in self.fig.axes
-            and self.ax_cut in self.fig.axes
             and getattr(self, "im_disp", None) is not None
         )
 
-        k_badge_str = rf"$\mathbf{{k}} = ({kx_probe/np.pi:.2f}\pi, {ky_probe/np.pi:.2f}\pi)$"
-
         if can_update_inplace:
-            # 1. Update 2D Dispersion Heatmap with exact source LogNorm and colorbar ticks
+            # Fast in-place artist updates
             self.im_disp.set_data(clean_path)
             self.im_disp.set_extent([0, num_points - 1, float(w_eval[0]), float(w_eval[-1])])
             self.im_disp.set_norm(mcolors.LogNorm(vmin=vmin_path, vmax=vmax))
@@ -236,37 +221,17 @@ class BandDispersionMode(BaseAnalyticalMode):
                 self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
                 self.cbar.update_ticks()
             self.line_bare.set_data(np.arange(num_points), self._xi_path)
-            self.line_probe.set_xdata([probe_idx, probe_idx])
             self.ax_disp.set_title(
                 rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)",
-                fontweight="bold", fontsize=10.5, pad=8
+                fontweight="bold", fontsize=11.5, pad=8
             )
-
-            # 2. Update 1D Cut
-            self.line_cut.set_data(w_eval, A_cut)
-            self.line_cut.set_label(f"$A(\\omega)$ [k-cut]")
-            self.line_cut_bare.set_xdata([xi_probe, xi_probe])
-            self.line_cut_bare.set_label(rf"Bare $\xi_k = {xi_probe:.2f}$")
-            self.ax_cut.set_title(
-                rf"Spectral Cut $A(\omega)$ at {k_badge_str}",
-                fontweight="bold", fontsize=10.5, pad=8
-            )
-            y_max_cut = max(float(np.max(A_cut)) * 1.15, 0.5)
-            self.ax_cut.set_ylim(0, y_max_cut)
-            self.ax_cut.set_xlim(-self.w_max, self.w_max)
-            self.ax_cut.legend(loc="upper right", fontsize=8.5, framealpha=0.9)
-
             self.canvas.draw_idle()
             return
 
-        # Full figure rebuild
+        # Full figure rebuild: Single-panel layout matching source code
         self.fig.clear()
-        self.ax_disp = self.fig.add_subplot(121)
-        self.ax_cut = self.fig.add_subplot(122)
+        self.ax_disp = self.fig.add_subplot(111)
 
-        # -----------------------------------------------------------------
-        # Panel 1: 2D Band Dispersion Map (Matching source plotter.py)
-        # -----------------------------------------------------------------
         extent = [0, num_points - 1, float(w_eval[0]), float(w_eval[-1])]
         norm = mcolors.LogNorm(vmin=vmin_path, vmax=vmax)
         self.im_disp = self.ax_disp.imshow(
@@ -278,7 +243,7 @@ class BandDispersionMode(BaseAnalyticalMode):
         path_x = np.arange(num_points)
         self.line_bare, = self.ax_disp.plot(
             path_x, self._xi_path, color="white", linestyle="--",
-            linewidth=1.2, alpha=0.85, label=r"Bare $\xi(\mathbf{k})$"
+            linewidth=1.3, alpha=0.85, label=r"Bare $\xi(\mathbf{k})$"
         )
 
         # Fermi Level (omega = 0)
@@ -286,95 +251,126 @@ class BandDispersionMode(BaseAnalyticalMode):
 
         # High-symmetry path boundary lines
         for t_idx in self._path_ticks[1:-1]:
-            self.ax_disp.axvline(t_idx, color="white", linestyle="--", linewidth=1.0, alpha=0.3)
-
-        # Probed momentum vertical tracker
-        self.line_probe = self.ax_disp.axvline(
-            probe_idx, color="#38bdf8", linestyle="-", linewidth=1.6, alpha=0.95, zorder=10
-        )
+            self.ax_disp.axvline(t_idx, color="white", linestyle="--", linewidth=1.0, alpha=0.35)
 
         self.ax_disp.set_xticks(self._path_ticks)
-        self.ax_disp.set_xticklabels(self._path_tick_labels, fontsize=9.5, fontweight="bold")
-        self.ax_disp.set_xlabel(r"$k$ path", fontsize=10)
-        self.ax_disp.set_ylabel(r"Frequency $\omega$ [eV]", fontsize=10)
-        self.ax_disp.set_ylim(-self.w_max, self.w_max)
+        self.ax_disp.set_xticklabels(self._path_tick_labels, fontsize=10.5, fontweight="bold")
+        self.ax_disp.set_xlabel(r"$k$ path", fontsize=11)
+        self.ax_disp.set_ylabel(r"Frequency $\omega$ [eV]", fontsize=11)
+
+        default_xlim = (0, num_points - 1)
+        default_ylim = (-self.w_max, self.w_max)
+        self.ax_disp.set_xlim(self._user_xlim if self._user_xlim is not None else default_xlim)
+        self.ax_disp.set_ylim(self._user_ylim if self._user_ylim is not None else default_ylim)
+
         self.ax_disp.set_title(
             rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)",
-            fontweight="bold", fontsize=10.5, pad=8
+            fontweight="bold", fontsize=11.5, pad=8
         )
-        self.ax_disp.legend(loc="upper right", fontsize=8.5, framealpha=0.85)
+        self.ax_disp.legend(loc="upper right", fontsize=9.5, framealpha=0.85)
 
         # Colorbar with exact source LogLocator & FuncFormatter
-        divider = make_axes_locatable(self.ax_disp)
-        cax = divider.append_axes("right", size="3.5%", pad=0.10)
-        self.cbar = self.fig.colorbar(self.im_disp, cax=cax)
+        self.cbar = self.fig.colorbar(self.im_disp, ax=self.ax_disp, aspect=30, pad=0.02)
         self.cbar.locator = ticker.LogLocator(base=10)
         self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
         self.cbar.update_ticks()
-        self.cbar.set_label(r"$A(\mathbf{k}, \omega)$ [$\mathrm{eV}^{-1}$]", fontsize=9)
-        self.cbar.ax.tick_params(labelsize=8)
-
-        # -----------------------------------------------------------------
-        # Panel 2: 1D Interactive Cut
-        # -----------------------------------------------------------------
-        self.line_cut, = self.ax_cut.plot(
-            w_eval, A_cut, color="#2563eb", linewidth=1.8, label=f"$A(\\omega)$ [k-cut]"
-        )
-        self.line_cut_bare = self.ax_cut.axvline(
-            xi_probe, color="#dc2626", linestyle=":", linewidth=1.0,
-            label=rf"Bare $\xi_k = {xi_probe:.2f}$"
-        )
-        self.ax_cut.axvline(0, color="#94a3b8", linestyle="--", linewidth=0.8, alpha=0.7)
-        self.ax_cut.set_xlabel(r"$\omega$ [eV]", fontsize=10)
-        self.ax_cut.set_ylabel(r"$A(\mathbf{k}, \omega)$", fontsize=10)
-        self.ax_cut.set_xlim(-self.w_max, self.w_max)
-        self.ax_cut.set_ylim(0, max(float(np.max(A_cut)) * 1.15, 0.5))
-        self.ax_cut.grid(True, linestyle=":", alpha=0.35)
-        self.ax_cut.set_title(
-            rf"Spectral Cut $A(\omega)$ at {k_badge_str}",
-            fontweight="bold", fontsize=10.5, pad=8
-        )
-        self.ax_cut.legend(loc="upper right", fontsize=8.5, framealpha=0.9)
+        self.cbar.set_label(r"$A(\mathbf{k}, \omega)$ [$\mathrm{eV}^{-1}$]", fontsize=10)
+        self.cbar.ax.tick_params(labelsize=8.5)
 
         self.fig.tight_layout()
         self.canvas.draw()
 
-    def on_press(self, event) -> bool:
-        if event.inaxes != self.ax_disp or event.xdata is None:
+    def on_scroll(self, event) -> bool:
+        if event.inaxes != self.ax_disp or event.xdata is None or event.ydata is None:
             return False
 
-        num_points = len(self._path_ix) if self._path_ix is not None else 1
-        x_clicked = int(round(np.clip(event.xdata, 0, num_points - 1)))
+        base_scale = 1.15
+        if event.button == "up":
+            scale_factor = 1.0 / base_scale
+        elif event.button == "down":
+            scale_factor = base_scale
+        else:
+            return False
 
-        if event.button == 1:
-            self.selected_path_idx = x_clicked
-            self._is_dragging_probe = True
-            self.render()
+        cur_xlim = self.ax_disp.get_xlim()
+        cur_ylim = self.ax_disp.get_ylim()
+        xdata = event.xdata
+        ydata = event.ydata
+
+        new_width = (cur_xlim[1] - cur_xlim[0]) * scale_factor
+        new_height = (cur_ylim[1] - cur_ylim[0]) * scale_factor
+
+        relx = (cur_xlim[1] - xdata) / max(cur_xlim[1] - cur_xlim[0], 1e-9)
+        rely = (cur_ylim[1] - ydata) / max(cur_ylim[1] - cur_ylim[0], 1e-9)
+
+        new_xlim = [xdata - new_width * (1.0 - relx), xdata + new_width * relx]
+        new_ylim = [ydata - new_height * (1.0 - rely), ydata + new_height * rely]
+
+        self.ax_disp.set_xlim(new_xlim)
+        self.ax_disp.set_ylim(new_ylim)
+        self._user_xlim = new_xlim
+        self._user_ylim = new_ylim
+        self.canvas.draw_idle()
+        return True
+
+    def on_press(self, event) -> bool:
+        if event.inaxes != self.ax_disp:
+            return False
+
+        if event.button == 1 and event.xdata is not None and event.ydata is not None:
+            self._is_panning = True
+            self._pan_start_x = event.x
+            self._pan_start_y = event.y
+            self._pan_start_xlim = self.ax_disp.get_xlim()
+            self._pan_start_ylim = self.ax_disp.get_ylim()
             return True
-
         elif event.button == 3:
-            # Right-click resets probed momentum to X(pi, 0)
-            half_n = (num_points - 1) // 3
-            self.selected_path_idx = 2 * half_n
-            self.render()
+            # Right-click resets zoom to auto-fit
+            self.fit_view()
             return True
 
         return False
 
     def on_motion(self, event) -> bool:
-        if not self._is_dragging_probe or event.inaxes != self.ax_disp or event.xdata is None:
-            return False
+        if self._is_panning and event.x is not None and event.y is not None and self.ax_disp is not None:
+            dx_pixels = event.x - self._pan_start_x
+            dy_pixels = event.y - self._pan_start_y
+            try:
+                inv = self.ax_disp.transData.inverted()
+                p0 = inv.transform((0, 0))
+                p1 = inv.transform((dx_pixels, dy_pixels))
+                dx_data = p1[0] - p0[0]
+                dy_data = p1[1] - p0[1]
 
-        num_points = len(self._path_ix) if self._path_ix is not None else 1
-        x_dragged = int(round(np.clip(event.xdata, 0, num_points - 1)))
-        if x_dragged != self.selected_path_idx:
-            self.selected_path_idx = x_dragged
-            self.render()
-            return True
+                new_xlim = [self._pan_start_xlim[0] - dx_data, self._pan_start_xlim[1] - dx_data]
+                new_ylim = [self._pan_start_ylim[0] - dy_data, self._pan_start_ylim[1] - dy_data]
+                self.ax_disp.set_xlim(new_xlim)
+                self.ax_disp.set_ylim(new_ylim)
+                self._user_xlim = new_xlim
+                self._user_ylim = new_ylim
+                self.canvas.draw_idle()
+                return True
+            except Exception:
+                return False
+
+        # Status bar coordinate readout when hovering over map
+        if event.inaxes == self.ax_disp and event.xdata is not None and event.ydata is not None:
+            num_points = len(self._path_ix) if self._path_ix is not None else 1
+            idx = int(np.clip(round(event.xdata), 0, num_points - 1))
+            if self._kx_path is not None and self._ky_path is not None:
+                kx = self._kx_path[idx]
+                ky = self._ky_path[idx]
+                w_val = event.ydata
+                self.lab.sig_status_msg.emit(
+                    f"Path point: index={idx}/{num_points-1} • k=({kx/np.pi:.2f}π, {ky/np.pi:.2f}π) • ω={w_val:.2f} eV"
+                )
+                return True
+
         return False
 
     def on_release(self, event) -> bool:
-        if self._is_dragging_probe:
-            self._is_dragging_probe = False
+        if self._is_panning:
+            self._is_panning = False
             return True
         return False
+

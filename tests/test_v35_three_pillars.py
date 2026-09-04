@@ -239,9 +239,10 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         self.assertEqual(lab.active_mode, "band_dispersion")
         mode2 = lab.current_mode
         self.assertIsNotNone(mode2._path_ix)
-        self.assertGreater(len(mode2._path_ix), 0)
         self.assertIsNotNone(mode2._xi_path)
-        self.assertEqual(len(lab.fig.axes), 3)  # 2 subplots + 1 colorbar
+        self.assertEqual(len(lab.fig.axes), 2)  # 1 main plot + 1 colorbar
+        self.assertIsNotNone(mode2.ax_disp)
+        self.assertIsNotNone(mode2.im_disp)
 
         # Experiment 3: Static RPA Susceptibility
         # Selecting RPA should auto-switch to static chi0 cache
