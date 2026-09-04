@@ -38,6 +38,8 @@ from pyside6_studio.widgets.analytical_modes import (
     SpectralFunctionMode,
     EnergySliceMode,
     BandDispersionMode,
+    StaticSusceptibilityMode,
+    DynamicSusceptibilityMode,
     RpaSusceptibilityMode,
 )
 
@@ -111,7 +113,9 @@ def parse_cache_metadata(fname: str, ftype: str) -> dict:
         "Jperp": None,
         "N": None,
         "eta": None,
-        "category": "sigma" if (ftype == "sigma_base" or fname.startswith("sigma_base")) else "chi0"
+        "category": "sigma" if (ftype == "sigma_base" or fname.startswith("sigma_base")) else (
+            "chi0_dynamic" if (ftype == "chi0_dynamic" or fname.startswith("chi0_dynamic")) else "chi0_static"
+        )
     }
     mu_match = re.search(r"mu_([0-9.-]+)", fname) or re.search(r"mu([0-9.-]+)", fname)
     if mu_match:
@@ -160,9 +164,10 @@ class LiveAnalyticalLabWidget(QWidget):
         self._suppress_mu_filter: bool = False
         self.loaded_base_sigma: dict = {}
         self.loaded_chi0_static: dict = {}
+        self.loaded_chi0_dynamic: dict = {}
 
         # Current physics state
-        self.active_mode = "k_probe"  # "k_probe", "energy_slice", "rpa_susc"
+        self.active_mode = "k_probe"  # "k_probe", "energy_slice", "band_dispersion", "static_susc", "dynamic_susc"
         self.current_kx = np.pi  # Antinodal by default
         self.current_ky = 0.0
         self.current_JK = 6.0
@@ -173,9 +178,11 @@ class LiveAnalyticalLabWidget(QWidget):
             "k_probe": SpectralFunctionMode(self),
             "energy_slice": EnergySliceMode(self),
             "band_dispersion": BandDispersionMode(self),
-            "rpa_susc": RpaSusceptibilityMode(self),
+            "rpa_susc": StaticSusceptibilityMode(self),
+            "static_susc": StaticSusceptibilityMode(self),
+            "dynamic_susc": DynamicSusceptibilityMode(self),
         }
-        self.mode_order = ["k_probe", "energy_slice", "band_dispersion", "rpa_susc"]
+        self.mode_order = ["k_probe", "energy_slice", "band_dispersion", "static_susc", "dynamic_susc"]
 
         self._build_ui()
         self.scan_caches()
@@ -725,7 +732,12 @@ class LiveAnalyticalLabWidget(QWidget):
         """Populates cb_filter_mu with distinct mu values discovered for the active mode category."""
         if not hasattr(self, "cb_filter_mu"):
             return
-        target_cat = "chi0" if self.active_mode == "rpa_susc" else "sigma"
+        if self.active_mode in ["rpa_susc", "static_susc"]:
+            target_cat = "chi0_static"
+        elif self.active_mode == "dynamic_susc":
+            target_cat = "chi0_dynamic"
+        else:
+            target_cat = "sigma"
         mu_vals = set()
         for c in self.scanned_caches:
             if c["category"] == target_cat and c["mu"] is not None:
@@ -752,7 +764,12 @@ class LiveAnalyticalLabWidget(QWidget):
 
     def _populate_cache_dropdown(self):
         """Filters scanned caches by active mode category and mu filter text."""
-        target_cat = "chi0" if self.active_mode == "rpa_susc" else "sigma"
+        if self.active_mode in ["rpa_susc", "static_susc"]:
+            target_cat = "chi0_static"
+        elif self.active_mode == "dynamic_susc":
+            target_cat = "chi0_dynamic"
+        else:
+            target_cat = "sigma"
         mode_caches = [c for c in self.scanned_caches if c["category"] == target_cat]
 
         mu_filter_text = self.cb_filter_mu.currentText().strip() if hasattr(self, "cb_filter_mu") else ""
@@ -922,6 +939,8 @@ class LiveAnalyticalLabWidget(QWidget):
             self._load_base_sigma(fpath)
         elif ftype == "chi0_static":
             self._load_chi0_static(fpath)
+        elif ftype == "chi0_dynamic":
+            self._load_chi0_dynamic(fpath)
         self._recompute_and_render()
 
     def _load_base_sigma(self, fpath: str):
@@ -1003,6 +1022,36 @@ class LiveAnalyticalLabWidget(QWidget):
             print(f"[CACHE LOAD ERROR] Failed loading {fpath}: {e}")
             if self.isVisible():
                 QMessageBox.warning(self, "Cache Load Error", f"Could not load Static Chi0 array:\n{e}")
+
+    def _load_chi0_dynamic(self, fpath: str):
+        try:
+            import re
+            jp_match = re.search(r"Jperp_([0-9.]+)", os.path.basename(fpath)) or re.search(r"J_perp_([0-9.]+)", os.path.basename(fpath))
+            with np.load(fpath) as d:
+                if jp_match:
+                    Jperp = float(jp_match.group(1))
+                else:
+                    Jperp = float(d.get("fixed_jperp", d.get("Jperp", d.get("J_perp", 6.0))))
+                self.loaded_chi0_dynamic = {
+                    "fpath": fpath,
+                    "chi0_master": d["chi0_master"],
+                    "Q_path_x": d["Q_path_x"],
+                    "Q_path_y": d["Q_path_y"],
+                    "omegas": d["omegas"],
+                    "N": int(d.get("N", 100)),
+                    "mu": float(d.get("mu", 1.0)),
+                    "t": float(d.get("t", 1.0)),
+                    "t1": float(d.get("t1", 0.0)),
+                    "eta": float(d.get("eta", 0.01)),
+                    "omega_max": float(d.get("omega_max", 10.0)),
+                    "num_omegas": int(d.get("num_omegas", 600)),
+                    "Jperp": Jperp,
+                    "K": float(d.get("K", 1.0)),
+                }
+        except Exception as e:
+            print(f"[CACHE LOAD ERROR] Failed loading {fpath}: {e}")
+            if self.isVisible():
+                QMessageBox.warning(self, "Cache Load Error", f"Could not load Dynamic Chi0 array:\n{e}")
 
     def _on_experiment_changed(self):
         idx = self.cb_experiment.currentIndex()

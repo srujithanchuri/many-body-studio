@@ -118,6 +118,26 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
             t=1.0
         )
 
+        # Generate sample Dynamic Chi0 cache foundation
+        self.cache_dyn_chi0 = os.path.join(self.cache_dir, "chi0_dynamic_N16_mu1.00_t1.00_t1_0.00_w50_eta0.0100.npz")
+        q_pts = 46
+        omegas = np.linspace(0.0, 10.0, 50)
+        chi0_master = 0.5 * np.ones((50, q_pts), dtype=np.complex128)
+        np.savez(
+            self.cache_dyn_chi0,
+            chi0_master=chi0_master,
+            Q_path_x=np.zeros(q_pts),
+            Q_path_y=np.zeros(q_pts),
+            omegas=omegas,
+            N=16,
+            mu=1.0,
+            t=1.0,
+            t1=0.0,
+            eta=0.01,
+            omega_max=10.0,
+            num_omegas=50
+        )
+
     def tearDown(self):
         self.temp_dir.cleanup()
 
@@ -245,13 +265,25 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         self.assertIsNotNone(mode2.im_disp)
 
         # Experiment 3: Static RPA Susceptibility
-        # Selecting RPA should auto-switch to static chi0 cache
+        # Selecting Static Susceptibility should auto-switch to static chi0 cache
         lab.cb_experiment.setCurrentIndex(3)
-        self.assertEqual(lab.active_mode, "rpa_susc")
+        self.assertIn(lab.active_mode, ["static_susc", "rpa_susc"])
         self.assertIsNotNone(lab.loaded_chi0_static)
         # Continuous slider changes J_K and updates Stoner instability gap
         lab.slider_jk.setValue(60)  # J_K = 6.0
         self.assertEqual(lab.current_JK, 6.0)
+
+        # Experiment 4: Dynamic RPA Susceptibility
+        # Selecting Dynamic Susceptibility should auto-switch to dynamic chi0 cache
+        lab.cb_experiment.setCurrentIndex(4)
+        self.assertEqual(lab.active_mode, "dynamic_susc")
+        self.assertIsNotNone(lab.loaded_chi0_dynamic)
+        self.assertEqual(len(lab.fig.axes), 2)  # main plot + colorbar
+        mode4 = lab.current_mode
+        self.assertIsNotNone(mode4.im_dyn)
+        self.assertIsNotNone(mode4.line_triplon)
+        lab.slider_jk.setValue(40)  # J_K = 4.0
+        self.assertEqual(lab.current_JK, 4.0)
 
     # -------------------------------------------------------------------------
     # Integration Test: Mode Switcher & Two Perspectives Integration
