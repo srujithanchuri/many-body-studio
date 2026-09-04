@@ -475,31 +475,25 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         btn_style = "QPushButton { padding: 3px 8px; font-size: 11px; font-weight: 500; }"
 
-        btn_ref_fig = QPushButton("🔄")
-        btn_ref_fig.setToolTip("Refresh dataset tree and available plots")
-        btn_ref_fig.setStyleSheet(btn_style)
-        btn_ref_fig.clicked.connect(self.refresh_dataset_tree)
-        fig_toolbar.addWidget(btn_ref_fig)
-
-        btn_fit_fig = QPushButton("🔄 Reset")
+        btn_fit_fig = QPushButton("Reset")
         btn_fit_fig.setToolTip("Reset zoom and restore image within viewport")
         btn_fit_fig.setStyleSheet(btn_style)
         btn_fit_fig.clicked.connect(self.reset_active_zoom)
         fig_toolbar.addWidget(btn_fit_fig)
 
-        btn_copy_fig = QPushButton("📋 Copy")
+        btn_copy_fig = QPushButton("Copy")
         btn_copy_fig.setToolTip("Copy current image to clipboard")
         btn_copy_fig.setStyleSheet(btn_style)
         btn_copy_fig.clicked.connect(self.copy_current_plot_to_clipboard)
         fig_toolbar.addWidget(btn_copy_fig)
 
-        btn_export_fig = QPushButton("💾 Export")
+        btn_export_fig = QPushButton("Export")
         btn_export_fig.setToolTip("Export plot image to disk")
         btn_export_fig.setStyleSheet(btn_style)
         btn_export_fig.clicked.connect(self.export_pdf_dialog)
         fig_toolbar.addWidget(btn_export_fig)
 
-        btn_open_fig = QPushButton("📂 Folder")
+        btn_open_fig = QPushButton("Folder")
         btn_open_fig.setToolTip("Open output directory in file explorer")
         btn_open_fig.setStyleSheet(btn_style)
         btn_open_fig.clicked.connect(self.open_output_folder)
