@@ -121,7 +121,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Many-Body Studio Pro v2.0 • Unified Physics Workbench")
+        self.setWindowTitle("Many-Body Studio Pro • Alpha v2")
         self.resize(1440, 920)
 
         # Install wheel scroll redirect filter to eliminate accidental value changes

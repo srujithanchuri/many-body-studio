@@ -1,6 +1,6 @@
 # Many-Body Studio Pro: Complete Architecture & Implementation Plan
 
-> **Document Version**: 2.0.0 (Native Physics Suite Integration)  
+> **Document Version**: alpha-v2 (Milestone: Complete 4-Study Physics Suite)  
 > **Target Project**: `C:\Users\sruji\Projects\masters_thesis_gui`  
 > **Physics Engine Source**: `C:\Users\sruji\Projects\masters_thesis`  
 > **Author**: Antigravity Assistant & Srujith Anchuri  

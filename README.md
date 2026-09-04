@@ -1,4 +1,4 @@
-# Many-Body Physics Studio Pro v2.0
+# Many-Body Physics Studio Pro • Alpha v2
 
 Modern, high-performance scientific desktop workbench for strongly correlated quantum heterostructures. Built with PySide6 (Qt6), isolated `QProcess` execution bridges, native multi-backend GPU/CPU physics engines, and dual-perspective workspace architecture.
 
