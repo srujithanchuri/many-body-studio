@@ -1278,6 +1278,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             f"[{time.strftime('%H:%M:%S')}] ⏹ [CANCEL REQUESTED] Terminating process tree & purging VRAM cache..."
             f"</div>"
         )
+        sb = self.txt_console.verticalScrollBar()
+        if sb:
+            sb.setValue(sb.maximum())
         QApplication.processEvents()
 
         self.bridge.cancel_calculation()
@@ -1378,14 +1381,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_calc_cancelled(self):
         self.btn_run.setEnabled(True)
         self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setText("⏹ Cancel / Stop")
+        self.btn_cancel.setText("⏹ Stopped")
         self.lbl_status.setText("⏹ Stopped: Execution cancelled by user • GPU VRAM purged.")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."
             f"</div>"
         )
-        QTimer.singleShot(3000, self._reset_status_to_ready)
+        sb = self.txt_console.verticalScrollBar()
+        if sb:
+            sb.setValue(sb.maximum())
+        QTimer.singleShot(2500, lambda: self.btn_cancel.setText("⏹ Cancel / Stop"))
+        QTimer.singleShot(3500, self._reset_status_to_ready)
 
     def closeEvent(self, event: QCloseEvent):
         """Guarantees child process termination and GPU cleanup upon window closing."""
