@@ -375,7 +375,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel = QPushButton("⏹ Cancel / Stop")
         self.btn_cancel.setObjectName("BtnCancel")
         self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setFixedWidth(130)
+        self.btn_cancel.setCursor(Qt.PointingHandCursor)
+        self.btn_cancel.setFixedWidth(135)
         self.btn_cancel.clicked.connect(self.cancel_simulation_ui)
         self.action_cancel = self.tb.addWidget(self.btn_cancel)
 
@@ -2071,8 +2072,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.resizeDocks([self.dock_bottom], [140], Qt.Vertical)
 
         try:
+            self._update_execution_buttons(is_running=True)
             self.bridge.start_calculation(params)
         except RuntimeError as e:
+            self._update_execution_buttons(is_running=False)
             QMessageBox.warning(self, "Execution Warning", str(e))
 
     def _on_precompute_bubble(self):
@@ -2105,13 +2108,35 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.bottom_tabs.setCurrentIndex(1)
         self.resizeDocks([self.dock_bottom], [140], Qt.Vertical)
         try:
+            self._update_execution_buttons(is_running=True)
             self.bridge.start_calculation(params)
         except RuntimeError as e:
+            self._update_execution_buttons(is_running=False)
             QMessageBox.warning(self, "Execution Warning", str(e))
+
+    def _update_execution_buttons(self, is_running: bool):
+        """Updates Run and Cancel/Stop buttons cleanly and forces Qt stylesheet re-evaluation."""
+        if is_running:
+            self.btn_run.setEnabled(False)
+            self.btn_run.setText("⏳ Running...")
+            self.btn_cancel.setEnabled(True)
+            self.btn_cancel.setText("⏹ Cancel / Stop")
+        else:
+            self.btn_run.setEnabled(True)
+            self.btn_run.setText("▶ Run Calculation")
+            self.btn_cancel.setEnabled(False)
+            self.btn_cancel.setText("⏹ Cancel / Stop")
+        for btn in (self.btn_run, self.btn_cancel):
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+            btn.update()
 
     def cancel_simulation_ui(self):
         """Cancels active computation immediately with clean stopping cooldown and VRAM flush."""
+        if hasattr(self, "queue_timer") and self.queue_timer.isActive():
+            self.queue_timer.stop()
         if not hasattr(self, "bridge") or not self.bridge.is_running():
+            self._update_execution_buttons(is_running=False)
             return
 
         # Keep both Run and Cancel disabled during stopping procedure
@@ -2119,6 +2144,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_run.setText("⏳ Stopping...")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏳ Stopping...")
+        for btn in (self.btn_run, self.btn_cancel):
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+            btn.update()
         self.lbl_status.setText("⏳ Stopping simulation & purging GPU VRAM...")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
@@ -2147,10 +2176,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.bridge.cancel_calculation()
 
     def _on_calc_started(self):
-        self.btn_run.setEnabled(False)
-        self.btn_run.setText("⏳ Running...")
-        self.btn_cancel.setEnabled(True)
-        self.btn_cancel.setText("⏹ Cancel / Stop")
+        self._update_execution_buttons(is_running=True)
         backend_name = "NVIDIA RTX 5060 GPU" if getattr(self, "cb_solver_choice", None) and self.cb_solver_choice.currentIndex() == 0 else "Host CPU"
         self.lbl_status.setText(f"⏳ Running: Initializing {backend_name} solver for {self.active_study}...")
         if hasattr(self, "lbl_console_engine_status"):
@@ -2213,10 +2239,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.lbl_status.setText(f"⏳ Running: {step}")
 
     def _on_calc_completed(self, payload: dict):
-        self.btn_run.setEnabled(True)
-        self.btn_run.setText("▶ Run Calculation")
-        self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setText("⏹ Cancel / Stop")
+        self._update_execution_buttons(is_running=False)
         self.lbl_status.setText(f"✅ Completed: {self.active_study} finished • Loaded into viewport.")
         if hasattr(self, "lbl_console_engine_status"):
             self.lbl_console_engine_status.setText("🟢 Engine Ready [Idle]")
@@ -2276,10 +2299,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.lbl_status.setText("Ready. [Simulation Studio Active]")
 
     def _on_calc_error(self, error_msg: str):
-        self.btn_run.setEnabled(True)
-        self.btn_run.setText("▶ Run Calculation")
-        self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setText("⏹ Cancel / Stop")
+        self._update_execution_buttons(is_running=False)
         self.lbl_status.setText(f"❌ Error: {error_msg}")
         self.txt_console.append(
             f"<div style='color: #ff6b68; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
@@ -2289,10 +2309,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         QTimer.singleShot(6000, self._reset_status_to_ready)
 
     def _on_calc_cancelled(self):
-        self.btn_run.setEnabled(True)
-        self.btn_run.setText("▶ Run Calculation")
-        self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setText("⏹ Cancel / Stop")
+        self._update_execution_buttons(is_running=False)
         self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
@@ -2403,6 +2420,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if self.table_queue.rowCount() == 0: self.add_to_queue()
         self.active_queue_row = 0; self.active_queue_progress = 0
         self.queue_timer.start(80); self.lbl_status.setText("🔄 Running batch queue...")
+        self.btn_cancel.setEnabled(True)
+        self.btn_cancel.style().unpolish(self.btn_cancel)
+        self.btn_cancel.style().polish(self.btn_cancel)
+        self.btn_cancel.update()
 
     def _on_queue_tick(self):
         self.active_queue_progress += 5
@@ -2416,6 +2437,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
             if self.active_queue_row >= self.table_queue.rowCount():
                 self.queue_timer.stop()
                 self.lbl_status.setText("🎉 Batch queue completed successfully!")
+                self.btn_cancel.setEnabled(False)
+                self.btn_cancel.style().unpolish(self.btn_cancel)
+                self.btn_cancel.style().polish(self.btn_cancel)
+                self.btn_cancel.update()
                 self.refresh_dataset_tree()
                 self._update_cache_badge()
                 if hasattr(self, "analytical_lab") and self.analytical_lab:
@@ -2425,6 +2450,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def pause_queue(self):
         self.queue_timer.stop()
+        self.btn_cancel.setEnabled(False)
+        self.btn_cancel.style().unpolish(self.btn_cancel)
+        self.btn_cancel.style().polish(self.btn_cancel)
+        self.btn_cancel.update()
         self.lbl_status.setText("⏸ Batch queue paused.")
 
     def clear_queue(self):

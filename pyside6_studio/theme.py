@@ -381,16 +381,23 @@ QPushButton#BtnCancel:enabled {
     border: 1px solid #dc2626;
     border-radius: 6px;
     font-weight: 700;
+    padding: 6px 14px;
 }
 QPushButton#BtnCancel:enabled:hover {
     background-color: #dc2626;
+    border-color: #b91c1c;
+}
+QPushButton#BtnCancel:pressed {
+    background-color: #b91c1c;
+    border-color: #991b1b;
 }
 QPushButton#BtnCancel:disabled {
     background-color: #f1f5f9;
     color: #94a3b8;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
     font-weight: 500;
+    padding: 6px 14px;
 }
 
 /* IDE Run Button (Emerald Green) */
@@ -927,9 +934,15 @@ QPushButton#BtnCancel:enabled {
     border: 1px solid #dc2626;
     border-radius: 6px;
     font-weight: 700;
+    padding: 6px 14px;
 }
 QPushButton#BtnCancel:enabled:hover {
     background-color: #dc2626;
+    border-color: #b91c1c;
+}
+QPushButton#BtnCancel:pressed {
+    background-color: #b91c1c;
+    border-color: #991b1b;
 }
 QPushButton#BtnCancel:disabled {
     background-color: #1e293b;
@@ -937,6 +950,7 @@ QPushButton#BtnCancel:disabled {
     border: 1px solid #334155;
     border-radius: 6px;
     font-weight: 500;
+    padding: 6px 14px;
 }
 
 /* IDE Run Button (Emerald Green) */
