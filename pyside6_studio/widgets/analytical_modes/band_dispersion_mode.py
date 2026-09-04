@@ -24,6 +24,7 @@ Features:
 import numpy as np
 import matplotlib.colors as mcolors
 import matplotlib.ticker as ticker
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
 from pyside6_studio.core.cache_manager import get_ibz_indices_and_map, LazyIBZArray
@@ -244,16 +245,11 @@ class BandDispersionMode(BaseAnalyticalMode):
             self.canvas.draw_idle()
             return
 
-        # Full figure rebuild: Single-panel layout matching source code, symmetrically centered
+        # Full figure rebuild: Symmetrically centered single-panel layout matching source code
         self.fig.clear()
-        
-        # Symmetrically centered margins across canvas width
-        gs = self.fig.add_gridspec(
-            1, 2, width_ratios=[1.0, 0.026],
-            left=0.08, right=0.91, bottom=0.11, top=0.90, wspace=0.025
-        )
-        self.ax_disp = self.fig.add_subplot(gs[0, 0])
-        cax = self.fig.add_subplot(gs[0, 1])
+        self.ax_disp = self.fig.add_subplot(111)
+        # Source code aspect ratio from plotter.py (figsize=(6.2, 4.8) -> width/height = 6.2/4.8 = 1.2917)
+        self.ax_disp.set_box_aspect(4.8 / 6.2)
 
         extent = [0, num_points - 1, float(w_eval[0]), float(w_eval[-1])]
         norm = mcolors.LogNorm(vmin=vmin_path, vmax=vmax)
@@ -292,7 +288,12 @@ class BandDispersionMode(BaseAnalyticalMode):
         )
         self.ax_disp.legend(loc="upper right", fontsize=9.5, framealpha=0.85)
 
-        # Colorbar with exact source LogLocator & FuncFormatter
+        # Colorbar glued directly to the 6.2:4.8 aspect ratio axes box
+        cax = inset_axes(
+            self.ax_disp, width="3.2%", height="100%", loc="lower left",
+            bbox_to_anchor=(1.02, 0.0, 1.0, 1.0), bbox_transform=self.ax_disp.transAxes,
+            borderpad=0
+        )
         self.cbar = self.fig.colorbar(self.im_disp, cax=cax)
         self.cbar.locator = ticker.LogLocator(base=10)
         self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
@@ -300,6 +301,7 @@ class BandDispersionMode(BaseAnalyticalMode):
         self.cbar.set_label(r"$A(\mathbf{k}, \omega)$ [$\mathrm{eV}^{-1}$]", fontsize=10)
         self.cbar.ax.tick_params(labelsize=8.5)
 
+        self.fig.subplots_adjust(left=0.08, right=0.92, bottom=0.11, top=0.90)
         self.canvas.draw()
 
     def on_scroll(self, event) -> bool:
