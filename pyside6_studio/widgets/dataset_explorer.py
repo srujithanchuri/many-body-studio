@@ -186,7 +186,12 @@ class SmartSearchMatcher:
                 if cls.normalize_key(pkey) == norm_k:
                     if is_num:
                         if isinstance(pval, list):
-                            if any(abs(elem - target_val) < 1e-3 for elem in pval):
+                            def _match_target(elem):
+                                try:
+                                    return abs(float(elem) - target_val) < 1e-3
+                                except (ValueError, TypeError):
+                                    return False
+                            if any(_match_target(elem) for elem in pval):
                                 matched_param = True
                                 break
                         elif isinstance(pval, (int, float)):
@@ -218,7 +223,12 @@ class SmartSearchMatcher:
                 num_matched = False
                 for pval in run_params.values():
                     if isinstance(pval, list):
-                        if any(abs(elem - w_float) < 1e-3 for elem in pval):
+                        def _match_w(elem):
+                            try:
+                                return abs(float(elem) - w_float) < 1e-3
+                            except (ValueError, TypeError):
+                                return False
+                        if any(_match_w(elem) for elem in pval):
                             num_matched = True
                             break
                     elif isinstance(pval, (int, float)):
@@ -929,6 +939,11 @@ class DatasetExplorerWidget(QWidget):
             self.lbl_card_stats.setText(f"Size: {size}  •  Modified: {mtime}")
 
             display_params = []
+            if meta.get("is_bitgroomed"):
+                display_params.append("<b>compression:</b> 1/8th IBZ (8-bit Groomed)")
+            elif meta.get("is_ibz"):
+                display_params.append("<b>compression:</b> 1/8th IBZ")
+
             for k in ["mu", "t", "t1", "K", "N", "num_omega", "eta", "fixed_jperp", "fixed_jk"]:
                 if k in meta:
                     val = meta[k]
@@ -961,8 +976,19 @@ class DatasetExplorerWidget(QWidget):
             param_strs = []
             for k, v in run.get("params", {}).items():
                 if isinstance(v, list):
-                    val_str = "[" + ", ".join(f"{x:.1f}" for x in v[:4]) + ("...]" if len(v) > 4 else "]")
-                elif isinstance(v, float):
+                    def _format_elem(x):
+                        if isinstance(x, (float, np.floating)):
+                            return f"{x:.2f}"
+                        elif isinstance(x, (int, np.integer)):
+                            return str(x)
+                        try:
+                            val_f = float(x)
+                            return f"{val_f:.2f}"
+                        except (ValueError, TypeError):
+                            return str(x)
+                    items_str = ", ".join(_format_elem(x) for x in v[:4])
+                    val_str = f"[{items_str}...]" if len(v) > 4 else f"[{items_str}]"
+                elif isinstance(v, (float, np.floating)):
                     val_str = f"{v:.2f}"
                 else:
                     val_str = str(v)

@@ -49,7 +49,11 @@ from pyside6_studio.core.cache_manager import (
     find_cached_chi0,
     check_cache_status,
     get_cache_stats,
-    purge_cache
+    purge_cache,
+    mask_mantissa_8,
+    byte_shuffle_f32,
+    byte_unshuffle_f32,
+    inspect_cache_foundation
 )
 from parameters import ModelParameters
 import sweep_core
@@ -58,6 +62,12 @@ import sweep_core
 class TestCachingAndDirectoryEngine(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp(prefix="mb_cache_test_")
+        for mod in list(sys.modules.keys()):
+            if mod == "solvers" or mod.startswith("solvers."):
+                del sys.modules[mod]
+        if SE_DIR in sys.path:
+            sys.path.remove(SE_DIR)
+        sys.path.insert(0, SE_DIR)
 
     def tearDown(self):
         if os.path.isdir(self.temp_dir):
@@ -264,6 +274,45 @@ class TestCachingAndDirectoryEngine(unittest.TestCase):
         # Check stats after purge
         stats_after = get_cache_stats(res_dir)
         self.assertEqual(stats_after["total_files"], 0)
+
+    def test_07_bit_grooming_and_byte_shuffle_roundtrip(self):
+        """Tests that 8-bit bit-grooming and byte-shuffle preserve precision and round-trip perfectly."""
+        # 1. Test Bit-Grooming mask
+        data = np.array([1.2345678, -98.76543, 0.00123456, 15.0], dtype=np.float32)
+        groomed = mask_mantissa_8(data)
+        # Lowest 8 bits of mantissa must be zeroed
+        u32 = groomed.view(np.uint32)
+        for val in u32:
+            self.assertEqual(val & 0xFF, 0)
+        # Relative error is bounded by 2^-15 ~= 3.05e-5 (< 0.005%)
+        rel_err = np.abs((groomed - data) / data)
+        self.assertTrue(np.all(rel_err < 5e-5))
+
+        # 2. Test Byte-Shuffle roundtrip
+        shape = (10, 4, 4)
+        arr = np.random.randn(*shape).astype(np.float32)
+        groomed_arr = mask_mantissa_8(arr)
+        shuf = byte_shuffle_f32(groomed_arr)
+        unshuf = byte_unshuffle_f32(shuf, shape)
+        self.assertEqual(unshuf.shape, shape)
+        self.assertEqual(unshuf.dtype, np.float32)
+        np.testing.assert_array_equal(unshuf, groomed_arr)
+
+        # 3. Test Full BZ Base Sigma Cache Save & Load Roundtrip
+        res_dir, _, _, cache_dir = normalize_results_dir(self.temp_dir)
+        p = ModelParameters(t=1.0, t1=0.0, mu=1.0, K=1.0, N=16, num_omega=21, omega_max=10.0, eta=0.08, solver="cpu")
+        sweep_core.run_J_k_sweep([3.0], fixed_jperp=6.0, mu=1.0, p=p, output_dir=res_dir, use_cache=True)
+
+        base_fn = get_sigma_base_filename(fixed_jperp=6.0, t=1.0, t1=0.0, mu=1.0, K=1.0, N=16, num_omega=21, omega_max=10.0, eta=0.08)
+        base_path = os.path.join(cache_dir, base_fn)
+        self.assertTrue(os.path.isfile(base_path))
+
+        meta = inspect_cache_foundation(base_path)
+        self.assertTrue(meta["is_ibz"])
+        self.assertTrue(meta["is_shuffled"])
+        self.assertTrue(meta["is_bitgroomed"])
+        self.assertEqual(meta["bitgroom_bits"], 8)
+        self.assertIn("8-bit Groomed", meta["format"])
 
 
 if __name__ == "__main__":

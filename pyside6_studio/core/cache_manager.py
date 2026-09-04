@@ -116,17 +116,42 @@ def get_ibz_indices_and_map(n: int):
     return rows, cols, full_to_ibz
 
 
+def mask_mantissa_8(arr_f32: np.ndarray) -> np.ndarray:
+    """Zeroes out the lowest 8 bits of float32 mantissa (Bit-Grooming)."""
+    u32 = np.ascontiguousarray(arr_f32).view(np.uint32)
+    return (u32 & np.uint32(0xFFFFFF00)).view(np.float32)
+
+
+def byte_shuffle_f32(arr: np.ndarray) -> np.ndarray:
+    """Byte-shuffles a float32 array into transposed uint8 memory stream."""
+    u8 = np.ascontiguousarray(arr).view(np.uint8).reshape(-1, 4)
+    return np.ascontiguousarray(u8.T)
+
+
+def byte_unshuffle_f32(u8_transposed: np.ndarray, shape: tuple) -> np.ndarray:
+    """Reconstructs float32 array from byte-shuffled uint8 stream."""
+    u8_2d = np.ascontiguousarray(u8_transposed.T)
+    return np.ascontiguousarray(u8_2d).view(np.float32).reshape(shape)
+
+
 def inspect_cache_foundation(fpath: str) -> dict:
     """
     Lightweight metadata inspector for cache foundations.
-    Detects whether an array is stored as 1/8th IBZ or legacy full BZ.
+    Detects whether an array is stored as 8-bit bit-groomed, 1/8th IBZ, or legacy full BZ.
     """
     if not os.path.isfile(fpath):
         return {"exists": False}
     try:
         with np.load(fpath) as d:
             is_ibz = bool(d.get("is_ibz", False))
-            if "sig_re" in d:
+            is_shuffled = bool(d.get("is_shuffled", False))
+            is_bitgroomed = bool(d.get("is_bitgroomed", False))
+            bitgroom_bits = int(d.get("bitgroom_bits", 8)) if is_bitgroomed else 0
+
+            if is_shuffled and "shape" in d:
+                dt = "float32 (groomed)" if is_bitgroomed else "float32 (shuffled)"
+                shape = tuple(d["shape"])
+            elif "sig_re" in d:
                 dt = str(d["sig_re"].dtype)
                 shape = tuple(d["sig_re"].shape)
             elif "sig1_re" in d:
@@ -135,12 +160,23 @@ def inspect_cache_foundation(fpath: str) -> dict:
             else:
                 dt = "unknown"
                 shape = ()
+
+            if is_bitgroomed:
+                fmt = f"1/8th IBZ ({bitgroom_bits}-bit Groomed)"
+            elif is_ibz:
+                fmt = "1/8th IBZ (C4v compressed)"
+            else:
+                fmt = "Legacy Full BZ"
+
             return {
                 "exists": True,
                 "is_ibz": is_ibz,
+                "is_shuffled": is_shuffled,
+                "is_bitgroomed": is_bitgroomed,
+                "bitgroom_bits": bitgroom_bits,
                 "dtype": dt,
                 "shape": shape,
-                "format": "1/8th IBZ (C4v compressed)" if is_ibz else "Legacy Full BZ"
+                "format": fmt
             }
     except Exception:
         return {"exists": True, "is_ibz": False, "dtype": "unknown", "format": "Legacy NPZ"}
@@ -347,7 +383,12 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
             )
             if base_file:
                 meta = inspect_cache_foundation(base_file)
-                ibz_tag = " (1/8th IBZ)" if meta.get("is_ibz") else ""
+                if meta.get("is_bitgroomed"):
+                    ibz_tag = " (8-bit Groomed)"
+                elif meta.get("is_ibz"):
+                    ibz_tag = " (1/8th IBZ)"
+                else:
+                    ibz_tag = ""
                 fmt_desc = meta.get("format", "Foundation")
                 return {
                     "state": "foundation",
