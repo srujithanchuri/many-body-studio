@@ -45,9 +45,11 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
         self.lab.container_slice.setVisible(False)
+        if hasattr(self.lab, "container_susc_params"):
+            self.lab.container_susc_params.setVisible(True)
         self.lab.lbl_map_tip.setVisible(True)
         self.lab.lbl_map_tip.setText(
-            "💡 Tip: Dynamic susceptibility along Γ(0,0) → X(π,0) → M(π,π) → Γ(0,0) • Scroll to zoom, drag to pan"
+            "💡 Tip: Dynamic susceptibility along Γ(0,0) → X(π,0) → M(π,π) → Γ(0,0) • Drag J_K / J_⊥ or change K"
         )
         if hasattr(self.lab, "container_wmax"):
             self.lab.container_wmax.setVisible(False)
@@ -81,9 +83,10 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
         N = dyn_data.get("N", 100)
         eta = dyn_data.get("eta", 0.01)
 
-        J = float(dyn_data.get("Jperp", 6.0))
+        J = float(getattr(self.lab, "current_Jperp", dyn_data.get("Jperp", 6.0)))
         JK = float(self.lab.current_JK)
-        K_coupling = float(dyn_data.get("K", 1.0))
+        K_coupling = float(getattr(self.lab, "current_K", dyn_data.get("K", 1.0)))
+        K_label = "AFM" if K_coupling > 0 else "FM"
 
         # 1. Compute bosonic background & triplon dispersion Ω(q)
         k_axis_bos = np.linspace(0, 2 * np.pi, N, endpoint=False)
@@ -143,7 +146,7 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
             self.ax_dyn.set_ylim(self._user_ylim if self._user_ylim is not None else default_ylim)
             if getattr(self, "title_artist", None) is not None:
                 self.title_artist.set_text(
-                    rf"Dynamic Susceptibility $-\mathrm{{Im}}\chi(\mathbf{{q}}, \omega)$ along Path ($J_K = {JK:.2f}, J_\perp = {J:.1f}$)"
+                    rf"Dynamic Susceptibility $-\mathrm{{Im}}\chi(\mathbf{{q}}, \omega)$ along Path ($J_K = {JK:.2f}, J_\perp = {J:.2f}, K = {K_coupling:+.0f}\ [{K_label}]$)"
                 )
             self.canvas.draw_idle()
             return
@@ -187,9 +190,9 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
         self.ax_dyn.set_xlim(self._user_xlim if self._user_xlim is not None else default_xlim)
         self.ax_dyn.set_ylim(self._user_ylim if self._user_ylim is not None else default_ylim)
 
-        self.title_artist = self.fig.suptitle(
-            rf"Dynamic Susceptibility $-\mathrm{{Im}}\chi(\mathbf{{q}}, \omega)$ along Path ($J_K = {JK:.2f}, J_\perp = {J:.1f}$)",
-            fontweight="bold", fontsize=12, y=0.96
+        self.title_artist = self.ax_dyn.set_title(
+            rf"Dynamic Susceptibility $-\mathrm{{Im}}\chi(\mathbf{{q}}, \omega)$ along Path ($J_K = {JK:.2f}, J_\perp = {J:.2f}, K = {K_coupling:+.0f}\ [{K_label}]$)",
+            fontweight="bold", fontsize=10.5, pad=8
         )
         self.ax_dyn.legend(loc="upper right", fontsize=9.5, framealpha=0.85)
 

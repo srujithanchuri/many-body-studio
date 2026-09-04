@@ -171,6 +171,8 @@ class LiveAnalyticalLabWidget(QWidget):
         self.current_kx = np.pi  # Antinodal by default
         self.current_ky = 0.0
         self.current_JK = 6.0
+        self.current_Jperp = 6.0
+        self.current_K = 1.0
         self.current_omega_slice = 0.0
 
         # Modular Analytical Mode Handlers
@@ -203,6 +205,11 @@ class LiveAnalyticalLabWidget(QWidget):
         self._slice_render_timer.setSingleShot(True)
         self._slice_render_timer.setInterval(20)
         self._slice_render_timer.timeout.connect(self._recompute_and_render)
+
+        self._jperp_render_timer = QTimer(self)
+        self._jperp_render_timer.setSingleShot(True)
+        self._jperp_render_timer.setInterval(20)
+        self._jperp_render_timer.timeout.connect(self._recompute_and_render)
 
     @property
     def current_mode(self) -> BaseAnalyticalMode:
@@ -604,6 +611,58 @@ class LiveAnalyticalLabWidget(QWidget):
         slice_lay.addWidget(self.lbl_slice_val)
         self.container_slice.setVisible(False)
         r2_lay.addWidget(self.container_slice)
+
+        # Contextual Sub-container: Susceptibility Parameters (J_perp slider + K AFM/FM dropdown)
+        self.container_susc_params = QWidget()
+        susc_lay = QHBoxLayout(self.container_susc_params)
+        susc_lay.setContentsMargins(0, 0, 0, 0)
+        susc_lay.setSpacing(6)
+        susc_lay.setAlignment(Qt.AlignVCenter)
+
+        lbl_jperp = QLabel("J_⊥:")
+        lbl_jperp.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
+        susc_lay.addWidget(lbl_jperp)
+
+        self.slider_jperp = QSlider(Qt.Horizontal)
+        self.slider_jperp.setRange(5, 120)  # 0.5 to 12.0
+        self.slider_jperp.setValue(60)       # 6.0 default
+        self.slider_jperp.setFixedWidth(110)
+        self.slider_jperp.setStyleSheet(self.slider_jk.styleSheet())
+        self.slider_jperp.valueChanged.connect(self._on_jperp_slider_changed)
+        self.slider_jperp.sliderReleased.connect(self._flush_render)
+        susc_lay.addWidget(self.slider_jperp)
+
+        self.lbl_jperp_val = QLabel("J_⊥ = 6.00")
+        self.lbl_jperp_val.setFixedHeight(24)
+        self.lbl_jperp_val.setStyleSheet("""
+            QLabel {
+                background: #ecfeff;
+                border: 1px solid #a5f3fc;
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-weight: 700;
+                color: #0e7490;
+                font-size: 11px;
+                min-width: 65px;
+            }
+        """)
+        susc_lay.addWidget(self.lbl_jperp_val)
+
+        susc_lay.addSpacing(4)
+
+        lbl_k = QLabel("K:")
+        lbl_k.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
+        susc_lay.addWidget(lbl_k)
+
+        self.cb_k = ModernComboBox(max_hint_width=110)
+        self.cb_k.setStyleSheet(combo_style + "QComboBox { min-width: 95px; max-width: 120px; font-weight: 600; }")
+        self.cb_k.addItem("+1 (AFM)", 1.0)
+        self.cb_k.addItem("-1 (FM)", -1.0)
+        self.cb_k.currentIndexChanged.connect(self._on_k_changed)
+        susc_lay.addWidget(self.cb_k)
+
+        self.container_susc_params.setVisible(False)
+        r2_lay.addWidget(self.container_susc_params)
 
         # Contextual Tip for 2D Maps
         self.lbl_map_tip = QLabel("💡 Tip: Click map to probe k • Double-click for A(k, ω)")
@@ -1018,6 +1077,12 @@ class LiveAnalyticalLabWidget(QWidget):
                     "t": float(d.get("t", 1.0)),
                     "Jperp": Jperp
                 }
+                if hasattr(self, "slider_jperp"):
+                    self.slider_jperp.blockSignals(True)
+                    self.slider_jperp.setValue(int(round(np.clip(Jperp * 10, 5, 120))))
+                    self.slider_jperp.blockSignals(False)
+                    self.current_Jperp = Jperp
+                    self.lbl_jperp_val.setText(f"J_⊥ = {Jperp:.2f}")
         except Exception as e:
             print(f"[CACHE LOAD ERROR] Failed loading {fpath}: {e}")
             if self.isVisible():
@@ -1032,6 +1097,7 @@ class LiveAnalyticalLabWidget(QWidget):
                     Jperp = float(jp_match.group(1))
                 else:
                     Jperp = float(d.get("fixed_jperp", d.get("Jperp", d.get("J_perp", 6.0))))
+                K_val = float(d.get("K", 1.0))
                 self.loaded_chi0_dynamic = {
                     "fpath": fpath,
                     "chi0_master": d["chi0_master"],
@@ -1046,8 +1112,19 @@ class LiveAnalyticalLabWidget(QWidget):
                     "omega_max": float(d.get("omega_max", 10.0)),
                     "num_omegas": int(d.get("num_omegas", 600)),
                     "Jperp": Jperp,
-                    "K": float(d.get("K", 1.0)),
+                    "K": K_val,
                 }
+                if hasattr(self, "slider_jperp"):
+                    self.slider_jperp.blockSignals(True)
+                    self.slider_jperp.setValue(int(round(np.clip(Jperp * 10, 5, 120))))
+                    self.slider_jperp.blockSignals(False)
+                    self.current_Jperp = Jperp
+                    self.lbl_jperp_val.setText(f"J_⊥ = {Jperp:.2f}")
+                if hasattr(self, "cb_k"):
+                    self.cb_k.blockSignals(True)
+                    self.cb_k.setCurrentIndex(0 if K_val >= 0 else 1)
+                    self.cb_k.blockSignals(False)
+                    self.current_K = K_val
         except Exception as e:
             print(f"[CACHE LOAD ERROR] Failed loading {fpath}: {e}")
             if self.isVisible():
@@ -1089,12 +1166,27 @@ class LiveAnalyticalLabWidget(QWidget):
         else:
             self._recompute_and_render()
 
+    def _on_jperp_slider_changed(self, val: int):
+        self.current_Jperp = float(val) / 10.0
+        self.lbl_jperp_val.setText(f"J_⊥ = {self.current_Jperp:.2f}")
+        if self.slider_jperp.isSliderDown():
+            self._jperp_render_timer.start(20)
+        else:
+            self._recompute_and_render()
+
+    def _on_k_changed(self, idx: int):
+        val = self.cb_k.currentData()
+        self.current_K = float(val) if val is not None else 1.0
+        self._recompute_and_render()
+
     def _flush_render(self):
         """Immediately executes pending debounced render on mouse release."""
         if hasattr(self, "_jk_render_timer") and self._jk_render_timer.isActive():
             self._jk_render_timer.stop()
         if hasattr(self, "_slice_render_timer") and self._slice_render_timer.isActive():
             self._slice_render_timer.stop()
+        if hasattr(self, "_jperp_render_timer") and self._jperp_render_timer.isActive():
+            self._jperp_render_timer.stop()
         self._recompute_and_render()
 
     def _on_wmax_changed(self, idx: int):
@@ -1233,6 +1325,19 @@ class LiveAnalyticalLabWidget(QWidget):
                 self.current_mode.reset_view()
             else:
                 self.current_mode.fit_view()
+        if self.active_mode in ["static_susc", "dynamic_susc", "rpa_susc"]:
+            if hasattr(self, "slider_jperp"):
+                self.slider_jperp.blockSignals(True)
+                self.slider_jperp.setValue(60)
+                self.slider_jperp.blockSignals(False)
+                self.current_Jperp = 6.0
+                self.lbl_jperp_val.setText("J_⊥ = 6.00")
+            if hasattr(self, "cb_k"):
+                self.cb_k.blockSignals(True)
+                self.cb_k.setCurrentIndex(0)
+                self.cb_k.blockSignals(False)
+                self.current_K = 1.0
+            self._recompute_and_render()
 
     def _fit_view(self):
         self._reset_view()

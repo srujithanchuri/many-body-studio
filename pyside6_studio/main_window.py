@@ -286,14 +286,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self._build_statusbar()
 
         self.dock_nav.setMinimumWidth(240)
-        self.dock_nav.setMaximumWidth(420)
+        self.dock_nav.setMaximumWidth(360)
 
         # Ensure docks start with proper comfortable widths & compact bottom height
         self.resizeDocks([self.dock_bottom], [150], Qt.Vertical)
-        self.resizeDocks([self.dock_nav, self.dock_inspector], [280, 420], Qt.Horizontal)
+        self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 480], Qt.Horizontal)
         QTimer.singleShot(0, lambda: (
             self.resizeDocks([self.dock_bottom], [150], Qt.Vertical),
-            self.resizeDocks([self.dock_nav, self.dock_inspector], [280, 420], Qt.Horizontal)
+            self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 480], Qt.Horizontal)
         ))
 
         # Setup Smart Cache invalidation debounced timer
@@ -654,14 +654,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _build_inspector_dock(self):
         self.dock_inspector = QDockWidget("⚙️ Parameter Inspector", self)
         self.dock_inspector.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        self.dock_inspector.setMinimumWidth(320)
+        self.dock_inspector.setMinimumWidth(400)
 
         # Wrap in QScrollArea so cards never overlap or clip beneath the bottom execution center
         self.inspector_scroll = QScrollArea()
         self.inspector_scroll.setWidgetResizable(True)
         self.inspector_scroll.setFrameShape(QFrame.NoFrame)
         self.inspector_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.inspector_scroll.setMinimumWidth(240)
+        self.inspector_scroll.setMinimumWidth(380)
 
         self.inspector_stack = QStackedWidget()
 

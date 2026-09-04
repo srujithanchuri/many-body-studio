@@ -46,9 +46,11 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
         self.lab.container_slice.setVisible(False)
+        if hasattr(self.lab, "container_susc_params"):
+            self.lab.container_susc_params.setVisible(True)
         self.lab.lbl_map_tip.setVisible(True)
         self.lab.lbl_map_tip.setText(
-            "💡 Tip: Hover to track wavevector q • Click to pin • Right-click to clear • Drag J_K for live RPA scaling"
+            "💡 Tip: Hover to track q • Click to pin • Right-click to clear • Drag J_K / J_⊥ or change K for live RPA scaling"
         )
         if hasattr(self.lab, "container_wmax"):
             self.lab.container_wmax.setVisible(False)
@@ -85,10 +87,11 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
         q_axis = cs["q_axis"]
         N = cs["N"]
 
-        # Compute Gamma_static for current J_K and J_perp=6.0, K=1.0
-        J = float(cs.get("Jperp", 6.0))
+        # Compute Gamma_static for current J_K, J_perp, and K
+        J = float(getattr(self.lab, "current_Jperp", cs.get("Jperp", 6.0)))
         JK = float(self.lab.current_JK)
-        K = 1.0
+        K = float(getattr(self.lab, "current_K", 1.0))
+        K_label = "AFM" if K > 0 else "FM"
 
         QX, QY = np.meshgrid(q_axis, q_axis)
         k_axis = np.linspace(0, 2 * np.pi, N, endpoint=False)
@@ -156,7 +159,7 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
 
             if getattr(self, "title_artist", None) is not None:
                 self.title_artist.set_text(
-                    rf"Static Magnetic Susceptibility $\chi_{{\mathrm{{RPA}}}}(\mathbf{{q}})$ ($J_K={JK:.2f}, J_\perp={J:.1f}$)"
+                    rf"Static Magnetic Susceptibility $\chi_{{\mathrm{{RPA}}}}(\mathbf{{q}})$ ($J_K={JK:.2f}, J_\perp={J:.2f}, K={K:+.0f}\ [{K_label}]$)"
                 )
             self.canvas.draw_idle()
             return
@@ -174,7 +177,7 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
         self.ax_susc.set_xlabel(r"$q_x$", fontsize=10.5, labelpad=6)
         self.ax_susc.set_ylabel(r"$q_y$", fontsize=10.5, labelpad=6)
         self.title_artist = self.ax_susc.set_title(
-            rf"Static Magnetic Susceptibility $\chi_{{\mathrm{{RPA}}}}(\mathbf{{q}})$ ($J_K={JK:.2f}, J_\perp={J:.1f}$)",
+            rf"Static Magnetic Susceptibility $\chi_{{\mathrm{{RPA}}}}(\mathbf{{q}})$ ($J_K={JK:.2f}, J_\perp={J:.2f}, K={K:+.0f}\ [{K_label}]$)",
             fontweight="bold", fontsize=11.5, pad=10
         )
 

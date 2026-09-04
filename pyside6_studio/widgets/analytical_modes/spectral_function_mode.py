@@ -39,6 +39,8 @@ class SpectralFunctionMode(BaseAnalyticalMode):
     def setup_ui(self):
         self.lab.container_mom.setVisible(True)
         self.lab.container_slice.setVisible(False)
+        if hasattr(self.lab, "container_susc_params"):
+            self.lab.container_susc_params.setVisible(False)
         self.lab.lbl_map_tip.setVisible(False)
         if hasattr(self.lab, "container_wmax"):
             self.lab.container_wmax.setVisible(True)

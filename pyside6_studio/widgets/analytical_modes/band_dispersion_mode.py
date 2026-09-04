@@ -79,6 +79,8 @@ class BandDispersionMode(BaseAnalyticalMode):
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
         self.lab.container_slice.setVisible(False)
+        if hasattr(self.lab, "container_susc_params"):
+            self.lab.container_susc_params.setVisible(False)
         self.lab.lbl_map_tip.setText("💡 Tip: Band dispersion along high-symmetry path Γ(0, 0) → M(π, π) → X(π, 0) → Γ(0, 0) • Scroll to zoom, drag to pan")
         self.lab.lbl_map_tip.setVisible(True)
         if hasattr(self.lab, "container_wmax"):

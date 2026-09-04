@@ -98,6 +98,8 @@ class EnergySliceMode(BaseAnalyticalMode):
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
         self.lab.container_slice.setVisible(True)
+        if hasattr(self.lab, "container_susc_params"):
+            self.lab.container_susc_params.setVisible(False)
         self.lab.lbl_map_tip.setText(
             "💡 Tip: Click map to pin k • Right-click map clears • "
             "Click DOS to slice • Right-click DOS resets • Double-click map opens A(k, ω)"
