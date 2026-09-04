@@ -631,8 +631,10 @@ class LiveAnalyticalLabWidget(QWidget):
         susc_lay.addWidget(lbl_jperp)
 
         self.slider_jperp = QSlider(Qt.Horizontal)
-        self.slider_jperp.setRange(5, 120)  # 0.5 to 12.0
-        self.slider_jperp.setValue(60)       # 6.0 default
+        self.slider_jperp.setRange(401, 1200)  # 4.01 to 12.00
+        self.slider_jperp.setValue(600)        # 6.00 default
+        self.slider_jperp.setSingleStep(1)
+        self.slider_jperp.setPageStep(10)
         self.slider_jperp.setFixedWidth(110)
         self.slider_jperp.setStyleSheet(self.slider_jk.styleSheet())
         self.slider_jperp.valueChanged.connect(self._on_jperp_slider_changed)
@@ -1087,7 +1089,7 @@ class LiveAnalyticalLabWidget(QWidget):
                 }
                 if hasattr(self, "slider_jperp"):
                     self.slider_jperp.blockSignals(True)
-                    self.slider_jperp.setValue(int(round(np.clip(Jperp * 10, 5, 120))))
+                    self.slider_jperp.setValue(int(round(np.clip(Jperp * 100, 401, 1200))))
                     self.slider_jperp.blockSignals(False)
                     self.current_Jperp = Jperp
                     self.lbl_jperp_val.setText(f"J_⊥ = {Jperp:.2f}")
@@ -1124,7 +1126,7 @@ class LiveAnalyticalLabWidget(QWidget):
                 }
                 if hasattr(self, "slider_jperp"):
                     self.slider_jperp.blockSignals(True)
-                    self.slider_jperp.setValue(int(round(np.clip(Jperp * 10, 5, 120))))
+                    self.slider_jperp.setValue(int(round(np.clip(Jperp * 100, 401, 1200))))
                     self.slider_jperp.blockSignals(False)
                     self.current_Jperp = Jperp
                     self.lbl_jperp_val.setText(f"J_⊥ = {Jperp:.2f}")
@@ -1175,7 +1177,7 @@ class LiveAnalyticalLabWidget(QWidget):
             self._recompute_and_render()
 
     def _on_jperp_slider_changed(self, val: int):
-        self.current_Jperp = float(val) / 10.0
+        self.current_Jperp = float(val) / 100.0
         self.lbl_jperp_val.setText(f"J_⊥ = {self.current_Jperp:.2f}")
         if self.slider_jperp.isSliderDown():
             self._jperp_render_timer.start(20)
@@ -1336,7 +1338,7 @@ class LiveAnalyticalLabWidget(QWidget):
         if self.active_mode in ["static_susc", "dynamic_susc", "rpa_susc"]:
             if hasattr(self, "slider_jperp"):
                 self.slider_jperp.blockSignals(True)
-                self.slider_jperp.setValue(60)
+                self.slider_jperp.setValue(600)
                 self.slider_jperp.blockSignals(False)
                 self.current_Jperp = 6.0
                 self.lbl_jperp_val.setText("J_⊥ = 6.00")
