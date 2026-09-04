@@ -38,7 +38,7 @@ class BandDispersionMode(BaseAnalyticalMode):
 
     def __init__(self, lab):
         super().__init__(lab)
-        self.w_max: float = 8.0
+        self.w_max: float = 15.0
 
         # Cached path geometry
         self._cached_path_id = None
@@ -73,6 +73,7 @@ class BandDispersionMode(BaseAnalyticalMode):
         self.im_disp = None
         self.line_bare = None
         self.cbar = None
+        self.title_artist = None
 
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
@@ -81,6 +82,11 @@ class BandDispersionMode(BaseAnalyticalMode):
         self.lab.lbl_map_tip.setVisible(True)
         if hasattr(self.lab, "container_wmax"):
             self.lab.container_wmax.setVisible(True)
+        if hasattr(self.lab, "cb_wmax"):
+            self.lab.cb_wmax.blockSignals(True)
+            self.lab.cb_wmax.setCurrentIndex(1)
+            self.lab.cb_wmax.blockSignals(False)
+        self.w_max = 15.0
         self.lab.lbl_live_z.setVisible(False)
         self.lab.lbl_live_gamma.setVisible(False)
         self.lab.lbl_live_mass.setVisible(False)
@@ -88,8 +94,13 @@ class BandDispersionMode(BaseAnalyticalMode):
     def fit_view(self):
         self._user_xlim = None
         self._user_ylim = None
+        self.w_max = 15.0
+        if hasattr(self.lab, "cb_wmax"):
+            self.lab.cb_wmax.blockSignals(True)
+            self.lab.cb_wmax.setCurrentText("±15 eV")
+            self.lab.cb_wmax.blockSignals(False)
         self.render()
-        self.lab.sig_status_msg.emit("Band dispersion view reset to full path.")
+        self.lab.sig_status_msg.emit("Band dispersion view reset to full path (±15 eV).")
 
     def reset_view(self):
         self.fit_view()
@@ -184,7 +195,10 @@ class BandDispersionMode(BaseAnalyticalMode):
             si_path = self._sig_im_clean[:, self._path_ix, self._path_iy].astype(np.float32)
 
         # Apply frequency bounds (±8 eV or ±15 eV based on cb_wmax)
-        self.w_max = getattr(self.lab, "current_w_max", 8.0)
+        if hasattr(self.lab, "cb_wmax"):
+            self.w_max = 15.0 if self.lab.cb_wmax.currentIndex() == 1 else 8.0
+        else:
+            self.w_max = getattr(self, "w_max", 15.0)
         w_mask = np.abs(omega) <= (self.w_max + 1e-4)
         w_eval = omega[w_mask].astype(np.float32)
         sr_eval = sr_path[w_mask]
@@ -216,21 +230,30 @@ class BandDispersionMode(BaseAnalyticalMode):
             self.im_disp.set_extent([0, num_points - 1, float(w_eval[0]), float(w_eval[-1])])
             self.im_disp.set_norm(mcolors.LogNorm(vmin=vmin_path, vmax=vmax))
             self.im_disp.set_clim(vmin=vmin_path, vmax=vmax)
+            default_ylim = (-self.w_max, self.w_max)
+            self.ax_disp.set_ylim(self._user_ylim if self._user_ylim is not None else default_ylim)
             if self.cbar is not None:
                 self.cbar.locator = ticker.LogLocator(base=10)
                 self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
                 self.cbar.update_ticks()
             self.line_bare.set_data(np.arange(num_points), self._xi_path)
-            self.ax_disp.set_title(
-                rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)",
-                fontweight="bold", fontsize=11.5, pad=8
-            )
+            if getattr(self, "title_artist", None) is not None:
+                self.title_artist.set_text(
+                    rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)"
+                )
             self.canvas.draw_idle()
             return
 
-        # Full figure rebuild: Single-panel layout matching source code
+        # Full figure rebuild: Single-panel layout matching source code, symmetrically centered
         self.fig.clear()
-        self.ax_disp = self.fig.add_subplot(111)
+        
+        # Symmetrically centered margins across canvas width
+        gs = self.fig.add_gridspec(
+            1, 2, width_ratios=[1.0, 0.026],
+            left=0.08, right=0.91, bottom=0.11, top=0.90, wspace=0.025
+        )
+        self.ax_disp = self.fig.add_subplot(gs[0, 0])
+        cax = self.fig.add_subplot(gs[0, 1])
 
         extent = [0, num_points - 1, float(w_eval[0]), float(w_eval[-1])]
         norm = mcolors.LogNorm(vmin=vmin_path, vmax=vmax)
@@ -263,21 +286,20 @@ class BandDispersionMode(BaseAnalyticalMode):
         self.ax_disp.set_xlim(self._user_xlim if self._user_xlim is not None else default_xlim)
         self.ax_disp.set_ylim(self._user_ylim if self._user_ylim is not None else default_ylim)
 
-        self.ax_disp.set_title(
+        self.title_artist = self.fig.suptitle(
             rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)",
-            fontweight="bold", fontsize=11.5, pad=8
+            fontweight="bold", fontsize=12, y=0.96
         )
         self.ax_disp.legend(loc="upper right", fontsize=9.5, framealpha=0.85)
 
         # Colorbar with exact source LogLocator & FuncFormatter
-        self.cbar = self.fig.colorbar(self.im_disp, ax=self.ax_disp, aspect=30, pad=0.02)
+        self.cbar = self.fig.colorbar(self.im_disp, cax=cax)
         self.cbar.locator = ticker.LogLocator(base=10)
         self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
         self.cbar.update_ticks()
         self.cbar.set_label(r"$A(\mathbf{k}, \omega)$ [$\mathrm{eV}^{-1}$]", fontsize=10)
         self.cbar.ax.tick_params(labelsize=8.5)
 
-        self.fig.tight_layout()
         self.canvas.draw()
 
     def on_scroll(self, event) -> bool:
