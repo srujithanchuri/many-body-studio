@@ -22,6 +22,7 @@ Features:
 
 import numpy as np
 import matplotlib.colors as mcolors
+import matplotlib.ticker as ticker
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
@@ -74,7 +75,7 @@ class BandDispersionMode(BaseAnalyticalMode):
     def setup_ui(self):
         self.lab.container_mom.setVisible(False)
         self.lab.container_slice.setVisible(False)
-        self.lab.lbl_map_tip.setText("💡 Tip: Click or drag along path to inspect 1D A(ω) • Double-click opens Spectral Function")
+        self.lab.lbl_map_tip.setText("💡 Tip: Click or drag along path to inspect 1D A(ω) • Right-click resets to X")
         self.lab.lbl_map_tip.setVisible(True)
         if hasattr(self.lab, "container_wmax"):
             self.lab.container_wmax.setVisible(True)
@@ -203,9 +204,16 @@ class BandDispersionMode(BaseAnalyticalMode):
         kx_probe = float(self._kx_path[probe_idx])
         ky_probe = float(self._ky_path[probe_idx])
 
-        # High-contrast color scaling
-        vmax = float(np.percentile(A_path, 99.7)) if A_path.size > 0 else 5.0
-        vmax = max(vmax, 0.5)
+        # Exact source code plotting settings from plotter.py:
+        # vmin_path = 0.005
+        # positive = Atot_path[np.isfinite(Atot_path) & (Atot_path > 0)]
+        # vmax = max(np.percentile(positive, 100.0), vmin_path * 10.0) if positive.size > 0 else 1.0
+        # clean_path = np.clip(Atot_path, a_min=vmin_path, a_max=None)
+        # norm = mcolors.LogNorm(vmin=vmin_path, vmax=vmax)
+        positive = A_path[np.isfinite(A_path) & (A_path > 0)]
+        vmin_path = 0.005
+        vmax = float(max(np.percentile(positive, 100.0), vmin_path * 10.0)) if positive.size > 0 else 1.0
+        clean_path = np.clip(A_path, a_min=vmin_path, a_max=None)
 
         can_update_inplace = (
             self.ax_disp is not None
@@ -218,10 +226,15 @@ class BandDispersionMode(BaseAnalyticalMode):
         k_badge_str = rf"$\mathbf{{k}} = ({kx_probe/np.pi:.2f}\pi, {ky_probe/np.pi:.2f}\pi)$"
 
         if can_update_inplace:
-            # 1. Update 2D Dispersion Heatmap
-            self.im_disp.set_data(A_path)
+            # 1. Update 2D Dispersion Heatmap with exact source LogNorm and colorbar ticks
+            self.im_disp.set_data(clean_path)
             self.im_disp.set_extent([0, num_points - 1, float(w_eval[0]), float(w_eval[-1])])
-            self.im_disp.set_clim(vmin=0.0, vmax=vmax)
+            self.im_disp.set_norm(mcolors.LogNorm(vmin=vmin_path, vmax=vmax))
+            self.im_disp.set_clim(vmin=vmin_path, vmax=vmax)
+            if self.cbar is not None:
+                self.cbar.locator = ticker.LogLocator(base=10)
+                self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
+                self.cbar.update_ticks()
             self.line_bare.set_data(np.arange(num_points), self._xi_path)
             self.line_probe.set_xdata([probe_idx, probe_idx])
             self.ax_disp.set_title(
@@ -252,28 +265,28 @@ class BandDispersionMode(BaseAnalyticalMode):
         self.ax_cut = self.fig.add_subplot(122)
 
         # -----------------------------------------------------------------
-        # Panel 1: 2D Band Dispersion Map
+        # Panel 1: 2D Band Dispersion Map (Matching source plotter.py)
         # -----------------------------------------------------------------
         extent = [0, num_points - 1, float(w_eval[0]), float(w_eval[-1])]
-        norm = mcolors.PowerNorm(gamma=0.6, vmin=0.0, vmax=vmax)
+        norm = mcolors.LogNorm(vmin=vmin_path, vmax=vmax)
         self.im_disp = self.ax_disp.imshow(
-            A_path, origin="lower", aspect="auto", extent=extent,
+            clean_path, origin="lower", aspect="auto", extent=extent,
             cmap="magma", norm=norm, interpolation="bilinear"
         )
 
         # Bare tight-binding dispersion curve
         path_x = np.arange(num_points)
         self.line_bare, = self.ax_disp.plot(
-            path_x, self._xi_path, color="#ffffff", linestyle="--",
+            path_x, self._xi_path, color="white", linestyle="--",
             linewidth=1.2, alpha=0.85, label=r"Bare $\xi(\mathbf{k})$"
         )
 
         # Fermi Level (omega = 0)
-        self.ax_disp.axhline(0, color="#cbd5e1", linestyle=":", linewidth=0.9, alpha=0.75)
+        self.ax_disp.axhline(0, color="white", linestyle=":", linewidth=1.0, alpha=0.5)
 
         # High-symmetry path boundary lines
         for t_idx in self._path_ticks[1:-1]:
-            self.ax_disp.axvline(t_idx, color="#ffffff", linestyle="-.", linewidth=0.8, alpha=0.55)
+            self.ax_disp.axvline(t_idx, color="white", linestyle="--", linewidth=1.0, alpha=0.3)
 
         # Probed momentum vertical tracker
         self.line_probe = self.ax_disp.axvline(
@@ -282,7 +295,8 @@ class BandDispersionMode(BaseAnalyticalMode):
 
         self.ax_disp.set_xticks(self._path_ticks)
         self.ax_disp.set_xticklabels(self._path_tick_labels, fontsize=9.5, fontweight="bold")
-        self.ax_disp.set_ylabel(r"$\omega$ [eV]", fontsize=10)
+        self.ax_disp.set_xlabel(r"$k$ path", fontsize=10)
+        self.ax_disp.set_ylabel(r"Frequency $\omega$ [eV]", fontsize=10)
         self.ax_disp.set_ylim(-self.w_max, self.w_max)
         self.ax_disp.set_title(
             rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)",
@@ -290,10 +304,13 @@ class BandDispersionMode(BaseAnalyticalMode):
         )
         self.ax_disp.legend(loc="upper right", fontsize=8.5, framealpha=0.85)
 
-        # Colorbar
+        # Colorbar with exact source LogLocator & FuncFormatter
         divider = make_axes_locatable(self.ax_disp)
         cax = divider.append_axes("right", size="3.5%", pad=0.10)
         self.cbar = self.fig.colorbar(self.im_disp, cax=cax)
+        self.cbar.locator = ticker.LogLocator(base=10)
+        self.cbar.formatter = ticker.FuncFormatter(lambda x, pos: f"{x:g}")
+        self.cbar.update_ticks()
         self.cbar.set_label(r"$A(\mathbf{k}, \omega)$ [$\mathrm{eV}^{-1}$]", fontsize=9)
         self.cbar.ax.tick_params(labelsize=8)
 
@@ -330,17 +347,6 @@ class BandDispersionMode(BaseAnalyticalMode):
         x_clicked = int(round(np.clip(event.xdata, 0, num_points - 1)))
 
         if event.button == 1:
-            if getattr(event, "dblclick", False):
-                # Double-click jumps to Mode 0 (Spectral Function) at probed coordinate
-                kx_val = float(self._kx_path[x_clicked])
-                ky_val = float(self._ky_path[x_clicked])
-                self.lab.current_kx = kx_val
-                self.lab.current_ky = ky_val
-                self.lab.sig_status_msg.emit(f"Jumped to Spectral Function at ({kx_val/np.pi:.2f}π, {ky_val/np.pi:.2f}π)")
-                if hasattr(self.lab, "cb_experiment"):
-                    self.lab.cb_experiment.setCurrentIndex(0)
-                return True
-
             self.selected_path_idx = x_clicked
             self._is_dragging_probe = True
             self.render()
