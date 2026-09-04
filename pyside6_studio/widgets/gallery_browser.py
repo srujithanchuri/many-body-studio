@@ -148,9 +148,12 @@ class ThumbnailCard(QFrame):
         self.img_lbl.setAlignment(Qt.AlignCenter)
         self.img_lbl.setFixedHeight(120)
         self.img_lbl.setStyleSheet("""
-            background: #0f172a;
-            border-radius: 4px;
-            border: 1px solid #e2e8f0;
+            QLabel {
+                background: #ffffff;
+                color: #64748b;
+                border: none;
+                border-radius: 4px;
+            }
         """)
         self.img_lbl.setText("⏳ Loading preview...")
         lay.addWidget(self.img_lbl)
