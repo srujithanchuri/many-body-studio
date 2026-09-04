@@ -242,7 +242,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Many-Body Studio Pro • Alpha v3.7")
+        self.setWindowTitle("Many-Body Studio Pro • Alpha v4")
         self.resize(1440, 900)
         self.setMinimumSize(1024, 600)
 

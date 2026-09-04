@@ -1,6 +1,6 @@
 # Many-Body Studio Pro: Complete Architecture & Implementation Plan
 
-> **Document Version**: alpha-v3.7 (Milestone: Modular Analytical Modes, Numba JIT Multi-Core Acceleration, & Smart Cache Management)  
+> **Document Version**: alpha-v4.0 (Milestone: Fixed Panel Dimensions, Modular 5-Mode Live Analytical Lab, High-Precision J_perp / K Susceptibility Tuning)  
 > **Target Project**: `C:\Users\sruji\Projects\masters_thesis_gui`  
 > **Physics Engine Source**: `C:\Users\sruji\Projects\masters_thesis`  
 > **Author**: Antigravity Assistant & Srujith Anchuri  

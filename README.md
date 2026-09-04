@@ -1,25 +1,30 @@
-# Many-Body Physics Studio Pro • Alpha v3.7
+# Many-Body Physics Studio Pro • Alpha v4
 
-Modern, high-performance scientific desktop workbench for strongly correlated quantum heterostructures. Built with PySide6 (Qt6), isolated `QProcess` execution bridges, native multi-backend GPU/CPU physics engines, 1/8th IBZ cache optimization, Numba JIT parallel acceleration, and a dual-perspective analytical architecture.
+Modern, high-performance scientific desktop workbench for strongly correlated quantum heterostructures. Built with PySide6 (Qt6), isolated `QProcess` execution bridges, native multi-backend GPU/CPU physics engines, 1/8th IBZ cache optimization, Numba JIT parallel acceleration, balanced and fixed panel layouts, and an interactive dual-perspective analytical architecture.
 
 ---
 
 ## Key Features
 
-### 1. Dual-Perspective Architecture
+### 1. Dual-Perspective Architecture & Balanced Proportions
 - **Simulation Studio**:
   - Configure Hamiltonians, launch asynchronous simulations, monitor live progress via an isolated subprocess `CalculationBridge`, and inspect raw numerical arrays in a hardware-accelerated interactive canvas.
+  - **Balanced Ergonomic Layout**: Rigidly proportioned $350\text{ px}$ Parameter Inspector dock paired with a spacious $\sim 730\text{ px}$ central canvas, ensuring un-cramped toolbars and comfortable controls across all screen resolutions (down to $1366\times 768$).
 - **Visual Analysis & Publication Perspective**:
   - **Visual Gallery Browser**: Grid and compact list views, metadata badges, parameter search, and instant file-system synchronization.
-  - **Live Analytical Lab**: On-the-fly physics powered by cached foundation arrays (`.npz` in `results/cache/`), enabling continuous $J_K$ and energy-slice scrubbing at 60+ FPS.
+  - **Live Analytical Lab**: On-the-fly physics powered by cached foundation arrays (`.npz` in `results/cache/`), enabling continuous $J_K$, $J_\perp$, $\omega$, and momentum scrubbing at 60+ FPS with immediate mode resync.
 
-### 2. Modular Analytical Physics Modes
+### 2. Full 5-Mode Modular Live Analytical Lab
 - **Spectral Function $[A(\mathbf{k}, \omega)]$**:
   - Probes $A(\mathbf{k}, \omega)$, $\text{Re }\Sigma$, and $\text{Im }\Sigma$ at any arbitrary Brillouin Zone momentum. Defaults to the antinodal point $\mathbf{k} = (\pi, 0)$ with interactive high-symmetry and custom coordinate pickers.
-- **DOS & Fermi Surface $[A(\mathbf{k}, \omega)]$**:
+- **Fermi Surface & DOS $[A(\mathbf{k}, \omega)]$**:
   - Side-by-side visualization: 2D Brillouin Zone contour $A(\mathbf{k}, \omega = \omega_{\text{slice}})$ with multi-point coordinate pinning alongside the full integrated Density of States $\rho(\omega) = \frac{1}{N^2} \sum_{\mathbf{k}} A(\mathbf{k}, \omega)$ with click-to-slice navigation.
-- **Magnetic Susceptibility $[\chi_{\text{RPA}}(\mathbf{q})]$**:
-  - Real-time RPA magnetic susceptibility intensity maps $\chi_{\text{RPA}}(\mathbf{q}) = \frac{\chi_0(\mathbf{q})}{1 - U_{\text{eff}}\chi_0(\mathbf{q})}$ with dynamic instability gap tracking.
+- **Band Dispersion along High-Symmetry Path**:
+  - Full-range quasiparticle band structure $A(\mathbf{k}, \omega)$ mapped across $\Gamma \to X \to M \to \Gamma$, matched to the authoritative source aspect ratio ($6.2 : 4.8$) with attached vertical colorbar.
+- **Static Susceptibility $[\chi_{\text{RPA}}(\mathbf{q})]$**:
+  - Real-time 2D magnetic susceptibility intensity maps across the Brillouin Zone with live interactive $J_K$, $J_\perp \in [4.01, 12.00]$, and $K$ (+1 AFM / -1 FM) controls.
+- **Dynamic Susceptibility $[-\text{Im}\chi(\mathbf{q}, \omega)]$ along Path**:
+  - Real-time frequency-momentum dynamical susceptibility colormaps computed via vectorized RPA, featuring live triplon mode tracking $\Omega(\mathbf{q}) = J_\perp \sqrt{1 + \frac{4K}{J_\perp}\gamma(\mathbf{q})}$ with continuous $J_\perp \ge 4.01$, $J_K$, and $K$ tuning.
 
 ### 3. Numba JIT Multi-Core Parallel Acceleration
 - Compiled native C-kernel with `@njit(parallel=True, fastmath=True)` utilizing OpenMP (`omp`) multi-threading across all 16 CPU cores via `prange`.
