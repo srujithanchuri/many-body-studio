@@ -359,14 +359,20 @@ QPushButton:pressed, QToolButton:pressed {
     background: #cbd5e1;
 }
 
-QPushButton#PrimaryBtn, QToolButton#PrimaryBtn {
+QPushButton#PrimaryBtn:enabled, QToolButton#PrimaryBtn:enabled {
     background: #2563eb;
     color: #ffffff;
     border: none;
     font-weight: 600;
 }
-QPushButton#PrimaryBtn:hover, QToolButton#PrimaryBtn:hover {
+QPushButton#PrimaryBtn:enabled:hover, QToolButton#PrimaryBtn:enabled:hover {
     background: #1d4ed8;
+}
+QPushButton#PrimaryBtn:disabled, QToolButton#PrimaryBtn:disabled {
+    background: #e2e8f0;
+    color: #94a3b8;
+    border: 1px solid #cbd5e1;
+    font-weight: 500;
 }
 
 QPushButton#BtnCancel:enabled {
@@ -862,14 +868,20 @@ QPushButton:pressed, QToolButton:pressed {
     background: #1e293b;
 }
 
-QPushButton#PrimaryBtn, QToolButton#PrimaryBtn {
+QPushButton#PrimaryBtn:enabled, QToolButton#PrimaryBtn:enabled {
     background: #2563eb;
     color: #ffffff;
     border: none;
     font-weight: 600;
 }
-QPushButton#PrimaryBtn:hover, QToolButton#PrimaryBtn:hover {
+QPushButton#PrimaryBtn:enabled:hover, QToolButton#PrimaryBtn:enabled:hover {
     background: #3b82f6;
+}
+QPushButton#PrimaryBtn:disabled, QToolButton#PrimaryBtn:disabled {
+    background: #1e293b;
+    color: #64748b;
+    border: 1px solid #334155;
+    font-weight: 500;
 }
 
 QPushButton#BtnCancel:enabled {

@@ -3,6 +3,11 @@
 import os
 from dataclasses import dataclass
 
+# Application Metadata
+APP_NAME = "Many-Body Studio Pro"
+APP_VERSION = "2.0.0"
+APP_RELEASE_TITLE = "Many-Body Studio Pro v2.0 • Unified Physics Workbench"
+
 # Base repository paths
 STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GUI_REPO_ROOT = os.path.dirname(STUDIO_DIR)

@@ -121,7 +121,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Many-Body Studio Pro • Alpha v1")
+        self.setWindowTitle("Many-Body Studio Pro v2.0 • Unified Physics Workbench")
         self.resize(1440, 920)
 
         # Install wheel scroll redirect filter to eliminate accidental value changes
@@ -1271,6 +1271,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         # Keep both Run and Cancel disabled during stopping procedure
         self.btn_run.setEnabled(False)
+        self.btn_run.setText("⏳ Stopping...")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏳ Stopping...")
         self.lbl_status.setText("⏳ Stopping simulation & purging GPU VRAM...")
@@ -1288,6 +1289,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_started(self):
         self.btn_run.setEnabled(False)
+        self.btn_run.setText(f"⏳ Running: {self.active_study}...")
         self.btn_cancel.setEnabled(True)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         backend_name = "NVIDIA RTX 5060 GPU" if getattr(self, "cb_solver_choice", None) and self.cb_solver_choice.currentIndex() == 0 else "Host CPU"
@@ -1339,6 +1341,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_completed(self, payload: dict):
         self.btn_run.setEnabled(True)
+        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"✅ Completed: {self.active_study} finished • Loaded into viewport.")
@@ -1369,6 +1372,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_error(self, error_msg: str):
         self.btn_run.setEnabled(True)
+        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"❌ Error: {error_msg}")
@@ -1382,6 +1386,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_calc_cancelled(self):
         # Keep Run button greyed out for the duration of the stopping procedure
         self.btn_run.setEnabled(False)
+        self.btn_run.setText("⏳ Stopping...")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏳ Stopping...")
         self.lbl_status.setText("⏳ Purging GPU VRAM & finalizing stop...")
@@ -1397,6 +1402,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Once stopping cooldown and VRAM flush complete, re-enable Run button
         def _finish_stopping():
             self.btn_run.setEnabled(True)
+            self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
             self.btn_cancel.setEnabled(False)
             self.btn_cancel.setText("⏹ Cancel / Stop")
             self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")

@@ -1,25 +1,27 @@
-# Many-Body Physics Studio Pro • Alpha v1
+# Many-Body Physics Studio Pro v2.0
 
-Modern, high-performance scientific desktop workbench for strongly correlated quantum heterostructures. Built with PySide6 (Qt6), isolated `QProcess` execution bridges, and dual-perspective workspace architecture.
+Modern, high-performance scientific desktop workbench for strongly correlated quantum heterostructures. Built with PySide6 (Qt6), isolated `QProcess` execution bridges, native multi-backend GPU/CPU physics engines, and dual-perspective workspace architecture.
 
 ---
 
 ## Key Features
 
-1. **Dual-Perspective Architecture**:
-   - 🔬 **Simulation Studio**: Full physics workspace with live parameter inspector, grid presets (N=64 to 256), batch queue, and sub-second calculation controls.
-   - 🎨 **Publication Figure Studio**: Dedicated camera-ready multi-panel composer, Physical Review B formatting presets, vector PDF export (300+ DPI), and instant LaTeX snippet generator.
+1. **Complete 4-Study Multi-Backend Physics Suite**:
+   - ⚡ **Spectral Sweep**: Full Brillouin zone composite density of states (DOS), Fermi surfaces, and high-symmetry path dispersion.
+   - 🌊 **Quasiparticle Spectral Function $A(\mathbf{k}, \omega)$**: Single-point Dyson FFT convolutions, retarded self-energy $\Sigma(\mathbf{k}, \omega)$, and lifetime/scattering rate decomposition.
+   - 📈 **Phase Diagram**: Exact root bisection search for the critical magnetic instability boundary $\det[\mathbf{1} - \mathbf{\Gamma}(\mathbf{q})\mathbf{\chi}_0(\mathbf{q})] = 0$ with AFM/FM order classification.
+   - 📊 **RPA Spin Susceptibility**: Full-BZ static $\chi(\mathbf{q})$ intensity maps and dynamic $\chi(\mathbf{q}, \omega)$ energy-momentum slices with automatic bare bubble $\chi_0$ caching.
 
-2. **Isolated Asynchronous Compute Engine**:
+2. **Dual Execution Backends (GPU & CPU)**:
+   - **NVIDIA CUDA GPU (`gpu64`)**: Hardware-accelerated CuPy FFTs and custom Numba CUDA kernels verified on NVIDIA GeForce RTX 5060 Laptop GPU.
+   - **Multi-Threaded CPU (`cpu`)**: Parallel Linear Tetrahedron Method (LTM) with dynamic CPU core quota limits (50% to 100%).
+
+3. **Isolated Asynchronous Compute Engine**:
    - Subprocess `CalculationBridge` decoupled from Qt GUI thread (0% UI freeze).
    - High-contrast live solver console with rich HTML colored logs.
-   - Instant sub-second cancellation with Windows process tree termination and CUDA VRAM purging.
+   - Instant sub-second cancellation with Windows process tree termination, stopping cooldown, and CUDA VRAM purging.
 
-3. **Multi-Backend Physics Engine**:
-   - **GPU 64-Bit (CUDA / CuPy)**: Hardware-accelerated Dyson real-time FFT convolutions on NVIDIA GeForce RTX 5060 Laptop GPU.
-   - **CPU Multithreaded (NumPy / SciPy)**: Dynamic CPU core usage limit controls (50% to 100%).
-
-4. **Hardware-Accelerated CAD Viewport**:
+4. **Hardware-Accelerated Viewport**:
    - `InteractivePlotCanvas` with sub-pixel rendering, smooth mousewheel zoom, click-drag panning, and coordinate inspection.
 
 ---
