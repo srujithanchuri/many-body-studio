@@ -116,10 +116,11 @@ class ThumbnailCard(QFrame):
     sig_view_fullscreen = Signal(str)
     sig_explore_data = Signal(str)
 
-    def __init__(self, plot_path: str, data_path: Optional[str] = None, parent=None):
+    def __init__(self, plot_path: str, data_path: Optional[str] = None, is_dark: bool = False, parent=None):
         super().__init__(parent)
         self.plot_path = os.path.normpath(plot_path)
         self.data_path = os.path.normpath(data_path) if data_path else None
+        self.is_dark = is_dark
         self.is_selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setFrameShape(QFrame.StyledPanel)
@@ -138,6 +139,10 @@ class ThumbnailCard(QFrame):
         self._build_ui()
         self.update_style()
 
+    def set_theme(self, is_dark: bool):
+        self.is_dark = is_dark
+        self.update_style()
+
     def _build_ui(self):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 8, 8, 8)
@@ -147,38 +152,28 @@ class ThumbnailCard(QFrame):
         self.img_lbl = QLabel()
         self.img_lbl.setAlignment(Qt.AlignCenter)
         self.img_lbl.setFixedHeight(120)
-        self.img_lbl.setStyleSheet("""
-            QLabel {
-                background: #ffffff;
-                color: #64748b;
-                border: none;
-                border-radius: 4px;
-            }
-        """)
         self.img_lbl.setText("⏳ Loading preview...")
         lay.addWidget(self.img_lbl)
 
         # 2. Prominent Physics Title
         self.lbl_title = QLabel(self.title)
         self.lbl_title.setWordWrap(True)
-        self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
         lay.addWidget(self.lbl_title)
 
         # 3. Physical Parameters Row
+        self.lbl_p = None
         if self.params_str:
-            lbl_p = QLabel(self.params_str)
-            lbl_p.setWordWrap(True)
-            lbl_p.setStyleSheet("font-size: 10px; color: #0284c7; font-weight: 600;")
-            lay.addWidget(lbl_p)
+            self.lbl_p = QLabel(self.params_str)
+            self.lbl_p.setWordWrap(True)
+            lay.addWidget(self.lbl_p)
 
         # 4. Bottom Row: Category Tag, Timestamp, and Data Badge
         b_row = QHBoxLayout()
         b_row.setContentsMargins(0, 2, 0, 0)
         b_row.setSpacing(4)
 
-        lbl_cat = QLabel(f"{self.cat_tag} • {self.time_str}")
-        lbl_cat.setStyleSheet("font-size: 9px; color: #64748b;")
-        b_row.addWidget(lbl_cat)
+        self.lbl_cat = QLabel(f"{self.cat_tag} • {self.time_str}")
+        b_row.addWidget(self.lbl_cat)
 
         b_row.addStretch()
 
@@ -195,28 +190,80 @@ class ThumbnailCard(QFrame):
         self.update_style()
 
     def update_style(self):
-        if self.is_selected:
-            self.setStyleSheet("""
-                #ThumbnailCard {
-                    background-color: #eff6ff;
-                    border: 2px solid #2563eb;
-                    border-radius: 6px;
+        if self.is_dark:
+            self.img_lbl.setStyleSheet("""
+                QLabel {
+                    background: #0f172a;
+                    color: #94a3b8;
+                    border: 1px solid #334155;
+                    border-radius: 4px;
                 }
             """)
-            self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #1d4ed8;")
+            if self.is_selected:
+                self.setStyleSheet("""
+                    #ThumbnailCard {
+                        background-color: #1e3a8a;
+                        border: 2px solid #3b82f6;
+                        border-radius: 6px;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #93c5fd;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 10px; color: #60a5fa; font-weight: 600;")
+            else:
+                self.setStyleSheet("""
+                    #ThumbnailCard {
+                        background-color: #1e293b;
+                        border: 1px solid #334155;
+                        border-radius: 6px;
+                    }
+                    #ThumbnailCard:hover {
+                        background-color: #334155;
+                        border-color: #475569;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #f8fafc;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 10px; color: #38bdf8; font-weight: 600;")
+            if hasattr(self, "lbl_cat"):
+                self.lbl_cat.setStyleSheet("font-size: 9px; color: #94a3b8;")
         else:
-            self.setStyleSheet("""
-                #ThumbnailCard {
-                    background-color: #ffffff;
-                    border: 1px solid #cbd5e1;
-                    border-radius: 6px;
-                }
-                #ThumbnailCard:hover {
-                    background-color: #f8fafc;
-                    border-color: #94a3b8;
+            self.img_lbl.setStyleSheet("""
+                QLabel {
+                    background: #ffffff;
+                    color: #64748b;
+                    border: none;
+                    border-radius: 4px;
                 }
             """)
-            self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
+            if self.is_selected:
+                self.setStyleSheet("""
+                    #ThumbnailCard {
+                        background-color: #eff6ff;
+                        border: 2px solid #2563eb;
+                        border-radius: 6px;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #1d4ed8;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 10px; color: #0284c7; font-weight: 600;")
+            else:
+                self.setStyleSheet("""
+                    #ThumbnailCard {
+                        background-color: #ffffff;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 6px;
+                    }
+                    #ThumbnailCard:hover {
+                        background-color: #f8fafc;
+                        border-color: #94a3b8;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 10px; color: #0284c7; font-weight: 600;")
+            if hasattr(self, "lbl_cat"):
+                self.lbl_cat.setStyleSheet("font-size: 9px; color: #64748b;")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -247,10 +294,11 @@ class CompactRowCard(QFrame):
     sig_view_fullscreen = Signal(str)
     sig_explore_data = Signal(str)
 
-    def __init__(self, plot_path: str, data_path: Optional[str] = None, parent=None):
+    def __init__(self, plot_path: str, data_path: Optional[str] = None, is_dark: bool = False, parent=None):
         super().__init__(parent)
         self.plot_path = os.path.normpath(plot_path)
         self.data_path = os.path.normpath(data_path) if data_path else None
+        self.is_dark = is_dark
         self.is_selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setFrameShape(QFrame.StyledPanel)
@@ -267,6 +315,10 @@ class CompactRowCard(QFrame):
             self.time_str = ""
 
         self._build_ui()
+        self.update_style()
+
+    def set_theme(self, is_dark: bool):
+        self.is_dark = is_dark
         self.update_style()
 
     def _build_ui(self):
@@ -298,7 +350,6 @@ class CompactRowCard(QFrame):
         t_lay.setSpacing(2)
 
         self.lbl_title = QLabel(self.title)
-        self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
         t_lay.addWidget(self.lbl_title)
 
         # Row 2: Parameters on left + Timestamp on bottom right
@@ -306,17 +357,17 @@ class CompactRowCard(QFrame):
         r2.setContentsMargins(0, 0, 0, 0)
         r2.setSpacing(6)
 
+        self.lbl_p = None
         if self.params_str:
             self.lbl_p = QLabel(self.params_str)
-            self.lbl_p.setStyleSheet("font-size: 9px; color: #0284c7; font-weight: 600;")
             r2.addWidget(self.lbl_p)
 
         r2.addStretch()
 
+        self.lbl_time = None
         if self.time_str:
             self.lbl_time = QLabel(self.time_str)
             self.lbl_time.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
             r2.addWidget(self.lbl_time)
 
         t_lay.addLayout(r2)
@@ -327,32 +378,68 @@ class CompactRowCard(QFrame):
         self.update_style()
 
     def update_style(self):
-        if self.is_selected:
-            self.setStyleSheet("""
-                #CompactRowCard {
-                    background-color: #eff6ff;
-                    border: 1.5px solid #2563eb;
-                    border-radius: 4px;
-                }
-            """)
-            self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #1d4ed8;")
-            if hasattr(self, "lbl_time"):
-                self.lbl_time.setStyleSheet("font-size: 9px; color: #3b82f6; font-weight: 600;")
+        if self.is_dark:
+            if self.is_selected:
+                self.setStyleSheet("""
+                    #CompactRowCard {
+                        background-color: #1e3a8a;
+                        border: 1.5px solid #3b82f6;
+                        border-radius: 4px;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #93c5fd;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 9px; color: #60a5fa; font-weight: 600;")
+                if self.lbl_time:
+                    self.lbl_time.setStyleSheet("font-size: 9px; color: #93c5fd; font-weight: 600;")
+            else:
+                self.setStyleSheet("""
+                    #CompactRowCard {
+                        background-color: #1e293b;
+                        border: 1px solid #334155;
+                        border-radius: 4px;
+                    }
+                    #CompactRowCard:hover {
+                        background-color: #334155;
+                        border-color: #475569;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #f8fafc;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 9px; color: #38bdf8; font-weight: 600;")
+                if self.lbl_time:
+                    self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
         else:
-            self.setStyleSheet("""
-                #CompactRowCard {
-                    background-color: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 4px;
-                }
-                #CompactRowCard:hover {
-                    background-color: #f8fafc;
-                    border-color: #94a3b8;
-                }
-            """)
-            self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
-            if hasattr(self, "lbl_time"):
-                self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
+            if self.is_selected:
+                self.setStyleSheet("""
+                    #CompactRowCard {
+                        background-color: #eff6ff;
+                        border: 1.5px solid #2563eb;
+                        border-radius: 4px;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #1d4ed8;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 9px; color: #0284c7; font-weight: 600;")
+                if self.lbl_time:
+                    self.lbl_time.setStyleSheet("font-size: 9px; color: #3b82f6; font-weight: 600;")
+            else:
+                self.setStyleSheet("""
+                    #CompactRowCard {
+                        background-color: #ffffff;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 4px;
+                    }
+                    #CompactRowCard:hover {
+                        background-color: #f8fafc;
+                        border-color: #94a3b8;
+                    }
+                """)
+                self.lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #0f172a;")
+                if self.lbl_p:
+                    self.lbl_p.setStyleSheet("font-size: 9px; color: #0284c7; font-weight: 600;")
+                if self.lbl_time:
+                    self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -395,9 +482,179 @@ class PlotGalleryWidget(QWidget):
         self.view_mode: str = "cards"
         self.active_category: str = "All"
         self.category_pills: Dict[str, QPushButton] = {}
+        self.is_dark: bool = False
 
         self._build_ui()
         self.refresh_gallery()
+
+    def set_theme(self, is_dark: bool):
+        self.is_dark = is_dark
+        self._apply_theme_styles()
+        for card in self.card_widgets.values():
+            if hasattr(card, "set_theme"):
+                card.set_theme(is_dark)
+
+    def _apply_theme_styles(self):
+        if not hasattr(self, "header"):
+            return
+        if self.is_dark:
+            self.header.setStyleSheet("""
+                QFrame#GalleryHeader {
+                    background: #0f172a;
+                    border: 1px solid #334155;
+                    border-radius: 8px;
+                }
+            """)
+            self.edit_search.setStyleSheet("""
+                QLineEdit {
+                    background: #0f172a;
+                    border: 1px solid #334155;
+                    border-radius: 14px;
+                    padding: 2px 10px;
+                    font-size: 11px;
+                    color: #f8fafc;
+                }
+                QLineEdit:focus {
+                    border: 1.5px solid #3b82f6;
+                    background: #0f172a;
+                }
+            """)
+            self.btn_refresh.setStyleSheet("""
+                QPushButton {
+                    background: #1e293b;
+                    border: 1px solid #334155;
+                    border-radius: 14px;
+                    font-size: 16px;
+                    font-weight: 800;
+                    color: #f8fafc;
+                    padding: 0px;
+                    margin: 0px;
+                }
+                QPushButton:hover {
+                    background: #334155;
+                    border-color: #475569;
+                    color: #ffffff;
+                }
+                QPushButton:pressed {
+                    background: #0f172a;
+                }
+            """)
+            pill_style = """
+                QPushButton {
+                    padding: 3px 10px; border-radius: 11px; font-size: 11px; font-weight: 600;
+                    border: 1px solid #334155; background: #1e293b; color: #94a3b8;
+                }
+                QPushButton:hover { background: #334155; color: #f8fafc; }
+                QPushButton:checked {
+                    background-color: #2563eb; color: #ffffff; border-color: #3b82f6;
+                }
+            """
+            for btn in self.category_pills.values():
+                btn.setStyleSheet(pill_style)
+            self.cb_observable.setStyleSheet("""
+                QComboBox {
+                    border: 1px solid #334155; border-radius: 4px;
+                    padding: 1px 6px; font-size: 11px; background: #0f172a; color: #f8fafc;
+                }
+                QComboBox::drop-down { border: none; }
+                QComboBox QAbstractItemView {
+                    background-color: #1e293b;
+                    color: #f8fafc;
+                    selection-background-color: #2563eb;
+                    selection-color: #ffffff;
+                    border: 1px solid #334155;
+                }
+            """)
+            self.lbl_count.setStyleSheet("font-size: 10px; font-weight: 700; color: #94a3b8;")
+            v_style = """
+                QToolButton {
+                    border: 1px solid #334155; border-radius: 3px;
+                    background: #1e293b; font-size: 11px; color: #94a3b8;
+                }
+                QToolButton:hover { background: #334155; color: #f8fafc; }
+                QToolButton:checked { background: #2563eb; color: #ffffff; border-color: #3b82f6; }
+            """
+            self.btn_view_cards.setStyleSheet(v_style)
+            self.btn_view_list.setStyleSheet(v_style)
+        else:
+            self.header.setStyleSheet("""
+                QFrame#GalleryHeader {
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                }
+            """)
+            self.edit_search.setStyleSheet("""
+                QLineEdit {
+                    background: #ffffff;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 14px;
+                    padding: 2px 10px;
+                    font-size: 11px;
+                    color: #0f172a;
+                }
+                QLineEdit:focus {
+                    border: 1.5px solid #2563eb;
+                    background: #ffffff;
+                }
+            """)
+            self.btn_refresh.setStyleSheet("""
+                QPushButton {
+                    background: #ffffff;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 14px;
+                    font-size: 16px;
+                    font-weight: 800;
+                    color: #334155;
+                    padding: 0px;
+                    margin: 0px;
+                }
+                QPushButton:hover {
+                    background: #f1f5f9;
+                    border-color: #94a3b8;
+                    color: #0f172a;
+                }
+                QPushButton:pressed {
+                    background: #e2e8f0;
+                }
+            """)
+            pill_style = """
+                QPushButton {
+                    padding: 3px 10px; border-radius: 11px; font-size: 11px; font-weight: 600;
+                    border: 1px solid #cbd5e1; background: #f1f5f9; color: #475569;
+                }
+                QPushButton:hover { background: #e2e8f0; color: #1e293b; }
+                QPushButton:checked {
+                    background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
+                }
+            """
+            for btn in self.category_pills.values():
+                btn.setStyleSheet(pill_style)
+            self.cb_observable.setStyleSheet("""
+                QComboBox {
+                    border: 1px solid #cbd5e1; border-radius: 4px;
+                    padding: 1px 6px; font-size: 11px; background: #ffffff; color: #334155;
+                }
+                QComboBox::drop-down { border: none; }
+                QComboBox QAbstractItemView {
+                    background-color: #ffffff;
+                    color: #0f172a;
+                    selection-background-color: #2563eb;
+                    selection-color: #ffffff;
+                    border: 1px solid #cbd5e1;
+                }
+            """)
+            self.lbl_count.setStyleSheet("font-size: 10px; font-weight: 700; color: #64748b;")
+            v_style = """
+                QToolButton {
+                    border: 1px solid #cbd5e1; border-radius: 3px;
+                    background: #ffffff; font-size: 11px; color: #475569;
+                }
+                QToolButton:hover { background: #f1f5f9; }
+                QToolButton:checked { background: #2563eb; color: #ffffff; border-color: #1d4ed8; }
+            """
+            self.btn_view_cards.setStyleSheet(v_style)
+            self.btn_view_list.setStyleSheet(v_style)
 
     def _build_ui(self):
         lay = QVBoxLayout(self)
@@ -405,16 +662,9 @@ class PlotGalleryWidget(QWidget):
         lay.setSpacing(6)
 
         # Compact Header Frame (< 85px)
-        header = QFrame()
-        header.setObjectName("GalleryHeader")
-        header.setStyleSheet("""
-            QFrame#GalleryHeader {
-                background: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-            }
-        """)
-        h_lay = QVBoxLayout(header)
+        self.header = QFrame()
+        self.header.setObjectName("GalleryHeader")
+        h_lay = QVBoxLayout(self.header)
         h_lay.setContentsMargins(6, 6, 6, 6)
         h_lay.setSpacing(4)
 
@@ -429,20 +679,6 @@ class PlotGalleryWidget(QWidget):
         self.edit_search.setPlaceholderText("🔍 Filter: mu=1.0, J_K=3.0, DOS, AFM...")
         self.edit_search.setClearButtonEnabled(True)
         self.edit_search.setFixedHeight(28)
-        self.edit_search.setStyleSheet("""
-            QLineEdit {
-                background: #ffffff;
-                border: 1px solid #cbd5e1;
-                border-radius: 14px;
-                padding: 2px 10px;
-                font-size: 11px;
-                color: #0f172a;
-            }
-            QLineEdit:focus {
-                border: 1.5px solid #2563eb;
-                background: #ffffff;
-            }
-        """)
         self.edit_search.textChanged.connect(self._filter_and_render_cards)
         r1.addWidget(self.edit_search, 1)
 
@@ -450,26 +686,6 @@ class PlotGalleryWidget(QWidget):
         self.btn_refresh.setToolTip("Refresh plot and data catalog")
         self.btn_refresh.setCursor(Qt.PointingHandCursor)
         self.btn_refresh.setFixedSize(28, 28)
-        self.btn_refresh.setStyleSheet("""
-            QPushButton {
-                background: #ffffff;
-                border: 1px solid #cbd5e1;
-                border-radius: 14px;
-                font-size: 16px;
-                font-weight: 800;
-                color: #334155;
-                padding: 0px;
-                margin: 0px;
-            }
-            QPushButton:hover {
-                background: #f1f5f9;
-                border-color: #94a3b8;
-                color: #0f172a;
-            }
-            QPushButton:pressed {
-                background: #e2e8f0;
-            }
-        """)
         self.btn_refresh.clicked.connect(self.refresh_gallery)
         r1.addWidget(self.btn_refresh)
         h_lay.addLayout(r1)
@@ -490,22 +706,10 @@ class PlotGalleryWidget(QWidget):
             ("🧲 Susceptibility", "Susceptibility"),
         ]
 
-        pill_style = """
-            QPushButton {
-                padding: 3px 10px; border-radius: 11px; font-size: 11px; font-weight: 600;
-                border: 1px solid #cbd5e1; background: #f1f5f9; color: #475569;
-            }
-            QPushButton:hover { background: #e2e8f0; color: #1e293b; }
-            QPushButton:checked {
-                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
-            }
-        """
-
         for label, cat_key in categories:
             btn = QPushButton(label)
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setStyleSheet(pill_style)
             if cat_key == "All":
                 btn.setChecked(True)
             btn.clicked.connect(lambda checked=False, k=cat_key: self._on_category_pill_clicked(k))
@@ -524,17 +728,9 @@ class PlotGalleryWidget(QWidget):
         r3.setSpacing(4)
 
         self.lbl_count = QLabel("0 plots")
-        self.lbl_count.setStyleSheet("font-size: 10px; font-weight: 700; color: #64748b;")
 
         self.cb_observable = QComboBox()
         self.cb_observable.setFixedHeight(24)
-        self.cb_observable.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #cbd5e1; border-radius: 4px;
-                padding: 1px 6px; font-size: 11px; background: #ffffff; color: #334155;
-            }
-            QComboBox::drop-down { border: none; }
-        """)
         self._populate_observable_types("All")
         self.cb_observable.currentIndexChanged.connect(self._filter_and_render_cards)
         r3.addWidget(self.cb_observable, 1)
@@ -559,17 +755,6 @@ class PlotGalleryWidget(QWidget):
         self.view_group.addButton(self.btn_view_cards)
         self.view_group.addButton(self.btn_view_list)
 
-        v_style = """
-            QToolButton {
-                border: 1px solid #cbd5e1; border-radius: 3px;
-                background: #ffffff; font-size: 11px; color: #475569;
-            }
-            QToolButton:hover { background: #f1f5f9; }
-            QToolButton:checked { background: #2563eb; color: #ffffff; border-color: #1d4ed8; }
-        """
-        self.btn_view_cards.setStyleSheet(v_style)
-        self.btn_view_list.setStyleSheet(v_style)
-
         self.btn_view_cards.clicked.connect(lambda: self._set_view_mode("cards"))
         self.btn_view_list.clicked.connect(lambda: self._set_view_mode("list"))
 
@@ -577,7 +762,9 @@ class PlotGalleryWidget(QWidget):
         r3.addWidget(self.btn_view_list)
         h_lay.addLayout(r3)
 
-        lay.addWidget(header)
+        self._apply_theme_styles()
+
+        lay.addWidget(self.header)
 
         # Scroll Area for Cards / List Items
         self.scroll = QScrollArea()
@@ -858,9 +1045,9 @@ class PlotGalleryWidget(QWidget):
         for p in filtered:
             data_p = self._find_paired_data(p)
             if self.view_mode == "list":
-                card = CompactRowCard(plot_path=p, data_path=data_p, parent=self.card_container)
+                card = CompactRowCard(plot_path=p, data_path=data_p, is_dark=self.is_dark, parent=self.card_container)
             else:
-                card = ThumbnailCard(plot_path=p, data_path=data_p, parent=self.card_container)
+                card = ThumbnailCard(plot_path=p, data_path=data_p, is_dark=self.is_dark, parent=self.card_container)
                 self._load_thumbnail(card, p)
 
             card.sig_selected.connect(self._on_card_selected)

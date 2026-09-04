@@ -189,6 +189,7 @@ class LiveAnalyticalLabWidget(QWidget):
             "dynamic_susc": DynamicSusceptibilityMode(self),
         }
         self.mode_order = ["k_probe", "energy_slice", "band_dispersion", "static_susc", "dynamic_susc"]
+        self.is_dark: bool = False
 
         self._build_ui()
         self.scan_caches()
@@ -214,6 +215,41 @@ class LiveAnalyticalLabWidget(QWidget):
         self._jperp_render_timer.setSingleShot(True)
         self._jperp_render_timer.setInterval(20)
         self._jperp_render_timer.timeout.connect(self._recompute_and_render)
+
+    def set_theme(self, is_dark: bool):
+        self.is_dark = is_dark
+        if hasattr(self, "header_frame"):
+            if is_dark:
+                self.header_frame.setStyleSheet("""
+                    QFrame#analytical_header_frame {
+                        background: #0f172a;
+                        border: 1px solid #334155;
+                        border-radius: 8px;
+                    }
+                """)
+            else:
+                self.header_frame.setStyleSheet("""
+                    QFrame#analytical_header_frame {
+                        background: #f8fafc;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 8px;
+                    }
+                """)
+        bg = "#0b1120" if is_dark else "#ffffff"
+        fg = "#f8fafc" if is_dark else "#0f172a"
+        grid_col = "#334155" if is_dark else "#cbd5e1"
+        if hasattr(self, "fig"):
+            self.fig.patch.set_facecolor(bg)
+            for ax in self.fig.axes:
+                ax.set_facecolor(bg)
+                ax.tick_params(colors=fg)
+                for spine in ax.spines.values():
+                    spine.set_color(grid_col)
+                ax.xaxis.label.set_color(fg)
+                ax.yaxis.label.set_color(fg)
+                ax.title.set_color(fg)
+            if hasattr(self, "canvas"):
+                self.canvas.draw_idle()
 
     @property
     def current_mode(self) -> BaseAnalyticalMode:

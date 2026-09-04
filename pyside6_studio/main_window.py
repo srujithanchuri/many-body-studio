@@ -1337,57 +1337,278 @@ class UnifiedWorkbenchWindow(QMainWindow):
     # =========================================================================
     # BOTTOM DOCK: EXECUTION QUEUE & PROCESS CONSOLE (SIMULATION ONLY)
     # =========================================================================
+    def _update_bottom_dock_theme(self, is_dark: bool):
+        if not hasattr(self, "dock_bottom") or not hasattr(self, "bottom_tabs"):
+            return
+        if is_dark:
+            self.dock_bottom.setStyleSheet("""
+                QDockWidget {
+                    font-weight: 700;
+                    font-size: 11px;
+                }
+                QDockWidget::title {
+                    background: #1e293b;
+                    padding: 4px 8px;
+                    border-bottom: 1px solid #334155;
+                    font-weight: 700;
+                    font-size: 11px;
+                    color: #94a3b8;
+                }
+            """)
+            self.bottom_tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #334155;
+                    border-radius: 6px;
+                    background: #1e293b;
+                    margin-top: -1px;
+                }
+                QTabBar::tab {
+                    background: #0f172a;
+                    color: #94a3b8;
+                    border: 1px solid #334155;
+                    border-bottom: 1px solid #334155;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    padding: 6px 16px;
+                    font-weight: 600;
+                    font-size: 11px;
+                    margin-right: 3px;
+                }
+                QTabBar::tab:selected {
+                    background: #1e293b;
+                    color: #60a5fa;
+                    font-weight: 700;
+                    border-color: #3b82f6;
+                    border-bottom: 2px solid #2563eb;
+                }
+                QTabBar::tab:hover:!selected {
+                    background: #1e293b;
+                    color: #f8fafc;
+                }
+            """)
+            btn_style = """
+                QPushButton {
+                    padding: 4px 11px;
+                    background: #334155;
+                    border: 1px solid #475569;
+                    border-radius: 5px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #f8fafc;
+                }
+                QPushButton:hover {
+                    background: #475569;
+                    border-color: #64748b;
+                    color: #ffffff;
+                }
+            """
+            self.lbl_queue_badge.setStyleSheet("""
+                QLabel {
+                    background: #0f172a;
+                    border: 1px solid #334155;
+                    border-radius: 10px;
+                    padding: 2px 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #94a3b8;
+                }
+            """)
+            self.table_queue.setStyleSheet("""
+                QTableWidget {
+                    border: 1px solid #334155;
+                    border-radius: 5px;
+                    background-color: #1e293b;
+                    alternate-background-color: #0f172a;
+                    gridline-color: #334155;
+                    selection-background-color: #1e3a8a;
+                    selection-color: #f8fafc;
+                    font-size: 11px;
+                    color: #f8fafc;
+                }
+                QHeaderView::section {
+                    background-color: #0f172a;
+                    color: #94a3b8;
+                    font-weight: 700;
+                    font-size: 11px;
+                    padding: 5px 8px;
+                    border: none;
+                    border-bottom: 2px solid #334155;
+                    border-right: 1px solid #334155;
+                }
+            """)
+            self.lbl_console_engine_status.setStyleSheet("""
+                QLabel {
+                    background: #064e3b;
+                    border: 1px solid #059669;
+                    border-radius: 10px;
+                    padding: 2px 10px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #6ee7b7;
+                }
+            """)
+        else:
+            self.dock_bottom.setStyleSheet("""
+                QDockWidget {
+                    font-weight: 700;
+                    font-size: 11px;
+                }
+                QDockWidget::title {
+                    background: #f1f5f9;
+                    padding: 4px 8px;
+                    border-bottom: 1px solid #cbd5e1;
+                    font-weight: 700;
+                    font-size: 11px;
+                    color: #1e293b;
+                }
+            """)
+            self.bottom_tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #ffffff;
+                    margin-top: -1px;
+                }
+                QTabBar::tab {
+                    background: #f1f5f9;
+                    color: #475569;
+                    border: 1px solid #cbd5e1;
+                    border-bottom: 1px solid #cbd5e1;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    padding: 6px 16px;
+                    font-weight: 600;
+                    font-size: 11px;
+                    margin-right: 3px;
+                }
+                QTabBar::tab:selected {
+                    background: #ffffff;
+                    color: #1d4ed8;
+                    font-weight: 700;
+                    border-color: #3b82f6;
+                    border-bottom: 2px solid #2563eb;
+                }
+                QTabBar::tab:hover:!selected {
+                    background: #e2e8f0;
+                    color: #0f172a;
+                }
+            """)
+            btn_style = """
+                QPushButton {
+                    padding: 4px 11px;
+                    background: #ffffff;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 5px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #334155;
+                }
+                QPushButton:hover {
+                    background: #f1f5f9;
+                    border-color: #94a3b8;
+                    color: #0f172a;
+                }
+            """
+            self.lbl_queue_badge.setStyleSheet("""
+                QLabel {
+                    background: #f8fafc;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 10px;
+                    padding: 2px 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #475569;
+                }
+            """)
+            self.table_queue.setStyleSheet("""
+                QTableWidget {
+                    border: 1px solid #e2e8f0;
+                    border-radius: 5px;
+                    background-color: #ffffff;
+                    alternate-background-color: #f8fafc;
+                    gridline-color: #e2e8f0;
+                    selection-background-color: #eff6ff;
+                    selection-color: #1e293b;
+                    font-size: 11px;
+                    color: #0f172a;
+                }
+                QHeaderView::section {
+                    background-color: #f1f5f9;
+                    color: #334155;
+                    font-weight: 700;
+                    font-size: 11px;
+                    padding: 5px 8px;
+                    border: none;
+                    border-bottom: 2px solid #cbd5e1;
+                    border-right: 1px solid #e2e8f0;
+                }
+            """)
+            self.lbl_console_engine_status.setStyleSheet("""
+                QLabel {
+                    background: #ecfdf5;
+                    border: 1px solid #a7f3d0;
+                    border-radius: 10px;
+                    padding: 2px 10px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #065f46;
+                }
+            """)
+
+        for btn in [
+            getattr(self, "btn_pause", None),
+            getattr(self, "btn_add_to_queue", None),
+            getattr(self, "btn_clear", None),
+            getattr(self, "btn_autoscroll", None),
+            getattr(self, "btn_copy_console", None),
+            getattr(self, "btn_clear_console", None),
+        ]:
+            if btn:
+                btn.setStyleSheet(btn_style)
+
+    def _update_statusbar_theme(self, is_dark: bool):
+        sb = self.statusBar()
+        if is_dark:
+            sb.setStyleSheet("QStatusBar { background: #0f172a; border-top: 1px solid #334155; padding: 2px 4px; }")
+            if hasattr(self, "lbl_status"):
+                self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 500; color: #94a3b8;")
+            if hasattr(self, "lbl_coords"):
+                self.lbl_coords.setStyleSheet("""
+                    QLabel {
+                        background: #1e293b;
+                        border: 1px solid #334155;
+                        border-radius: 4px;
+                        padding: 2px 8px;
+                        font-family: 'Consolas', 'Cascadia Code', monospace;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: #f8fafc;
+                    }
+                """)
+        else:
+            sb.setStyleSheet("QStatusBar { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 2px 4px; }")
+            if hasattr(self, "lbl_status"):
+                self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 500; color: #334155;")
+            if hasattr(self, "lbl_coords"):
+                self.lbl_coords.setStyleSheet("""
+                    QLabel {
+                        background: #ffffff;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 4px;
+                        padding: 2px 8px;
+                        font-family: 'Consolas', 'Cascadia Code', monospace;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: #1e293b;
+                    }
+                """)
+
     def _build_bottom_drawer_dock(self):
         self.dock_bottom = QDockWidget("⚡ Calculation Engine • Batch Queue & Process Console", self)
         self.dock_bottom.setAllowedAreas(Qt.BottomDockWidgetArea)
         self.dock_bottom.setMaximumHeight(260)
-        self.dock_bottom.setStyleSheet("""
-            QDockWidget {
-                font-weight: 700;
-                font-size: 11px;
-            }
-            QDockWidget::title {
-                background: #f1f5f9;
-                padding: 4px 8px;
-                border-bottom: 1px solid #cbd5e1;
-                font-weight: 700;
-                font-size: 11px;
-                color: #1e293b;
-            }
-        """)
 
         self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #cbd5e1;
-                border-radius: 6px;
-                background: #ffffff;
-                margin-top: -1px;
-            }
-            QTabBar::tab {
-                background: #f1f5f9;
-                color: #475569;
-                border: 1px solid #cbd5e1;
-                border-bottom: 1px solid #cbd5e1;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-                padding: 6px 16px;
-                font-weight: 600;
-                font-size: 11px;
-                margin-right: 3px;
-            }
-            QTabBar::tab:selected {
-                background: #ffffff;
-                color: #1d4ed8;
-                font-weight: 700;
-                border-color: #3b82f6;
-                border-bottom: 2px solid #2563eb;
-            }
-            QTabBar::tab:hover:!selected {
-                background: #e2e8f0;
-                color: #0f172a;
-            }
-        """)
 
         # Tab 1: Batch Queue
         queue_tab = QWidget()
@@ -1399,23 +1620,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
-
-        btn_action_style = """
-            QPushButton {
-                padding: 4px 11px;
-                background: #ffffff;
-                border: 1px solid #cbd5e1;
-                border-radius: 5px;
-                font-size: 11px;
-                font-weight: 600;
-                color: #334155;
-            }
-            QPushButton:hover {
-                background: #f1f5f9;
-                border-color: #94a3b8;
-                color: #0f172a;
-            }
-        """
 
         self.btn_start = QPushButton("▶ Run All Pending")
         self.btn_start.setObjectName("PrimaryBtn")
@@ -1442,36 +1646,22 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.btn_pause = QPushButton("⏸ Pause")
         self.btn_pause.setToolTip("Pause batch execution after current step")
-        self.btn_pause.setStyleSheet(btn_action_style)
         self.btn_pause.clicked.connect(self.pause_queue)
         row.addWidget(self.btn_pause)
 
         self.btn_add_to_queue = QPushButton("➕ Add Active Study")
         self.btn_add_to_queue.setToolTip("Enqueue current study and parameter snapshot into the batch list")
-        self.btn_add_to_queue.setStyleSheet(btn_action_style)
         self.btn_add_to_queue.clicked.connect(self.add_to_queue)
         row.addWidget(self.btn_add_to_queue)
 
         self.btn_clear = QPushButton("🗑 Clear Finished")
         self.btn_clear.setToolTip("Remove all completed or pending entries from the queue")
-        self.btn_clear.setStyleSheet(btn_action_style)
         self.btn_clear.clicked.connect(self.clear_queue)
         row.addWidget(self.btn_clear)
 
         row.addStretch(1)
 
         self.lbl_queue_badge = QLabel("0 Jobs Queued")
-        self.lbl_queue_badge.setStyleSheet("""
-            QLabel {
-                background: #f8fafc;
-                border: 1px solid #cbd5e1;
-                border-radius: 10px;
-                padding: 2px 10px;
-                font-size: 11px;
-                font-weight: 600;
-                color: #475569;
-            }
-        """)
         row.addWidget(self.lbl_queue_badge)
 
         ql.addLayout(row)
@@ -1490,28 +1680,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.table_queue.verticalHeader().setVisible(False)
         self.table_queue.setShowGrid(True)
         self.table_queue.setAlternatingRowColors(True)
-        self.table_queue.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #e2e8f0;
-                border-radius: 5px;
-                background-color: #ffffff;
-                alternate-background-color: #f8fafc;
-                gridline-color: #e2e8f0;
-                selection-background-color: #eff6ff;
-                selection-color: #1e293b;
-                font-size: 11px;
-            }
-            QHeaderView::section {
-                background-color: #f1f5f9;
-                color: #334155;
-                font-weight: 700;
-                font-size: 11px;
-                padding: 5px 8px;
-                border: none;
-                border-bottom: 2px solid #cbd5e1;
-                border-right: 1px solid #e2e8f0;
-            }
-        """)
         ql.addWidget(self.table_queue)
         self.bottom_tabs.addTab(queue_tab, "📋 Batch Execution Queue (0)")
 
@@ -1527,17 +1695,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         crow.setSpacing(6)
 
         self.lbl_console_engine_status = QLabel("🟢 Engine Ready [Idle]")
-        self.lbl_console_engine_status.setStyleSheet("""
-            QLabel {
-                background: #ecfdf5;
-                border: 1px solid #a7f3d0;
-                border-radius: 10px;
-                padding: 2px 10px;
-                font-size: 10px;
-                font-weight: 700;
-                color: #065f46;
-            }
-        """)
         crow.addWidget(self.lbl_console_engine_status)
 
         crow.addStretch(1)
@@ -1546,19 +1703,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_autoscroll.setCheckable(True)
         self.btn_autoscroll.setChecked(True)
         self.btn_autoscroll.setToolTip("Automatically follow live execution log output")
-        self.btn_autoscroll.setStyleSheet(btn_action_style)
         self.btn_autoscroll.toggled.connect(self._on_autoscroll_toggled)
         crow.addWidget(self.btn_autoscroll)
 
         self.btn_copy_console = QPushButton("📋 Copy Console")
         self.btn_copy_console.setToolTip("Copy entire console output to clipboard")
-        self.btn_copy_console.setStyleSheet(btn_action_style)
         self.btn_copy_console.clicked.connect(self._copy_console_to_clipboard)
         crow.addWidget(self.btn_copy_console)
 
         self.btn_clear_console = QPushButton("🗑 Clear")
         self.btn_clear_console.setToolTip("Clear console history")
-        self.btn_clear_console.setStyleSheet(btn_action_style)
         self.btn_clear_console.clicked.connect(self._clear_console)
         crow.addWidget(self.btn_clear_console)
 
@@ -1584,6 +1738,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         cl.addWidget(self.txt_console)
         self.bottom_tabs.addTab(console_tab, "💻 Live Solver Console")
 
+        self._update_bottom_dock_theme(self.is_dark)
+
         self.dock_bottom.setWidget(self.bottom_tabs)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.dock_bottom)
 
@@ -1604,25 +1760,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _build_statusbar(self):
         sb = self.statusBar()
-        sb.setStyleSheet("QStatusBar { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 2px 4px; }")
 
         self.lbl_status = QLabel("● Ready. [Simulation Studio Active]")
-        self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 500; color: #334155;")
         self.lbl_status.setMinimumWidth(0)
 
         self.lbl_coords = QLabel("Pointer: (kx = --, ky = --)")
-        self.lbl_coords.setStyleSheet("""
-            QLabel {
-                background: #ffffff;
-                border: 1px solid #cbd5e1;
-                border-radius: 4px;
-                padding: 2px 8px;
-                font-family: 'Consolas', 'Cascadia Code', monospace;
-                font-size: 11px;
-                font-weight: 600;
-                color: #1e293b;
-            }
-        """)
+
+        self._update_statusbar_theme(self.is_dark)
+
         sb.addWidget(self.lbl_status, 1)
         sb.addPermanentWidget(self.lbl_coords)
 
@@ -2295,6 +2440,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.data_canvas.set_theme(self.is_dark)
         if hasattr(self, "explorer"):
             self.explorer.set_theme(self.is_dark)
+        if hasattr(self, "gallery"):
+            self.gallery.set_theme(self.is_dark)
+        if hasattr(self, "live_lab"):
+            self.live_lab.set_theme(self.is_dark)
+        self._update_bottom_dock_theme(self.is_dark)
+        self._update_statusbar_theme(self.is_dark)
         study_col = QColor("#60a5fa") if self.is_dark else QColor("#2563eb")
         snap_col = QColor("#94a3b8") if self.is_dark else QColor("#475569")
         for r in range(self.table_queue.rowCount()):
