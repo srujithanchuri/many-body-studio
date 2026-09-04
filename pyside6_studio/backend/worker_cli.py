@@ -49,6 +49,11 @@ except Exception:
 
 from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
 from pyside6_studio.backend.cuda_env import init_cuda_environment
+from pyside6_studio.core.cache_manager import (
+    normalize_results_dir,
+    find_cached_sigma_base,
+    get_sigma_base_filename
+)
 
 init_cuda_environment()
 
@@ -76,7 +81,7 @@ def emit_completed(plot_path: str = "", data_path: str = "", all_plots: list = N
     print(msg, flush=True)
 
 
-def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str):
+def run_spectral_sweep_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str, out_cache_dir: str):
     """Executes the full-BZ Spectral Sweep (DOS, FS, Path) with cache optimization and multi-plot delivery."""
     t = float(params.get("t", 1.0))
     t1 = float(params.get("t1", 0.0))
@@ -93,6 +98,7 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
     raw_solver = params.get("solver_choice", "gpu").lower()
     solver_choice = "cpu" if "cpu" in raw_solver else "gpu64"
     cpu_limit_str = str(params.get("cpu_limit", "80%")).rstrip("%")
+    force_recompute = bool(params.get("force_recompute", False))
     try:
         cpu_limit = float(cpu_limit_str) / 100.0
     except Exception:
@@ -121,8 +127,9 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
             fixed_jk=fixed_jperp,
             mu=mu,
             p=p,
-            output_dir=out_plots_dir,
-            use_cache=True
+            output_dir=results_dir,
+            use_cache=True,
+            force_recompute=force_recompute
         )
         safe_suffix = f"atJ_K_{fixed_jperp:.1f}_mu_{mu:.1f}".replace("$", "").replace("\\", "").replace(" ", "").replace("=", "_").replace("{", "").replace("}", "").replace(",", "_").replace("/", "_")
     else:
@@ -131,8 +138,9 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
             fixed_jperp=fixed_jperp,
             mu=mu,
             p=p,
-            output_dir=out_plots_dir,
-            use_cache=True
+            output_dir=results_dir,
+            use_cache=True,
+            force_recompute=force_recompute
         )
         safe_suffix = f"atJ_perp_{fixed_jperp:.1f}_mu_{mu:.1f}".replace("$", "").replace("\\", "").replace(" ", "").replace("=", "_").replace("{", "").replace("}", "").replace(",", "_").replace("/", "_")
 
@@ -149,12 +157,13 @@ def run_spectral_sweep_task(params: dict, out_plots_dir: str, out_data_dir: str)
                 all_plots.append(os.path.join(out_plots_dir, f))
 
     primary_plot = dos_plot if os.path.isfile(dos_plot) else (all_plots[0] if all_plots else "")
+    data_path = str(res) if res and os.path.isfile(str(res)) else ""
 
     emit_status("Spectral Sweep completed successfully.")
-    emit_completed(plot_path=primary_plot, all_plots=all_plots)
+    emit_completed(plot_path=primary_plot, data_path=data_path, all_plots=all_plots)
 
 
-def run_spectral_function_task(params: dict, out_plots_dir: str, out_data_dir: str):
+def run_spectral_function_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str, out_cache_dir: str):
     """Executes single-point Quasiparticle Spectral Function A(k, ω) calculation."""
     t = float(params.get("t", 1.0))
     t1 = float(params.get("t1", 0.0))
@@ -164,6 +173,7 @@ def run_spectral_function_task(params: dict, out_plots_dir: str, out_data_dir: s
     num_omega = int(params.get("num_omega", params.get("Nw", 2001)))
     omega_max = float(params.get("omega_max", params.get("w_max", 20.0)))
     eta = float(params.get("eta", 0.08))
+    force_recompute = bool(params.get("force_recompute", False))
 
     sweep_mode = "JK" if ("Kondo" in params.get("spec_sweep_mode", "JK") or params.get("spec_sweep_mode") == "JK") else "J_perp"
     sweep_vals = params.get("spec_sweep_vals", [3.0, 6.0, 9.0])
@@ -233,9 +243,42 @@ def run_spectral_function_task(params: dict, out_plots_dir: str, out_data_dir: s
     if sweep_mode == "JK":
         p.j_perp = float(fixed_coupling)
         p.j_k = 1.0
-        emit_progress(50, "Evaluating 1-Loop and 3-Loop convolutions at target k...")
-        s1_re, s1_im = solver_m1.calculate_one_loop(omega, p, external_P=ext_P)
-        s3_re, s3_im = solver_m3.calculate_three_loop(omega, p, external_P=ext_P)
+
+        # Check single-point base cache in results/cache/
+        base_cached = find_cached_sigma_base(
+            cache_dir=out_cache_dir, fixed_jperp=fixed_coupling,
+            t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta,
+            ext_P=ext_P
+        )
+        s_loaded = False
+        if base_cached and not force_recompute:
+            try:
+                t_load = time.time()
+                d_c = np.load(base_cached)
+                s1_re, s1_im = d_c["s1_re"], d_c["s1_im"]
+                s3_re, s3_im = d_c["s3_re"], d_c["s3_im"]
+                s_loaded = True
+                emit_status(f"⚡ Loaded point Σ₀ from cache ({time.time()-t_load:.2f}s)")
+            except Exception:
+                s_loaded = False
+
+        if not s_loaded:
+            emit_progress(50, "Evaluating 1-Loop and 3-Loop convolutions at target k...")
+            s1_re, s1_im = solver_m1.calculate_one_loop(omega, p, external_P=ext_P)
+            s3_re, s3_im = solver_m3.calculate_three_loop(omega, p, external_P=ext_P)
+            try:
+                base_fname = get_sigma_base_filename(
+                    fixed_jperp=fixed_coupling, t=t, t1=t1, mu=mu, K=K,
+                    N=N, num_omega=num_omega, omega_max=omega_max, eta=eta, ext_P=ext_P
+                )
+                np.savez_compressed(
+                    os.path.join(out_cache_dir, base_fname),
+                    s1_re=s1_re, s1_im=s1_im, s3_re=s3_re, s3_im=s3_im,
+                    omega=omega, fixed_jperp=fixed_coupling, ext_P=ext_P,
+                    t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, eta=eta
+                )
+            except Exception:
+                pass
 
         emit_progress(75, "Scaling spectral weight across Kondo coupling values...")
         for jk in sweep_vals:
@@ -311,11 +354,32 @@ def run_spectral_function_task(params: dict, out_plots_dir: str, out_data_dir: s
     fig.savefig(plot_file, dpi=300)
     plt.close(fig)
 
+    # Save raw numerical dataset to results/data/
+    data_file = os.path.join(out_data_dir, f"{plot_prefix}_{sweep_mode}_k_{mult_x:g}_{mult_y:g}_mu_{mu:.1f}_eta_{eta:.4f}.npz")
+    save_data = {
+        "omega": omega,
+        "xi_k": xi_k,
+        "kx": kx_val,
+        "ky": ky_val,
+        "ext_P": np.array(ext_P),
+        "num_curves": len(curves),
+        "sweep_mode": sweep_mode,
+        "fixed_coupling": fixed_coupling,
+        "mu": mu, "t": t, "t1": t1, "K": K, "N": N, "eta": eta
+    }
+    for idx, c in enumerate(curves):
+        save_data[f"val_{idx}"] = c["val"]
+        save_data[f"label_{idx}"] = c["label"]
+        save_data[f"re_{idx}"] = c["re"]
+        save_data[f"im_{idx}"] = c["im"]
+        save_data[f"A_{idx}"] = c["A"]
+    np.savez_compressed(data_file, **save_data)
+
     emit_progress(100, "Spectral Function calculation completed successfully.")
-    emit_completed(plot_path=plot_file)
+    emit_completed(plot_path=plot_file, data_path=data_file)
 
 
-def run_phase_diagram_task(params: dict, out_plots_dir: str, out_data_dir: str):
+def run_phase_diagram_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str):
     """Executes Phase Boundary Bisection Search det[1 - Gamma(q)*chi0(q)] = 0 across the BZ."""
     mu = float(params.get("mu", 1.0))
     t = float(params.get("t", 1.0))
@@ -326,6 +390,7 @@ def run_phase_diagram_task(params: dict, out_plots_dir: str, out_data_dir: str):
     jk_min = float(params.get("JK_min", params.get("jk_min", 0.0)))
     jk_max = float(params.get("JK_max", params.get("jk_max", 12.0)))
     jk_pts = int(params.get("JK_pts", params.get("jk_pts", 200)))
+    force_recompute = bool(params.get("force_recompute", False))
 
     raw_solver = str(params.get("solver_choice", "gpu")).lower()
     solver_choice = "cpu" if "cpu" in raw_solver else "gpu64"
@@ -357,7 +422,6 @@ def run_phase_diagram_task(params: dict, out_plots_dir: str, out_data_dir: str):
 
     import phase_diagram
 
-    base_out_dir = os.path.dirname(out_plots_dir)
     emit_status(f"Solving exact critical boundary instability condition on {backend_label}...")
 
     def on_status(msg):
@@ -373,8 +437,9 @@ def run_phase_diagram_task(params: dict, out_plots_dir: str, out_data_dir: str):
         JK_max=jk_max,
         JK_pts=jk_pts,
         solver_choice=solver_choice,
-        output_dir=base_out_dir,
-        status_callback=on_status
+        output_dir=results_dir,
+        status_callback=on_status,
+        force_recompute=force_recompute
     )
 
     k_tag = "AFM" if K > 0 else "FM"
@@ -385,7 +450,7 @@ def run_phase_diagram_task(params: dict, out_plots_dir: str, out_data_dir: str):
     emit_completed(plot_path=plot_file if os.path.exists(plot_file) else "", data_path=data_file if os.path.exists(data_file) else "")
 
 
-def run_susceptibility_task(params: dict, out_plots_dir: str, out_data_dir: str):
+def run_susceptibility_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str):
     """Executes 2D Static & Dynamic RPA Spin Susceptibility calculations."""
     mu = float(params.get("mu", 1.0))
     t = float(params.get("t", 1.0))
@@ -395,6 +460,7 @@ def run_susceptibility_task(params: dict, out_plots_dir: str, out_data_dir: str)
     num_omega = int(params.get("num_omega", params.get("Nw", 600)))
     omega_max = float(params.get("omega_max", params.get("w_max", 10.0)))
     eta = float(params.get("eta", 0.01))
+    force_recompute = bool(params.get("force_recompute", False))
 
     run_static = bool(params.get("run_static", True))
     run_dynamic = bool(params.get("run_dynamic", True))
@@ -440,8 +506,6 @@ def run_susceptibility_task(params: dict, out_plots_dir: str, out_data_dir: str)
 
     import sweeper
 
-    base_out_dir = os.path.dirname(out_plots_dir)
-
     def on_status(msg):
         emit_status(f"{msg}")
 
@@ -461,8 +525,9 @@ def run_susceptibility_task(params: dict, out_plots_dir: str, out_data_dir: str)
         num_omegas=num_omega,
         eta=eta,
         solver_choice=solver_choice,
-        output_dir=base_out_dir,
-        status_callback=on_status
+        output_dir=results_dir,
+        status_callback=on_status,
+        force_recompute=force_recompute
     )
 
     fixed_str = f"J_{fixed_J}" if sweep_mode == "JK" else f"JK_{fixed_JK}"
@@ -490,22 +555,19 @@ def run_worker(params: dict):
     task = params.get("task", "spectral_sweep").lower()
     emit_progress(5, f"Initializing worker for task: {task}...")
 
-    # Default output directory: masters_thesis_gui/results
+    # Normalize to self-contained results directory layout
     base_out_dir = params.get("output_dir", os.path.join(GUI_ROOT, "results"))
-    out_plots_dir = os.path.join(base_out_dir, "plots")
-    out_data_dir = os.path.join(base_out_dir, "data")
-    os.makedirs(out_plots_dir, exist_ok=True)
-    os.makedirs(out_data_dir, exist_ok=True)
+    results_dir, out_plots_dir, out_data_dir, out_cache_dir = normalize_results_dir(base_out_dir)
 
     try:
         if "phase" in task or "diagram" in task or "bisection" in task:
-            run_phase_diagram_task(params, out_plots_dir, out_data_dir)
+            run_phase_diagram_task(params, results_dir, out_plots_dir, out_data_dir)
         elif "susc" in task or "rpa" in task or "chi" in task:
-            run_susceptibility_task(params, out_plots_dir, out_data_dir)
+            run_susceptibility_task(params, results_dir, out_plots_dir, out_data_dir)
         elif "function" in task or "a(k" in task or ("spec" in task and "sweep" not in task):
-            run_spectral_function_task(params, out_plots_dir, out_data_dir)
+            run_spectral_function_task(params, results_dir, out_plots_dir, out_data_dir, out_cache_dir)
         else:
-            run_spectral_sweep_task(params, out_plots_dir, out_data_dir)
+            run_spectral_sweep_task(params, results_dir, out_plots_dir, out_data_dir, out_cache_dir)
 
     except Exception as e:
         import traceback

@@ -16,8 +16,12 @@ htmlcov/
 # Local results and plots (keep data directory gitignored, keep README or structure if needed)
 results/plots/
 results/data/
+results/cache/
 results/*.png
 results/*.pdf
+
+# Scratch and temp test artifacts
+scratch/
 
 # IDE and agents
 .agents/

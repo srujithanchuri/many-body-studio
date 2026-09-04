@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox, QSpinBox, QComboBox, QPushButton, QTableWidget,
     QTableWidgetItem, QHeaderView, QTextEdit, QProgressBar, QToolBar,
     QTreeWidget, QTreeWidgetItem, QMessageBox, QFileDialog, QToolButton,
-    QMenu, QStackedWidget, QCheckBox, QScrollArea, QFrame, QSizePolicy
+    QMenu, QStackedWidget, QCheckBox, QScrollArea, QFrame, QSizePolicy,
+    QDialog, QAbstractItemView
 )
 
 from pyside6_studio.theme import LIGHT_THEME_QSS, DARK_THEME_QSS, create_light_palette, create_dark_palette
@@ -31,6 +32,12 @@ from pyside6_studio.canvas import InteractivePlotCanvas
 from pyside6_studio.backend.bridge import CalculationBridge
 from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
 from pyside6_studio.core.hardware import get_hardware_info
+from pyside6_studio.core.cache_manager import (
+    normalize_results_dir,
+    check_cache_status,
+    get_cache_stats,
+    purge_cache
+)
 from pyside6_studio.core import config
 
 DEFAULT_RESULTS_DIR = r"C:\Users\sruji\Projects\masters_thesis_gui\results"
@@ -43,22 +50,23 @@ def get_available_plots(output_dir=None):
     """
     plots = {}
     target_dir = output_dir or DEFAULT_RESULTS_DIR
-    if not os.path.isdir(target_dir):
-        return plots
+    results_dir, plots_dir, data_dir, cache_dir = normalize_results_dir(target_dir)
 
-    sub_plots = os.path.join(target_dir, "plots")
-    search_dir = sub_plots if os.path.isdir(sub_plots) else target_dir
-
-    for f in glob.glob(os.path.join(search_dir, "*.png")):
-        bname = os.path.basename(f)
-        if bname.startswith(("sweep_", "both_", "spectral_", "phase_", "chi_")):
-            plots[bname] = os.path.normpath(f)
+    if os.path.isdir(plots_dir):
+        for f in glob.glob(os.path.join(plots_dir, "*.png")):
+            bname = os.path.basename(f)
+            if bname.startswith(("sweep_", "both_", "spectral_", "phase_", "chi_")):
+                plots[bname] = os.path.normpath(f)
 
     return plots
 
 
 class ModernCard(QGroupBox):
     """QGroupBox that allows its width to shrink down gracefully without long title text inflating minimumSizeHint."""
+    def __init__(self, title="", parent=None):
+        clean_title = title.replace("&", "&&") if ("&" in title and "&&" not in title) else title
+        super().__init__(clean_title, parent)
+
     def minimumSizeHint(self):
         sz = super().minimumSizeHint()
         return QSize(min(sz.width(), 240), sz.height())
@@ -111,6 +119,115 @@ class WheelScrollRedirectFilter(QObject):
                 # If not inside a scroll area, safely ignore the event to prevent unwanted value modifications
                 return True
         return super().eventFilter(obj, event)
+
+
+class CacheManagerDialog(QDialog):
+    """Inspects and manages reusable computational foundation arrays in results/cache/."""
+    def __init__(self, parent=None, out_dir=None):
+        super().__init__(parent)
+        self.setWindowTitle("Smart Cache Manager • Many-Body Studio Pro")
+        self.setMinimumSize(700, 420)
+        self.out_dir = out_dir
+        self._init_ui()
+        self.refresh_data()
+
+    def _init_ui(self):
+        lay = QVBoxLayout(self)
+        lay.setSpacing(10)
+
+        lbl_title = QLabel("📦 Reusable Computational Foundations")
+        lbl_title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        lay.addWidget(lbl_title)
+
+        lbl_desc = QLabel(
+            "The Smart Caching Engine stores reusable foundations (Base Σ₀ at J_K=1.0 and bare bubbles χ₀)\n"
+            "in the 'results/cache/' directory. Changing (t, t1, mu, K, J_perp, N, Nw, wmax, eta) invalidates these foundations.\n"
+            "Scaling J_K utilizes the analytical J_K² scaling law without recomputing convolutions."
+        )
+        lbl_desc.setStyleSheet("color: #64748b; font-size: 11px;")
+        lbl_desc.setWordWrap(True)
+        lay.addWidget(lbl_desc)
+
+        self.lbl_stats = QLabel("Total Cache: 0 files (0 KB)")
+        self.lbl_stats.setStyleSheet("font-weight: 600; color: #0891b2;")
+        lay.addWidget(self.lbl_stats)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Foundation File", "Size", "Type", "Last Modified"])
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        lay.addWidget(self.table)
+
+        h_btns = QHBoxLayout()
+        self.btn_clear = QPushButton("🗑️ Clear Cache")
+        self.btn_clear.setStyleSheet("background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; font-weight: 600; padding: 4px 10px;")
+        self.btn_clear.clicked.connect(self._clear_cache)
+        h_btns.addWidget(self.btn_clear)
+
+        self.btn_open_folder = QPushButton("📂 Open Cache Folder")
+        self.btn_open_folder.setStyleSheet("padding: 4px 10px;")
+        self.btn_open_folder.clicked.connect(self._open_folder)
+        h_btns.addWidget(self.btn_open_folder)
+
+        h_btns.addStretch()
+
+        btn_close = QPushButton("Close")
+        btn_close.setStyleSheet("padding: 4px 14px;")
+        btn_close.clicked.connect(self.accept)
+        h_btns.addWidget(btn_close)
+
+        lay.addLayout(h_btns)
+
+    def refresh_data(self):
+        stats = get_cache_stats(self.out_dir)
+        self.lbl_stats.setText(f"Total Cache: {stats['total_files']} files ({stats['formatted_size']}) in {stats['cache_dir']}")
+
+        self.table.setRowCount(0)
+        for row, itm in enumerate(stats["items"]):
+            self.table.insertRow(row)
+            name = itm["name"]
+            if name.startswith("sigma_base_full"):
+                ftype = "Base Σ₀ (Full BZ)"
+            elif name.startswith("sigma_base_point"):
+                ftype = "Point Σ₀ (Single k)"
+            elif name.startswith("chi0_static"):
+                ftype = "Static χ₀ Bubble"
+            elif name.startswith("chi0_dynamic"):
+                ftype = "Dynamic χ₀ Bubble"
+            else:
+                ftype = "Cache Array"
+
+            mtime_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(itm["mtime"]))
+
+            self.table.setItem(row, 0, QTableWidgetItem(name))
+            self.table.setItem(row, 1, QTableWidgetItem(itm["size_str"]))
+            self.table.setItem(row, 2, QTableWidgetItem(ftype))
+            self.table.setItem(row, 3, QTableWidgetItem(mtime_str))
+
+    def _clear_cache(self):
+        res = QMessageBox.question(
+            self, "Clear Cache",
+            "Are you sure you want to purge all reusable foundation arrays from results/cache/?\n\n"
+            "This will not delete finished plots or observable datasets.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if res == QMessageBox.Yes:
+            cnt = purge_cache(self.out_dir)
+            QMessageBox.information(self, "Cache Cleared", f"Removed {cnt} cached foundation files.")
+            self.refresh_data()
+            if self.parent() and hasattr(self.parent(), "_update_cache_badge"):
+                self.parent()._update_cache_badge()
+
+    def _open_folder(self):
+        results_dir, plots_dir, data_dir, cache_dir = normalize_results_dir(self.out_dir)
+        if os.path.isdir(cache_dir):
+            try:
+                os.startfile(cache_dir)
+            except Exception as e:
+                QMessageBox.warning(self, "Open Folder Error", str(e))
 
 
 class UnifiedWorkbenchWindow(QMainWindow):
@@ -172,6 +289,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.resizeDocks([self.dock_nav, self.dock_inspector], [240, 360], Qt.Horizontal)
         ))
 
+        # Setup Smart Cache invalidation debounced timer
+        self.cache_timer = QTimer(self)
+        self.cache_timer.setSingleShot(True)
+        self.cache_timer.setInterval(120)
+        self.cache_timer.timeout.connect(self._update_cache_badge)
+        self._wire_cache_check_signals()
+
         # Wire Output Directory text change to dynamically re-populate datasets & plots
         self.edit_out_dir.textChanged.connect(self.refresh_dataset_tree)
         self.refresh_dataset_tree()
@@ -179,6 +303,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Initialize default state
         self.set_active_study(self.STUDY_SE)
         self.set_perspective("simulation")
+        self._update_cache_badge()
 
     # =========================================================================
     # TOOLBAR & MODE SWITCHER
@@ -394,6 +519,34 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.cb_active_study.currentTextChanged.connect(self.set_active_study)
         sel_lay.addWidget(self.cb_active_study)
         lay_sim.addWidget(grp_selector)
+
+        # 1b. Computation & Cache Status Card
+        grp_cache = ModernCard("Computation & Cache Status")
+        gc = QVBoxLayout(grp_cache)
+        gc.setSpacing(6)
+
+        self.lbl_cache_badge = QLabel("⚡ Checking Cache...")
+        self.lbl_cache_badge.setStyleSheet(
+            "padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 11px; "
+            "background-color: rgba(8, 145, 178, 0.12); color: #0891b2; border: 1px solid rgba(8, 145, 178, 0.3);"
+        )
+        self.lbl_cache_badge.setWordWrap(True)
+        gc.addWidget(self.lbl_cache_badge)
+
+        h_cache_ctrl = QHBoxLayout()
+        self.chk_force_recompute = QCheckBox("Force Recompute")
+        self.chk_force_recompute.setToolTip("Bypass results/cache/ and recalculate all convolutions from scratch.")
+        self.chk_force_recompute.stateChanged.connect(self._schedule_cache_check)
+        h_cache_ctrl.addWidget(self.chk_force_recompute)
+
+        self.btn_cache_mgr = QPushButton("🧹 Cache (0 MB)")
+        self.btn_cache_mgr.setFixedWidth(125)
+        self.btn_cache_mgr.setStyleSheet("padding: 3px 8px; font-size: 11px;")
+        self.btn_cache_mgr.clicked.connect(self._open_cache_manager)
+        h_cache_ctrl.addWidget(self.btn_cache_mgr)
+        gc.addLayout(h_cache_ctrl)
+
+        lay_sim.addWidget(grp_cache)
 
         # 2. Study-specific stacked parameters
         self.param_stack = DynamicStackedWidget()
@@ -829,6 +982,108 @@ class UnifiedWorkbenchWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Output Directory for Plots & Data", curr)
         if folder:
             self.edit_out_dir.setText(folder)
+            self.refresh_dataset_tree()
+            self._update_cache_badge()
+
+    def _open_cache_manager(self):
+        out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
+        dlg = CacheManagerDialog(self, out_dir=out_dir)
+        dlg.exec_()
+        self._update_cache_badge()
+
+    def _schedule_cache_check(self, *args):
+        if hasattr(self, "cache_timer"):
+            self.cache_timer.start()
+
+    def _update_cache_badge(self):
+        if not hasattr(self, "lbl_cache_badge"):
+            return
+            
+        out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
+        
+        # Update Cache Manager button text with live cache size
+        stats = get_cache_stats(out_dir)
+        if hasattr(self, "btn_cache_mgr"):
+            self.btn_cache_mgr.setText(f"🧹 Cache ({stats['formatted_size']})")
+            self.btn_cache_mgr.setToolTip(f"{stats['total_files']} foundation files ({stats['total_bytes']} bytes) in results/cache/")
+
+        if hasattr(self, "chk_force_recompute") and self.chk_force_recompute.isChecked():
+            self.lbl_cache_badge.setText("⚡ Force Recompute Active (Bypassing All Caches)")
+            self.lbl_cache_badge.setStyleSheet(
+                "padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 11px; "
+                "background-color: rgba(234, 88, 12, 0.15); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.4);"
+            )
+            self.lbl_cache_badge.setToolTip("All simulations will be calculated from scratch without reading from results/cache/.")
+            return
+
+        # Build current params dictionary
+        study = self.active_study
+        params = {
+            "t": float(self.spin_t.value()),
+            "t1": float(self.spin_t1.value()),
+            "mu": float(self.spin_mu.value()),
+            "K": float(self.spin_k.value()),
+            "N": int(self.spin_n.value()),
+            "num_omega": int(self.spin_nw.value()),
+            "omega_max": float(self.spin_wmax.value()),
+            "eta": float(self.spin_eta.value()),
+            "sweep_mode": self.cb_se_mode.currentText() if hasattr(self, "cb_se_mode") else "",
+            "jk_values": self.edit_se_vals.text().strip() if hasattr(self, "edit_se_vals") else "",
+            "fixed_jperp": float(self.spin_se_fixed.value()) if hasattr(self, "spin_se_fixed") else 6.0,
+            "spec_sweep_mode": self.cb_spec_mode.currentText() if hasattr(self, "cb_spec_mode") else "",
+            "spec_sweep_vals": self.edit_spec_vals.text().strip() if hasattr(self, "edit_spec_vals") else "",
+            "spec_fixed_coupling": float(self.spin_spec_fixed.value()) if hasattr(self, "spin_spec_fixed") else 6.0,
+            "spec_momentum": self.cb_mom.currentText() if hasattr(self, "cb_mom") else "",
+            "spec_custom_k": self.edit_custom_k.text().strip() if hasattr(self, "edit_custom_k") else "",
+            "JK_min": float(self.s_min.value()) if hasattr(self, "s_min") else 0.0,
+            "JK_max": float(self.s_max.value()) if hasattr(self, "s_max") else 12.0,
+            "JK_pts": int(self.s_pts.value()) if hasattr(self, "s_pts") else 200,
+            "run_static": bool(self.chk_static.isChecked()) if hasattr(self, "chk_static") else True,
+            "run_dynamic": bool(self.chk_dynamic.isChecked()) if hasattr(self, "chk_dynamic") else True,
+            "susc_sweep_vals": self.edit_susc_vals.text().strip() if hasattr(self, "edit_susc_vals") else "",
+            "fixed_J": float(self.spin_se_fixed.value()) if hasattr(self, "spin_se_fixed") else 6.0
+        }
+
+        res = check_cache_status(study, params, out_dir)
+        text = res["badge_text"]
+        color = res["badge_color"]
+        details = res["details"]
+
+        if res["state"] == "full":
+            bg_col = "rgba(22, 163, 74, 0.12)"
+            border_col = "rgba(22, 163, 74, 0.3)"
+        elif res["state"] == "foundation":
+            bg_col = "rgba(8, 145, 178, 0.12)"
+            border_col = "rgba(8, 145, 178, 0.3)"
+        else:
+            bg_col = "rgba(100, 116, 139, 0.12)"
+            border_col = "rgba(100, 116, 139, 0.3)"
+
+        self.lbl_cache_badge.setText(text)
+        self.lbl_cache_badge.setStyleSheet(
+            f"padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 11px; "
+            f"background-color: {bg_col}; color: {color}; border: 1px solid {border_col};"
+        )
+        self.lbl_cache_badge.setToolTip(details)
+
+    def _wire_cache_check_signals(self):
+        """Connects all parameter inputs to debounced cache badge update."""
+        for sp in [self.spin_t, self.spin_t1, self.spin_mu, self.spin_k,
+                   self.spin_n, self.spin_nw, self.spin_wmax, self.spin_eta,
+                   self.spin_se_fixed, self.spin_spec_fixed,
+                   self.s_min, self.s_max, self.s_pts]:
+            sp.valueChanged.connect(self._schedule_cache_check)
+
+        for cb in [self.cb_preset, self.cb_se_mode, self.cb_spec_mode,
+                   self.cb_mom, self.cb_solver_choice]:
+            cb.currentIndexChanged.connect(self._schedule_cache_check)
+
+        for le in [self.edit_se_vals, self.edit_spec_vals, self.edit_custom_k,
+                   self.edit_susc_vals]:
+            le.textChanged.connect(self._schedule_cache_check)
+
+        for chk in [self.chk_static, self.chk_dynamic, self.chk_force_recompute]:
+            chk.stateChanged.connect(self._schedule_cache_check)
 
     def refresh_dataset_tree(self):
         """Refreshes the '📁 PREVIOUS DATASETS & PLOTS' tree from the currently configured output directory."""
@@ -1102,6 +1357,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
             if p and os.path.exists(p):
                 self.canvas_left.load_image(p)
 
+        self._schedule_cache_check()
+
     def _select_and_run(self, study_name):
         self.set_active_study(study_name)
         self.run_simulation_ui()
@@ -1138,6 +1395,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "num_omega": int(self.spin_nw.value()),
             "omega_max": float(self.spin_wmax.value()),
             "eta": float(self.spin_eta.value()),
+            "force_recompute": bool(self.chk_force_recompute.isChecked()) if hasattr(self, "chk_force_recompute") else False,
             "output_dir": out_dir
         }
 
@@ -1251,6 +1509,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "num_omega": int(self.spin_nw.value()),
             "omega_max": float(self.spin_wmax.value()),
             "eta": float(self.spin_eta.value()),
+            "force_recompute": bool(self.chk_force_recompute.isChecked()) if hasattr(self, "chk_force_recompute") else False,
             "output_dir": out_dir,
             "run_static": True,
             "run_dynamic": False,
@@ -1357,6 +1616,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             all_plots = [primary_plot]
 
         self.refresh_dataset_tree()
+        self._update_cache_badge()
 
         if primary_plot and os.path.exists(primary_plot):
             self.canvas_left.load_image(primary_plot)
