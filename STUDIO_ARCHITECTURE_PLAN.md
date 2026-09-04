@@ -1,6 +1,6 @@
 # Many-Body Studio Pro: Complete Architecture & Implementation Plan
 
-> **Document Version**: alpha-v2 (Milestone: Complete 4-Study Physics Suite)  
+> **Document Version**: alpha-v3 (Milestone: Smart Caching Engine & Flat Results Hierarchy)  
 > **Target Project**: `C:\Users\sruji\Projects\masters_thesis_gui`  
 > **Physics Engine Source**: `C:\Users\sruji\Projects\masters_thesis`  
 > **Author**: Antigravity Assistant & Srujith Anchuri  
