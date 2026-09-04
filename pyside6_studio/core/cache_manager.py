@@ -225,7 +225,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
     """
     Inspects disk to determine the computation state for the active parameters:
       - 'full': 100% computed, finished observable ready in data/.
-      - 'foundation': Reusable foundation (Sigma_0 or chi_0) ready in cache/; compute will be fast.
+      - 'foundation': Reusable foundation (Base Sigma or chi_0) ready in cache/; compute will be fast.
       - 'cold': Cold compute needed.
     
     Returns:
@@ -281,7 +281,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
                 "data_file": obs_path
             }
 
-        # Check foundation (Base Sigma_0) for J_K sweep
+        # Check foundation (Base Sigma) for J_K sweep
         if is_jk_sweep:
             base_file = find_cached_sigma_base(
                 cache_dir=cache_dir, fixed_jperp=fixed_jperp,
@@ -290,7 +290,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
             if base_file:
                 return {
                     "state": "foundation",
-                    "badge_text": "⚡ Base Σ₀ Cached (Fast J_K Scaling)",
+                    "badge_text": "⚡ Base Σ Cached (Fast J_K Scaling)",
                     "badge_color": "#0891b2",
                     "details": f"Base self-energy cached. Fast J_K^2 scaling will finish in < 0.2s!",
                     "foundation_file": base_file,
@@ -330,7 +330,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
             if base_file:
                 return {
                     "state": "foundation",
-                    "badge_text": "⚡ Point Σ₀ Cached (Instant Scaling)",
+                    "badge_text": "⚡ Point Σ Cached (Instant Scaling)",
                     "badge_color": "#0891b2",
                     "details": f"Single-point self-energy at P=({ix},{iy}) cached in results/cache/.",
                     "foundation_file": base_file,

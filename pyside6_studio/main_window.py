@@ -140,7 +140,7 @@ class CacheManagerDialog(QDialog):
         lay.addWidget(lbl_title)
 
         lbl_desc = QLabel(
-            "The Smart Caching Engine stores reusable foundations (Base Σ₀ at J_K=1.0 and bare bubbles χ₀)\n"
+            "The Smart Caching Engine stores reusable foundations (Base Σ at J_K=1.0 and bare bubbles χ₀)\n"
             "in the 'results/cache/' directory. Changing (t, t1, mu, K, J_perp, N, Nw, wmax, eta) invalidates these foundations.\n"
             "Scaling J_K utilizes the analytical J_K² scaling law without recomputing convolutions."
         )
@@ -190,9 +190,9 @@ class CacheManagerDialog(QDialog):
             self.table.insertRow(row)
             name = itm["name"]
             if name.startswith("sigma_base_full"):
-                ftype = "Base Σ₀ (Full BZ)"
+                ftype = "Base Σ (Full BZ)"
             elif name.startswith("sigma_base_point"):
-                ftype = "Point Σ₀ (Single k)"
+                ftype = "Point Σ (Single k)"
             elif name.startswith("chi0_static"):
                 ftype = "Static χ₀ Bubble"
             elif name.startswith("chi0_dynamic"):

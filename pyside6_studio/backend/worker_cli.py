@@ -258,7 +258,7 @@ def run_spectral_function_task(params: dict, results_dir: str, out_plots_dir: st
                 s1_re, s1_im = d_c["s1_re"], d_c["s1_im"]
                 s3_re, s3_im = d_c["s3_re"], d_c["s3_im"]
                 s_loaded = True
-                emit_status(f"⚡ Loaded point Σ₀ from cache ({time.time()-t_load:.2f}s)")
+                emit_status(f"⚡ Loaded point Base Σ from cache ({time.time()-t_load:.2f}s)")
             except Exception:
                 s_loaded = False
 

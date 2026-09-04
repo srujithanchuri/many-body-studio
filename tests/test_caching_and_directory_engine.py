@@ -4,7 +4,7 @@ Tests:
 1. Self-contained results directory layout (results/plots, results/data, results/cache).
 2. Elimination/migration of legacy nested results/plots/data/.
 3. Deterministic parameter keys with rigorous invalidation rules (including eta).
-4. Base Sigma_0 caching at J_K=1.0 and instantaneous J_K^2 scaling.
+4. Base Sigma caching at J_K=1.0 and instantaneous J_K^2 scaling.
 5. Invalidation when eta, mu, or J_perp change.
 6. Bare bubble chi_0 sharing between Phase Diagram and Susceptibility.
 7. Force recompute override bypass.
@@ -136,7 +136,7 @@ class TestCachingAndDirectoryEngine(unittest.TestCase):
         self.assertNotEqual(c_stat1, c_stat3)
 
     def test_04_base_sigma_caching_and_jk_scaling(self):
-        """Tests that base Sigma_0 is cached in results/cache and J_K sweeps reuse it."""
+        """Tests that base Sigma is cached in results/cache and J_K sweeps reuse it."""
         res_dir, plots_dir, data_dir, cache_dir = normalize_results_dir(self.temp_dir)
 
         p = ModelParameters(
