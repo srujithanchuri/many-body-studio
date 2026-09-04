@@ -41,6 +41,8 @@ from pyside6_studio.core.cache_manager import (
 from pyside6_studio.core import config
 from pyside6_studio.widgets.dataset_explorer import DatasetExplorerWidget
 from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas, VectorExportDialog
+from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot_metadata
+from pyside6_studio.widgets.live_analytical_lab import LiveAnalyticalLabWidget
 
 DEFAULT_RESULTS_DIR = r"C:\Users\sruji\Projects\masters_thesis_gui\results"
 
@@ -255,6 +257,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.is_dark = False
         self.active_study = self.STUDY_SE
         self.current_perspective = "simulation"
+        self.current_view_plot_path = None
         self._updating_preset = False
         self.setStyleSheet(LIGHT_THEME_QSS)
 
@@ -335,8 +338,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Simulation Studio Toolbar Actions
         self.btn_run = QToolButton()
         self.btn_run.setObjectName("PrimaryBtn")
-        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
+        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setToolTip(f"Run {self.active_study} (Click arrow for other studies)")
         self.btn_run.setPopupMode(QToolButton.MenuButtonPopup)
+        self.btn_run.setFixedWidth(160)
         self.btn_run.clicked.connect(self.run_simulation_ui)
 
         menu_run = QMenu(self.btn_run)
@@ -351,6 +356,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cancel = QPushButton("⏹ Cancel / Stop")
         self.btn_cancel.setObjectName("BtnCancel")
         self.btn_cancel.setEnabled(False)
+        self.btn_cancel.setFixedWidth(130)
         self.btn_cancel.clicked.connect(self.cancel_simulation_ui)
         self.action_cancel = self.tb.addWidget(self.btn_cancel)
 
@@ -363,17 +369,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_split.toggled.connect(self.toggle_split_view)
         self.action_split = self.tb.addWidget(self.btn_split)
 
-        # Publication Studio Toolbar Actions
+        # Publication Studio Toolbar Actions (Hidden by default in Simulation Mode)
         self.btn_export_pdf = QPushButton("📄 Save Vector PDF for LaTeX (300 DPI)")
         self.btn_export_pdf.setObjectName("PrimaryBtn")
         self.btn_export_pdf.clicked.connect(self.export_pdf_dialog)
         self.action_export_pdf = self.tb.addWidget(self.btn_export_pdf)
-        self.btn_export_pdf.setVisible(False)
+        self.action_export_pdf.setVisible(False)
 
         self.btn_copy_latex = QPushButton("📋 Copy LaTeX Code")
         self.btn_copy_latex.clicked.connect(self.copy_latex_snippet)
         self.action_copy_latex = self.tb.addWidget(self.btn_copy_latex)
-        self.btn_copy_latex.setVisible(False)
+        self.action_copy_latex.setVisible(False)
 
         self.tb.addSeparator()
 
@@ -395,33 +401,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        # Segmented View Mode Switcher
+        # 3-Pillar Workspace Switcher
         header_bar = QHBoxLayout()
         header_bar.setContentsMargins(4, 2, 4, 2)
         header_bar.setSpacing(6)
 
-        lbl_vp = QLabel("CANVAS VIEW:")
+        lbl_vp = QLabel("STUDIO PERSPECTIVE:")
         lbl_vp.setStyleSheet("font-weight: 700; font-size: 11px; color: #64748b;")
         header_bar.addWidget(lbl_vp)
 
-        self.btn_canvas_data = QPushButton("🔬 Interactive Data Studio")
-        self.btn_canvas_data.setCheckable(True)
-        self.btn_canvas_data.setChecked(True)
-        self.btn_canvas_data.setStyleSheet("""
-            QPushButton {
-                padding: 4px 12px; font-weight: 600; font-size: 11px;
-                border: 1px solid #cbd5e1; border-radius: 4px; background: transparent;
-            }
-            QPushButton:checked {
-                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
-            }
-        """)
-        self.btn_canvas_data.clicked.connect(lambda: self.set_canvas_mode(0))
-        header_bar.addWidget(self.btn_canvas_data)
-
-        self.btn_canvas_figure = QPushButton("🖼️ Publication Figure View")
+        self.btn_canvas_figure = QPushButton("🖼️ Publication Figures")
         self.btn_canvas_figure.setCheckable(True)
-        self.btn_canvas_figure.setChecked(False)
+        self.btn_canvas_figure.setChecked(True)
         self.btn_canvas_figure.setStyleSheet("""
             QPushButton {
                 padding: 4px 12px; font-weight: 600; font-size: 11px;
@@ -431,23 +422,68 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
             }
         """)
-        self.btn_canvas_figure.clicked.connect(lambda: self.set_canvas_mode(1))
+        self.btn_canvas_figure.clicked.connect(lambda: self.set_canvas_mode(0))
         header_bar.addWidget(self.btn_canvas_figure)
+
+        self.btn_canvas_lab = QPushButton("⚡ Live Analytical Lab")
+        self.btn_canvas_lab.setCheckable(True)
+        self.btn_canvas_lab.setChecked(False)
+        self.btn_canvas_lab.setStyleSheet("""
+            QPushButton {
+                padding: 4px 14px; font-weight: 600; font-size: 11px;
+                border: 1px solid #cbd5e1; border-radius: 4px; background: transparent;
+            }
+            QPushButton:checked {
+                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
+            }
+        """)
+        self.btn_canvas_lab.clicked.connect(lambda: self.set_canvas_mode(1))
+        header_bar.addWidget(self.btn_canvas_lab)
 
         header_bar.addStretch()
         layout.addLayout(header_bar)
 
         self.central_view_stack = QStackedWidget()
 
-        # Page 0: Interactive Scientific Data Canvas (FigureCanvasQTAgg)
-        self.data_canvas = InteractiveDataCanvas(self)
-        self.data_canvas.coord_changed.connect(lambda text: self.lbl_coords.setText(text))
-        self.central_view_stack.addWidget(self.data_canvas)
-
-        # Page 1: CAD Publication Raster Split-View Canvas (QGraphicsView)
+        # Page 0: CAD Publication Raster Split-View Canvas (QGraphicsView)
         self.figure_view_container = QWidget()
         fig_lay = QVBoxLayout(self.figure_view_container)
         fig_lay.setContentsMargins(0, 0, 0, 0)
+        fig_lay.setSpacing(4)
+
+        # Action bar for Publication Figure (matching the old GUI baseline)
+        fig_toolbar = QHBoxLayout()
+        fig_toolbar.setContentsMargins(4, 2, 4, 2)
+        fig_toolbar.setSpacing(6)
+
+        fig_toolbar.addWidget(QLabel("Active Plot:"))
+        self.cb_active_plot = QComboBox()
+        self.cb_active_plot.setMinimumWidth(320)
+        self.cb_active_plot.currentIndexChanged.connect(self._on_active_plot_changed)
+        fig_toolbar.addWidget(self.cb_active_plot)
+
+        btn_ref_fig = QPushButton("🔄 Refresh")
+        btn_ref_fig.clicked.connect(self.refresh_dataset_tree)
+        fig_toolbar.addWidget(btn_ref_fig)
+
+        btn_fit_fig = QPushButton("🔍 Fit Window")
+        btn_fit_fig.clicked.connect(self.reset_active_zoom)
+        fig_toolbar.addWidget(btn_fit_fig)
+
+        btn_copy_fig = QPushButton("📋 Copy Image")
+        btn_copy_fig.clicked.connect(self.copy_current_plot_to_clipboard)
+        fig_toolbar.addWidget(btn_copy_fig)
+
+        btn_export_fig = QPushButton("💾 Export")
+        btn_export_fig.clicked.connect(self.export_pdf_dialog)
+        fig_toolbar.addWidget(btn_export_fig)
+
+        btn_open_fig = QPushButton("📂 Open Folder")
+        btn_open_fig.clicked.connect(self.open_output_folder)
+        fig_toolbar.addWidget(btn_open_fig)
+
+        fig_toolbar.addStretch()
+        fig_lay.addLayout(fig_toolbar)
 
         self.view_splitter = QSplitter(Qt.Horizontal)
         self.canvas_left = InteractivePlotCanvas()
@@ -459,42 +495,77 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.canvas_right.setVisible(False)
         self.view_splitter.addWidget(self.canvas_right)
 
-        fig_lay.addWidget(self.view_splitter)
+        fig_lay.addWidget(self.view_splitter, 1)
         self.central_view_stack.addWidget(self.figure_view_container)
+
+        # Page 1: Live Analytical Lab (Cache-driven real-time BZ probe & continuous J_K scaling)
+        out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
+        self.analytical_lab = LiveAnalyticalLabWidget(out_dir=out_dir, parent=self)
+        self.central_view_stack.addWidget(self.analytical_lab)
 
         layout.addWidget(self.central_view_stack, 1)
         self.setCentralWidget(self.central_container)
 
     def set_canvas_mode(self, mode_idx: int):
-        """Switches between Interactive Data Studio (0) and Publication Figure View (1)."""
+        """Switches between Publication Figures (0) and Live Analytical Lab (1)."""
         self.central_view_stack.setCurrentIndex(mode_idx)
-        self.btn_canvas_data.setChecked(mode_idx == 0)
-        self.btn_canvas_figure.setChecked(mode_idx == 1)
+        self.btn_canvas_figure.setChecked(mode_idx == 0)
+        self.btn_canvas_lab.setChecked(mode_idx == 1)
         if hasattr(self, "action_split"):
-            self.action_split.setVisible(mode_idx == 1)
+            self.action_split.setVisible(mode_idx == 0)
+
+    def copy_current_plot_to_clipboard(self):
+        if hasattr(self, "current_view_plot_path") and self.current_view_plot_path and os.path.exists(self.current_view_plot_path):
+            pix = QPixmap(self.current_view_plot_path)
+            if not pix.isNull():
+                QApplication.clipboard().setPixmap(pix)
+                self.lbl_status.setText("Current plot image copied to clipboard!")
+                return
+        if hasattr(self, "canvas_left") and self.canvas_left.current_pixmap:
+            QApplication.clipboard().setPixmap(self.canvas_left.current_pixmap)
+            self.lbl_status.setText("Current plot image copied to clipboard!")
+
+    def open_output_folder(self):
+        out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
+        results_dir, plots_dir, data_dir, cache_dir = normalize_results_dir(out_dir)
+        target = plots_dir if os.path.isdir(plots_dir) else results_dir
+        if os.path.isdir(target):
+            try:
+                os.startfile(target)
+            except Exception as e:
+                QMessageBox.warning(self, "Open Folder Error", str(e))
+
+    def _on_active_plot_changed(self, index: int):
+        if not hasattr(self, "cb_active_plot") or index < 0:
+            return
+        plot_path = self.cb_active_plot.itemData(index)
+        if plot_path and os.path.exists(plot_path):
+            self.current_view_plot_path = plot_path
+            self.canvas_left.load_image(plot_path)
+            self.lbl_status.setText(f"Viewing Plot: {os.path.basename(plot_path)}")
+            if hasattr(self, "gallery"):
+                self.gallery.select_plot(plot_path)
 
     # =========================================================================
-    # LEFT DOCK: RESEARCH NAVIGATOR & DATASET EXPLORER
+    # LEFT DOCK: PLOT GALLERY BROWSER
     # =========================================================================
     def _build_navigator_dock(self):
-        self.dock_nav = QDockWidget("🧭 Research Workspace & Datasets", self)
+        self.dock_nav = QDockWidget("🖼️ Plot Gallery Browser", self)
         self.dock_nav.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.dock_nav.setMinimumWidth(280)
 
         self.nav_stack = QStackedWidget()
 
-        # PAGE 1: Smart Research Navigator & Dataset Explorer
+        # PAGE 0: Visual Plot Gallery Browser
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
-        self.explorer = DatasetExplorerWidget(out_dir=out_dir, parent=self)
-        self.explorer.sig_view_plot.connect(self._on_explorer_view_plot)
-        self.explorer.sig_explore_data.connect(self._on_explorer_explore_data)
-        self.explorer.sig_compare.connect(self._on_explorer_compare)
-        self.explorer.sig_open_cache_dialog.connect(self._open_cache_manager)
-        self.nav_stack.addWidget(self.explorer)
+        self.gallery = PlotGalleryWidget(out_dir=out_dir, parent=self)
+        self.gallery.sig_plot_selected.connect(self._on_gallery_plot_selected)
+        self.nav_stack.addWidget(self.gallery)
 
-        # PAGE 2: Publication Figure Layout Assigner
+        # PAGE 1: Publication Multi-Panel Layout Assigner
         p_pub = QWidget()
-        l_pub = QVBoxLayout(p_pub); l_pub.setContentsMargins(4, 4, 4, 4)
+        l_pub = QVBoxLayout(p_pub)
+        l_pub.setContentsMargins(4, 4, 4, 4)
 
         grp_panels = ModernCard("Multi-Panel Dataset Assignment")
         gp_lay = QVBoxLayout(grp_panels)
@@ -511,16 +582,19 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gp_lay.addWidget(self.cb_pub_template)
 
         gp_lay.addWidget(QLabel("\nPanel (a) Data Source:"))
-        self.cb_panel_a = ModernComboBox(); self.cb_panel_a.addItems(list(self.plots.keys()))
+        self.cb_panel_a = ModernComboBox()
+        self.cb_panel_a.addItems(list(self.plots.keys()))
         gp_lay.addWidget(self.cb_panel_a)
 
         gp_lay.addWidget(QLabel("Panel (b) Data Source:"))
-        self.cb_panel_b = ModernComboBox(); self.cb_panel_b.addItems(list(self.plots.keys()))
+        self.cb_panel_b = ModernComboBox()
+        self.cb_panel_b.addItems(list(self.plots.keys()))
         if len(self.plots) > 1: self.cb_panel_b.setCurrentIndex(1)
         gp_lay.addWidget(self.cb_panel_b)
 
         gp_lay.addWidget(QLabel("Panel (c) Data Source:"))
-        self.cb_panel_c = ModernComboBox(); self.cb_panel_c.addItems(list(self.plots.keys()))
+        self.cb_panel_c = ModernComboBox()
+        self.cb_panel_c.addItems(list(self.plots.keys()))
         if len(self.plots) > 2: self.cb_panel_c.setCurrentIndex(2)
         gp_lay.addWidget(self.cb_panel_c)
 
@@ -536,18 +610,24 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.dock_nav.setWidget(self.nav_stack)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.dock_nav)
 
-    def _on_explorer_view_plot(self, plot_path: str):
-        self.set_canvas_mode(1)
+    def _on_gallery_plot_selected(self, plot_path: str):
+        self.current_view_plot_path = plot_path
+
+        self.set_canvas_mode(0)
         self.canvas_left.load_image(plot_path)
         self.lbl_status.setText(f"Viewing Plot: {os.path.basename(plot_path)}")
 
-    def _on_explorer_explore_data(self, data_path: str, meta: dict):
-        self.set_canvas_mode(0)
-        self.data_canvas.load_dataset(data_path, meta)
-        self.lbl_status.setText(f"Exploring Dataset: {os.path.basename(data_path)}")
+        # Synchronize active plot combobox
+        if hasattr(self, "cb_active_plot"):
+            for i in range(self.cb_active_plot.count()):
+                if self.cb_active_plot.itemData(i) == plot_path:
+                    self.cb_active_plot.blockSignals(True)
+                    self.cb_active_plot.setCurrentIndex(i)
+                    self.cb_active_plot.blockSignals(False)
+                    break
 
     def _on_explorer_compare(self, path: str):
-        self.set_canvas_mode(1)
+        self.set_canvas_mode(0)
         self.btn_split.setChecked(True)
         if path.lower().endswith((".png", ".pdf", ".svg")):
             self.canvas_right.load_image(path)
@@ -1152,12 +1232,37 @@ class UnifiedWorkbenchWindow(QMainWindow):
             chk.stateChanged.connect(self._schedule_cache_check)
 
     def refresh_dataset_tree(self):
-        """Refreshes the Dataset Explorer and publication comboboxes from the active output directory."""
+        """Refreshes the Plot Gallery and active plot comboboxes from the active output directory."""
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.plots = get_available_plots(out_dir)
 
-        if hasattr(self, "explorer"):
-            self.explorer.set_output_dir(out_dir)
+        if hasattr(self, "gallery"):
+            self.gallery.set_output_dir(out_dir)
+
+        if hasattr(self, "analytical_lab"):
+            self.analytical_lab.set_output_dir(out_dir)
+
+        # Update Active Plot combobox in publication toolbar
+        if hasattr(self, "cb_active_plot") and hasattr(self, "gallery"):
+            self.cb_active_plot.blockSignals(True)
+            self.cb_active_plot.clear()
+            for p in self.gallery.all_plots:
+                title, params_str, _, _, fname = parse_plot_metadata(p)
+                disp = f"{title} [{params_str}]" if params_str else title
+                self.cb_active_plot.addItem(disp, p)
+            self.cb_active_plot.blockSignals(False)
+
+            if self.gallery.all_plots:
+                cur = self.current_view_plot_path if self.current_view_plot_path in self.gallery.all_plots else self.gallery.all_plots[0]
+                self.current_view_plot_path = cur
+                self.canvas_left.load_image(cur)
+                # Select in combobox
+                for i in range(self.cb_active_plot.count()):
+                    if self.cb_active_plot.itemData(i) == cur:
+                        self.cb_active_plot.blockSignals(True)
+                        self.cb_active_plot.setCurrentIndex(i)
+                        self.cb_active_plot.blockSignals(False)
+                        break
 
         # Also update publication panel comboboxes if they exist
         if hasattr(self, "cb_panel_a"):
@@ -1218,7 +1323,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _build_bottom_drawer_dock(self):
         self.dock_bottom = QDockWidget("📋 Execution Center & Process Console", self)
         self.dock_bottom.setAllowedAreas(Qt.BottomDockWidgetArea)
-        self.dock_bottom.setMaximumHeight(380)
+        self.dock_bottom.setMaximumHeight(260)
         self.bottom_tabs = QTabWidget()
 
         # Tab 1: Batch Queue
@@ -1249,7 +1354,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Tab 2: Console
         console_tab = QWidget()
         cl = QVBoxLayout(console_tab); cl.setContentsMargins(4, 4, 4, 4)
-        self.txt_console = QTextEdit(); self.txt_console.setReadOnly(True)
+        self.txt_console = QTextEdit()
+        self.txt_console.setReadOnly(True)
+        self.txt_console.setMinimumHeight(60)
         self.txt_console.setStyleSheet("""
             QTextEdit {
                 background-color: #012456;
@@ -1289,12 +1396,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_mode_pub.setStyleSheet("")
 
             # Show simulation buttons, hide publication buttons
-            self.btn_run.setVisible(True)
-            self.btn_cancel.setVisible(True)
-            self.btn_queue.setVisible(True)
-            self.btn_split.setVisible(True)
-            self.btn_export_pdf.setVisible(False)
-            self.btn_copy_latex.setVisible(False)
+            self.action_run.setVisible(True)
+            self.action_cancel.setVisible(True)
+            self.action_queue.setVisible(True)
+            self.action_split.setVisible(True)
+            self.action_export_pdf.setVisible(False)
+            self.action_copy_latex.setVisible(False)
 
             # Show bottom drawer
             self.dock_bottom.show()
@@ -1317,12 +1424,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_mode_pub.setStyleSheet("")
 
             # Hide simulation runner buttons, show publication export buttons
-            self.btn_run.setVisible(False)
-            self.btn_cancel.setVisible(False)
-            self.btn_queue.setVisible(False)
-            self.btn_split.setVisible(False)
-            self.btn_export_pdf.setVisible(True)
-            self.btn_copy_latex.setVisible(True)
+            self.action_run.setVisible(False)
+            self.action_cancel.setVisible(False)
+            self.action_queue.setVisible(False)
+            self.action_split.setVisible(False)
+            self.action_export_pdf.setVisible(True)
+            self.action_copy_latex.setVisible(True)
 
             # Hide bottom drawer completely
             self.dock_bottom.hide()
@@ -1394,7 +1501,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
     # =========================================================================
     def set_active_study(self, study_name):
         self.active_study = study_name
-        self.btn_run.setText(f"⚡ Run Active: {study_name}")
+        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setToolTip(f"Run {study_name} (Click arrow for study choices)")
         if self.cb_active_study.currentText() != study_name:
             self.cb_active_study.setCurrentText(study_name)
 
@@ -1415,7 +1523,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
             elif study_name == self.STUDY_PD: p = self.plots.get("phase_diagram_mu1.00_AFM.png")
             else: p = self.plots.get("sweep_JK_fixed_J_6.0_mu_1.00_static.png")
             if p and os.path.exists(p):
+                self.current_view_plot_path = p
                 self.canvas_left.load_image(p)
+                if hasattr(self, "gallery"):
+                    self.gallery.select_plot(p)
+                if hasattr(self, "cb_active_plot"):
+                    for i in range(self.cb_active_plot.count()):
+                        if self.cb_active_plot.itemData(i) == p:
+                            self.cb_active_plot.blockSignals(True)
+                            self.cb_active_plot.setCurrentIndex(i)
+                            self.cb_active_plot.blockSignals(False)
+                            break
 
         self._schedule_cache_check()
 
@@ -1542,8 +1660,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             QMessageBox.warning(self, "Unknown Study", f"Unrecognized calculation study: {self.active_study}")
             return
 
-        # Auto-switch bottom drawer to the Live Solver Console so logs are visible
+        # Auto-switch bottom drawer to the Live Solver Console so logs are visible without expanding dock
         self.bottom_tabs.setCurrentIndex(1)
+        self.resizeDocks([self.dock_bottom], [140], Qt.Vertical)
 
         try:
             self.bridge.start_calculation(params)
@@ -1578,6 +1697,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "fixed_J": 6.0
         }
         self.bottom_tabs.setCurrentIndex(1)
+        self.resizeDocks([self.dock_bottom], [140], Qt.Vertical)
         try:
             self.bridge.start_calculation(params)
         except RuntimeError as e:
@@ -1608,7 +1728,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_started(self):
         self.btn_run.setEnabled(False)
-        self.btn_run.setText(f"⏳ Running: {self.active_study}...")
+        self.btn_run.setText("⏳ Running...")
         self.btn_cancel.setEnabled(True)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         backend_name = "NVIDIA RTX 5060 GPU" if getattr(self, "cb_solver_choice", None) and self.cb_solver_choice.currentIndex() == 0 else "Host CPU"
@@ -1660,7 +1780,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_completed(self, payload: dict):
         self.btn_run.setEnabled(True)
-        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
+        self.btn_run.setText("⚡ Run Calculation")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"✅ Completed: {self.active_study} finished • Loaded into viewport.")
@@ -1680,8 +1800,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self._update_cache_badge()
 
         if primary_plot and os.path.exists(primary_plot):
+            self.current_view_plot_path = primary_plot
             self.canvas_left.load_image(primary_plot)
             self.canvas_left.fit_in_view()
+            if hasattr(self, "gallery"):
+                self.gallery.select_plot(primary_plot)
+            if hasattr(self, "cb_active_plot"):
+                for i in range(self.cb_active_plot.count()):
+                    if self.cb_active_plot.itemData(i) == primary_plot:
+                        self.cb_active_plot.blockSignals(True)
+                        self.cb_active_plot.setCurrentIndex(i)
+                        self.cb_active_plot.blockSignals(False)
+                        break
 
         if data_path and os.path.exists(data_path) and hasattr(self, "data_canvas"):
             self.data_canvas.load_dataset(data_path)
@@ -1696,7 +1826,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_error(self, error_msg: str):
         self.btn_run.setEnabled(True)
-        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
+        self.btn_run.setText("⚡ Run Calculation")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"❌ Error: {error_msg}")
@@ -1709,7 +1839,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_cancelled(self):
         self.btn_run.setEnabled(True)
-        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
+        self.btn_run.setText("⚡ Run Calculation")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")
