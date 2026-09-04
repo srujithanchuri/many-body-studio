@@ -5,8 +5,11 @@ Run this script to launch the Dual-Perspective Studio.
 import sys
 import os
 
-# Ensure pyside6_studio is on path
+# Ensure pyside6_studio and its parent directory are on path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+GUI_ROOT = os.path.dirname(CURRENT_DIR)
+if GUI_ROOT not in sys.path:
+    sys.path.insert(0, GUI_ROOT)
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
@@ -44,9 +47,12 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Many-Body Physics Studio Pro • Alpha v2")
     app.setApplicationVersion("alpha-v2")
+    app.setQuitOnLastWindowClosed(True)
     window = UnifiedWorkbenchWindow()
     window.showMaximized()
-    sys.exit(app.exec())
+    exit_code = app.exec()
+    # Guarantee immediate OS-level exit to release console/terminal prompt instantly
+    os._exit(exit_code)
 
 
 if __name__ == "__main__":

@@ -211,6 +211,20 @@ class CalculationBridge(QObject):
         self._running = False
         self.sig_cancelled.emit()
 
+    def kill_hard(self):
+        """Forcefully and synchronously terminates the child worker process and all of its subprocesses."""
+        pid = self.pid
+        if self._process is not None:
+            try:
+                if self._process.state() != QProcess.NotRunning:
+                    self._process.kill()
+                    self._process.waitForFinished(1000)
+            except Exception:
+                pass
+        if pid:
+            kill_process_tree(pid)
+        self._running = False
+
     def _on_calculation_finished(self, success: bool, plot_path: str = "", data_path: str = ""):
         """Helper to simulate completion or emit completion payload."""
         self._running = False

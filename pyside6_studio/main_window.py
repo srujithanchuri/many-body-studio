@@ -1671,11 +1671,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
         QTimer.singleShot(800, _finish_stopping)
 
     def closeEvent(self, event: QCloseEvent):
-        """Guarantees child process termination and GPU cleanup upon window closing."""
-        if hasattr(self, "bridge") and self.bridge.is_running():
-            self.bridge.cancel_calculation()
-        flush_gpu_vram()
+        """Guarantees child process termination and immediate application shutdown upon window closing."""
+        if hasattr(self, "queue_timer"):
+            self.queue_timer.stop()
+        if hasattr(self, "cache_timer"):
+            self.cache_timer.stop()
+        if hasattr(self, "bridge"):
+            self.bridge.kill_hard()
         event.accept()
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
     def _adjust_bottom_dock_height(self):
         """Automatically expands/contracts Execution Center vertical height based on queued sweep jobs."""

@@ -299,7 +299,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Cold Compute Needed (~2-10s)",
+            "badge_text": "⚙️ Full Calculation Required (~2-10s)",
             "badge_color": "#64748b",
             "details": "Full 1-loop & 3-loop convolutions will be calculated.",
             "foundation_file": None,
@@ -339,7 +339,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Cold Single-Point Dyson (~1-3s)",
+            "badge_text": "⚙️ Full Dyson Evaluation (~1-3s)",
             "badge_color": "#64748b",
             "details": f"Computing single-point Dyson convolution at P=({ix},{iy}).",
             "foundation_file": None,
@@ -374,7 +374,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Cold χ₀ + Bisection (~3-8s)",
+            "badge_text": "⚙️ Full χ₀ + Bisection Search (~3-8s)",
             "badge_color": "#64748b",
             "details": f"Bare static bubble χ₀(q) will be computed once on {N}×{N} grid, then cached.",
             "foundation_file": None,
@@ -420,7 +420,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Cold χ₀ + RPA Compute",
+            "badge_text": "⚙️ Full χ₀ + RPA Evaluation",
             "badge_color": "#64748b",
             "details": "Bare bubble χ₀ array must be computed before RPA sweep.",
             "foundation_file": None,
