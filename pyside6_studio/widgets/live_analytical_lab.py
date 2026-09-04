@@ -310,9 +310,9 @@ class LiveAnalyticalLabWidget(QWidget):
             }
         """
 
-        self.cb_experiment = ModernComboBox(max_hint_width=135)
-        self.cb_experiment.setStyleSheet(combo_style + "QComboBox { font-weight: 600; min-width: 85px; max-width: 110px; }")
-        self.cb_experiment.setMaximumWidth(135)
+        self.cb_experiment = ModernComboBox(max_hint_width=175)
+        self.cb_experiment.setStyleSheet(combo_style + "QComboBox { font-weight: 600; min-width: 125px; max-width: 150px; }")
+        self.cb_experiment.setMaximumWidth(175)
         self.cb_experiment.addItems([
             self.modes[m_id].display_name for m_id in self.mode_order
         ])
