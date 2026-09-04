@@ -11,11 +11,14 @@ Modular mode handlers for LiveAnalyticalLabWidget:
 from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
 from pyside6_studio.widgets.analytical_modes.spectral_function_mode import SpectralFunctionMode
 from pyside6_studio.widgets.analytical_modes.energy_slice_mode import EnergySliceMode
+from pyside6_studio.widgets.analytical_modes.band_dispersion_mode import BandDispersionMode
 from pyside6_studio.widgets.analytical_modes.rpa_susceptibility_mode import RpaSusceptibilityMode
 
 __all__ = [
     "BaseAnalyticalMode",
     "SpectralFunctionMode",
     "EnergySliceMode",
+    "BandDispersionMode",
     "RpaSusceptibilityMode",
 ]
+

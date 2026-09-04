@@ -234,9 +234,18 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         self.assertEqual(len(mode1._current_dos), len(lab.loaded_base_sigma["omega"]))
         self.assertTrue(np.all(mode1._current_dos >= 0.0))
 
-        # Experiment 2: Static RPA Susceptibility
-        # Selecting RPA should auto-switch to static chi0 cache
+        # Experiment 2: Energy-Momentum Band Dispersion along High-Symmetry Path
         lab.cb_experiment.setCurrentIndex(2)
+        self.assertEqual(lab.active_mode, "band_dispersion")
+        mode2 = lab.current_mode
+        self.assertIsNotNone(mode2._path_ix)
+        self.assertGreater(len(mode2._path_ix), 0)
+        self.assertIsNotNone(mode2._xi_path)
+        self.assertEqual(len(lab.fig.axes), 3)  # 2 subplots + 1 colorbar
+
+        # Experiment 3: Static RPA Susceptibility
+        # Selecting RPA should auto-switch to static chi0 cache
+        lab.cb_experiment.setCurrentIndex(3)
         self.assertEqual(lab.active_mode, "rpa_susc")
         self.assertIsNotNone(lab.loaded_chi0_static)
         # Continuous slider changes J_K and updates Stoner instability gap

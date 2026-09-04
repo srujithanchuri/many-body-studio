@@ -37,6 +37,7 @@ from pyside6_studio.widgets.analytical_modes import (
     BaseAnalyticalMode,
     SpectralFunctionMode,
     EnergySliceMode,
+    BandDispersionMode,
     RpaSusceptibilityMode,
 )
 
@@ -171,9 +172,10 @@ class LiveAnalyticalLabWidget(QWidget):
         self.modes: dict[str, BaseAnalyticalMode] = {
             "k_probe": SpectralFunctionMode(self),
             "energy_slice": EnergySliceMode(self),
+            "band_dispersion": BandDispersionMode(self),
             "rpa_susc": RpaSusceptibilityMode(self),
         }
-        self.mode_order = ["k_probe", "energy_slice", "rpa_susc"]
+        self.mode_order = ["k_probe", "energy_slice", "band_dispersion", "rpa_susc"]
 
         self._build_ui()
         self.scan_caches()
@@ -1051,7 +1053,10 @@ class LiveAnalyticalLabWidget(QWidget):
         if "k_probe" in self.modes:
             self.modes["k_probe"].w_max = val
             self.modes["k_probe"]._user_xlim = None
-        if self.active_mode == "k_probe":
+        if "band_dispersion" in self.modes:
+            self.modes["band_dispersion"].w_max = val
+            self.modes["band_dispersion"]._user_ylim = None
+        if self.active_mode in ["k_probe", "band_dispersion"]:
             self._recompute_and_render()
             self.sig_status_msg.emit(f"Spectral frequency window set to [-{val:.0f}, {val:.0f}] eV.")
 
