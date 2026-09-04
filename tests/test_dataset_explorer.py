@@ -79,44 +79,65 @@ class TestDatasetExplorerAndVisualizer(unittest.TestCase):
                 f.write(b"PNGDATA")
         np.savez(d1, omega=np.linspace(-1, 1, 10), mu=1.0, N=64)
 
-        # Create a cache foundation file
+        # Create a cache foundation file (must NOT be shown in explorer)
         c1 = os.path.join(self.cache_dir, "chi0_static_N64_mu1.00_t1.00_t1_0.00.npz")
         np.savez(c1, chi0_grid=np.zeros((64, 64)), N=64)
 
         explorer = DatasetExplorerWidget(out_dir=self.root)
         self.assertEqual(len(explorer._runs_data), 1)
         run = explorer._runs_data[0]
-        self.assertEqual(run["category"], "Spectral Sweep")
+        self.assertEqual(run["category"], "Sweeps")
         self.assertEqual(len(run["plots"]), 3)
         self.assertIsNotNone(run["data"])
-        self.assertEqual(len(explorer._cache_files), 1)
+
+        # Verify zero cache items in the explorer tree
+        all_tree_text = " ".join(explorer.tree.topLevelItem(i).text(0) for i in range(explorer.tree.topLevelItemCount()))
+        self.assertNotIn("chi0", all_tree_text.lower())
+        self.assertNotIn("cache", all_tree_text.lower())
 
     def test_04_search_and_category_filtering(self):
-        """Verifies real-time search filtering and category tabs."""
-        # Create 2 runs
-        p1 = os.path.join(self.plots_dir, "sweep_DOS_atJ_perp_6.0_mu_1.0.png")
+        """Verifies real-time scientific search filtering and category tabs."""
+        # Create 2 runs with distinct parameters
+        p1 = os.path.join(self.plots_dir, "sweep_DOS_atJ_perp_6.0_mu_1.0_N64.png")
         p2 = os.path.join(self.plots_dir, "phase_diagram_mu0.50_AFM.png")
         with open(p1, "wb") as f: f.write(b"DATA")
         with open(p2, "wb") as f: f.write(b"DATA")
 
+        # Cache file in results/cache (must NOT appear in tree)
         c1 = os.path.join(self.cache_dir, "chi0_static_N64_mu1.00_t1.00_t1_0.00.npz")
         np.savez(c1, dummy=1)
 
         explorer = DatasetExplorerWidget(out_dir=self.root)
 
-        # Test search query
-        explorer.edit_search.setText("phase_diagram")
-        self.assertEqual(explorer.tree.topLevelItemCount(), 2)  # Studies group and cache group headers
-        studies_grp = explorer.tree.topLevelItem(0)
-        # Should contain only Phase Diagram
-        self.assertEqual(studies_grp.childCount(), 1)
-        self.assertIn("Phase Diagram", studies_grp.child(0).text(0))
+        # 1. Test search by exact parameter mu=1.0
+        explorer.edit_search.setText("mu=1.0")
+        self.assertEqual(explorer.tree.topLevelItemCount(), 1)  # Sweeps category
+        sweeps_cat = explorer.tree.topLevelItem(0)
+        self.assertEqual(sweeps_cat.childCount(), 1)
+        self.assertIn("Spectral Sweep", sweeps_cat.child(0).text(0))
 
-        # Test category filter pill
-        explorer.edit_search.clear()
-        explorer._on_filter_changed(2)  # Cache only
+        # 2. Test search by parameter mu=0.5
+        explorer.edit_search.setText("mu=0.5")
+        self.assertEqual(explorer.tree.topLevelItemCount(), 1)  # Phase Diagram category
+        phase_cat = explorer.tree.topLevelItem(0)
+        self.assertEqual(phase_cat.childCount(), 1)
+        self.assertIn("Phase Diagram", phase_cat.child(0).text(0))
+
+        # 3. Test search by order AFM
+        explorer.edit_search.setText("AFM")
         self.assertEqual(explorer.tree.topLevelItemCount(), 1)
-        self.assertIn("COMPUTATIONAL CACHE", explorer.tree.topLevelItem(0).text(0))
+        self.assertIn("Phase Diagram", explorer.tree.topLevelItem(0).child(0).text(0))
+
+        # 4. Test category filter pill (Sweeps: index 1)
+        explorer.edit_search.clear()
+        explorer._on_filter_changed(1)  # Sweeps only
+        self.assertEqual(explorer.tree.topLevelItemCount(), 1)
+        self.assertIn("SWEEPS", explorer.tree.topLevelItem(0).text(0))
+
+        # 5. Test category filter pill (Phase: index 4)
+        explorer._on_filter_changed(4)  # Phase Diagram only
+        self.assertEqual(explorer.tree.topLevelItemCount(), 1)
+        self.assertIn("PHASE DIAGRAM", explorer.tree.topLevelItem(0).text(0))
 
     def test_05_interactive_data_canvas(self):
         """Verifies that InteractiveDataCanvas can load 1D arrays, 2D BZ maps, and zero-wait RPA coupler."""
@@ -151,6 +172,32 @@ class TestDatasetExplorerAndVisualizer(unittest.TestCase):
         # Change slider
         canvas.slider_jk.setValue(50)
         self.assertEqual(canvas._coupler_jk, 5.0)
+
+    def test_06_smart_parameter_search_matrix(self):
+        """Verifies diverse parameter query formulations: mu=1.0, mu 1, JK=3, Jperp=6, N=64, etc."""
+        fn = os.path.join(self.plots_dir, "sweep_JK_vals_3.00_5.00_Jperp_6.00_mu_1.00_N_64_eta_0.0800.png")
+        with open(fn, "wb") as f: f.write(b"DATA")
+
+        explorer = DatasetExplorerWidget(out_dir=self.root)
+
+        # Variations that must all match this run
+        positive_queries = [
+            "mu=1.0", "mu=1", "mu:1.0", "mu 1.0", "mu 1",
+            "JK=3.0", "JK=3", "J_K=3.0", "JK=5.0", "JK=5",
+            "Jperp=6.0", "Jperp=6", "J_perp=6.0",
+            "N=64", "N 64", "eta=0.08",
+            "mu=1.0 JK=3.0", "mu=1.0 Jperp=6.0"
+        ]
+
+        for q in positive_queries:
+            explorer.edit_search.setText(q)
+            num_matches = sum(explorer.tree.topLevelItem(i).childCount() for i in range(explorer.tree.topLevelItemCount()))
+            self.assertGreaterEqual(num_matches, 1, f"Failed to match query: '{q}'")
+
+        # Query that must NOT match
+        explorer.edit_search.setText("mu=2.5")
+        self.assertEqual(explorer.tree.topLevelItemCount(), 1)
+        self.assertIn("No runs match", explorer.tree.topLevelItem(0).text(0))
 
 
 if __name__ == "__main__":

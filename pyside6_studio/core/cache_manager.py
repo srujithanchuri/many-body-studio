@@ -88,6 +88,64 @@ def normalize_results_dir(target_dir: Optional[str] = None) -> Tuple[str, str, s
     return results_dir, plots_dir, data_dir, cache_dir
 
 
+def get_ibz_indices_and_map(n: int):
+    """
+    Computes the 1/8th Irreducible Brillouin Zone (IBZ) coordinates and 
+    a fast full-BZ reconstruction lookup table for C4v square lattice symmetry.
+    Wedge: 0 <= j <= i <= n // 2.
+    """
+    half_n = n // 2
+    ibz_coords = []
+    coord_to_idx = {}
+    idx = 0
+    for i in range(half_n + 1):
+        for j in range(i + 1):
+            ibz_coords.append((i, j))
+            coord_to_idx[(i, j)] = idx
+            idx += 1
+
+    full_to_ibz = np.zeros((n, n), dtype=np.int32)
+    for i in range(n):
+        i_f = min(i, (n - i) % n)
+        for j in range(n):
+            j_f = min(j, (n - j) % n)
+            full_to_ibz[i, j] = coord_to_idx[(max(i_f, j_f), min(i_f, j_f))]
+
+    rows = [c[0] for c in ibz_coords]
+    cols = [c[1] for c in ibz_coords]
+    return rows, cols, full_to_ibz
+
+
+def inspect_cache_foundation(fpath: str) -> dict:
+    """
+    Lightweight metadata inspector for cache foundations.
+    Detects whether an array is stored as 1/8th IBZ or legacy full BZ.
+    """
+    if not os.path.isfile(fpath):
+        return {"exists": False}
+    try:
+        with np.load(fpath) as d:
+            is_ibz = bool(d.get("is_ibz", False))
+            if "sig_re" in d:
+                dt = str(d["sig_re"].dtype)
+                shape = tuple(d["sig_re"].shape)
+            elif "sig1_re" in d:
+                dt = str(d["sig1_re"].dtype)
+                shape = tuple(d["sig1_re"].shape)
+            else:
+                dt = "unknown"
+                shape = ()
+            return {
+                "exists": True,
+                "is_ibz": is_ibz,
+                "dtype": dt,
+                "shape": shape,
+                "format": "1/8th IBZ (C4v compressed)" if is_ibz else "Legacy Full BZ"
+            }
+    except Exception:
+        return {"exists": True, "is_ibz": False, "dtype": "unknown", "format": "Legacy NPZ"}
+
+
 # ==============================================================================
 # PARAMETER-PRECISE CACHE KEY FILENAMES
 # ==============================================================================
@@ -288,11 +346,14 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
                 t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
             )
             if base_file:
+                meta = inspect_cache_foundation(base_file)
+                ibz_tag = " (1/8th IBZ)" if meta.get("is_ibz") else ""
+                fmt_desc = meta.get("format", "Foundation")
                 return {
                     "state": "foundation",
-                    "badge_text": "⚡ Base Σ Cached (Fast J_K Scaling)",
+                    "badge_text": f"⚡ Base Σ Cached{ibz_tag} (Fast J_K Scaling)",
                     "badge_color": "#0891b2",
-                    "details": "Base self-energy cached in results/cache/. Fast analytical J_K² scaling will be applied.",
+                    "details": f"Base self-energy ({fmt_desc}) in results/cache/. Fast analytical J_K² scaling on Full BZ.",
                     "foundation_file": base_file,
                     "data_file": None
                 }
