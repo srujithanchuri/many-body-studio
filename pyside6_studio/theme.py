@@ -15,7 +15,7 @@ QMainWindow, QWidget#CentralWidget, QSplitter {
 QWidget {
     color: #0f172a;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    font-size: 13px;
+    font-size: 10pt;
 }
 
 /* Central interactive canvas viewport */
@@ -527,7 +527,7 @@ QMainWindow, QWidget#CentralWidget, QSplitter {
 QWidget {
     color: #f8fafc;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    font-size: 13px;
+    font-size: 10pt;
 }
 
 /* Central interactive canvas viewport */

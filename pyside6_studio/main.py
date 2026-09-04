@@ -20,20 +20,9 @@ from main_window import UnifiedWorkbenchWindow
 
 
 def configure_high_dpi():
-    """Configures native Windows Per-Monitor High-DPI awareness and subpixel rendering."""
-    # Prevent Windows Desktop Window Manager (DWM) from bitmap-stretching python.exe
-    if sys.platform == "win32":
-        import ctypes
-        try:
-            # PROCESS_PER_MONITOR_DPI_AWARE_V2 = 2 (Windows 10 1703+)
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        except Exception:
-            try:
-                ctypes.windll.user32.SetProcessDPIAware()
-            except Exception:
-                pass
-
-    # Ensure Qt uses subpixel fractional DPI scaling without rounding blur
+    """Configures native Windows subpixel fractional DPI rendering without rounding blur.
+    Note: Qt 6 automatically manages DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 on Windows natively.
+    """
     try:
         QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
