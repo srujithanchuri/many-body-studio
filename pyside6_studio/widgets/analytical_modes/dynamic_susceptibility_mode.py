@@ -7,13 +7,14 @@ Features:
   - Vectorized live evaluation of -Im χ_RPA(q, ω) along Γ(0,0) -> X(π,0) -> M(π,π) -> Γ(0,0).
   - Continuous 60 FPS slider scaling of J_K and J_perp.
   - Overlaid collective triplon excitation dispersion Ω(q) (cyan dotted curve).
-  - Exact source aspect ratio, high-symmetry path partitioning, and vertical guide lines.
+  - Exact source aspect ratio (6.5 : 5.0 -> 1.30:1), high-symmetry path partitioning, and vertical guide lines.
   - Interactive wheel zoom and drag panning.
 """
 
 import numpy as np
 import matplotlib.colors as mcolors
 from matplotlib import ticker
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
 
@@ -149,13 +150,9 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
 
         # Full figure rebuild: Symmetrically centered single-panel layout matching source code
         self.fig.clear()
-
-        gs = self.fig.add_gridspec(
-            1, 2, width_ratios=[1.0, 0.026],
-            left=0.08, right=0.91, bottom=0.11, top=0.90, wspace=0.025
-        )
-        self.ax_dyn = self.fig.add_subplot(gs[0, 0])
-        cax = self.fig.add_subplot(gs[0, 1])
+        self.ax_dyn = self.fig.add_subplot(111)
+        # Source code aspect ratio from sweeper.py (figsize=(6.5, 5.0) -> width/height = 1.30)
+        self.ax_dyn.set_box_aspect(5.0 / 6.5)
 
         extent = [0, num_q - 1, w_min, w_max]
         self.im_dyn = self.ax_dyn.imshow(
@@ -196,11 +193,17 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
         )
         self.ax_dyn.legend(loc="upper right", fontsize=9.5, framealpha=0.85)
 
-        # Colorbar
+        # Colorbar glued directly to the 1.30:1 aspect ratio axes box
+        cax = inset_axes(
+            self.ax_dyn, width="3.2%", height="100%", loc="lower left",
+            bbox_to_anchor=(1.02, 0.0, 1.0, 1.0), bbox_transform=self.ax_dyn.transAxes,
+            borderpad=0
+        )
         self.cbar = self.fig.colorbar(self.im_dyn, cax=cax)
         self.cbar.set_label(r"$-\mathrm{Im}\chi(\mathbf{q}, \omega)$", fontsize=10)
         self.cbar.ax.tick_params(labelsize=8.5)
 
+        self.fig.subplots_adjust(left=0.08, right=0.92, bottom=0.11, top=0.90)
         self.canvas.draw()
 
     def on_scroll(self, event) -> bool:
