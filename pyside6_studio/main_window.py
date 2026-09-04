@@ -1265,14 +1265,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
             QMessageBox.warning(self, "Execution Warning", str(e))
 
     def cancel_simulation_ui(self):
-        """Cancels active computation immediately with instant visual feedback and VRAM flush."""
+        """Cancels active computation immediately with clean stopping cooldown and VRAM flush."""
         if not hasattr(self, "bridge") or not self.bridge.is_running():
             return
 
-        # Immediate visual feedback so user knows cancel was registered instantly
+        # Keep both Run and Cancel disabled during stopping procedure
+        self.btn_run.setEnabled(False)
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏳ Stopping...")
-        self.lbl_status.setText("⏳ Stopping simulation & releasing GPU VRAM...")
+        self.lbl_status.setText("⏳ Stopping simulation & purging GPU VRAM...")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ⏹ [CANCEL REQUESTED] Terminating process tree & purging VRAM cache..."
@@ -1379,10 +1380,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
         QTimer.singleShot(6000, self._reset_status_to_ready)
 
     def _on_calc_cancelled(self):
-        self.btn_run.setEnabled(True)
+        # Keep Run button greyed out for the duration of the stopping procedure
+        self.btn_run.setEnabled(False)
         self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setText("⏹ Stopped")
-        self.lbl_status.setText("⏹ Stopped: Execution cancelled by user • GPU VRAM purged.")
+        self.btn_cancel.setText("⏳ Stopping...")
+        self.lbl_status.setText("⏳ Purging GPU VRAM & finalizing stop...")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."
@@ -1391,8 +1393,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
         sb = self.txt_console.verticalScrollBar()
         if sb:
             sb.setValue(sb.maximum())
-        QTimer.singleShot(2500, lambda: self.btn_cancel.setText("⏹ Cancel / Stop"))
-        QTimer.singleShot(3500, self._reset_status_to_ready)
+
+        # Once stopping cooldown and VRAM flush complete, re-enable Run button
+        def _finish_stopping():
+            self.btn_run.setEnabled(True)
+            self.btn_cancel.setEnabled(False)
+            self.btn_cancel.setText("⏹ Cancel / Stop")
+            self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")
+            QTimer.singleShot(2500, self._reset_status_to_ready)
+
+        QTimer.singleShot(800, _finish_stopping)
 
     def closeEvent(self, event: QCloseEvent):
         """Guarantees child process termination and GPU cleanup upon window closing."""
