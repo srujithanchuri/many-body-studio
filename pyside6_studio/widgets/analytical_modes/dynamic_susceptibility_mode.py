@@ -131,9 +131,9 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
         # Check if in-place artist update is possible
         can_update_inplace = (
             self.ax_dyn is not None
+            and self.ax_dyn in self.fig.axes
             and self.im_dyn is not None
             and self.line_triplon is not None
-            and len(self.fig.axes) >= 1
             and getattr(self.im_dyn, 'get_array', lambda: None)() is not None
             and self.im_dyn.get_array().shape == spectral_map.shape
         )

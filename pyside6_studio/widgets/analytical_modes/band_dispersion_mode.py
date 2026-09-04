@@ -225,6 +225,8 @@ class BandDispersionMode(BaseAnalyticalMode):
             self.ax_disp is not None
             and self.ax_disp in self.fig.axes
             and getattr(self, "im_disp", None) is not None
+            and getattr(self.im_disp, "get_array", lambda: None)() is not None
+            and self.im_disp.get_array().shape == clean_path.shape
         )
 
         if can_update_inplace:

@@ -307,6 +307,8 @@ class EnergySliceMode(BaseAnalyticalMode):
             and self.ax_map in self.fig.axes
             and self.ax_dos in self.fig.axes
             and getattr(self, "im", None) is not None
+            and getattr(self.im, "get_array", lambda: None)() is not None
+            and self.im.get_array().shape == A_slice.T.shape
         )
 
         w_max_dos = 15.0

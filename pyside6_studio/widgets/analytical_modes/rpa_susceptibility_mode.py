@@ -119,8 +119,8 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
         # Check if in-place artist update is possible
         can_update_inplace = (
             self.ax_susc is not None
+            and self.ax_susc in self.fig.axes
             and self.im_susc is not None
-            and len(self.fig.axes) >= 1
             and getattr(self.im_susc, "get_array", lambda: None)() is not None
             and self.im_susc.get_array().shape == sus_grid.T.shape
         )

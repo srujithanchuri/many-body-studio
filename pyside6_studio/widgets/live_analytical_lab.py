@@ -818,8 +818,9 @@ class LiveAnalyticalLabWidget(QWidget):
         for m in sorted_mus:
             self.cb_filter_mu.addItem(f"{m:.2f}")
 
-        # Preserve user's typed value if they were searching for something specific
-        if curr_text:
+        # Preserve user's typed value only if it exists in the active mode's caches
+        valid_mus = [f"{m:.2f}" for m in sorted_mus]
+        if curr_text and curr_text in valid_mus:
             self.cb_filter_mu.setEditText(curr_text)
         else:
             self.cb_filter_mu.setCurrentIndex(0)
