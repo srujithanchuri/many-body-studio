@@ -535,7 +535,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         h_cache_ctrl = QHBoxLayout()
         self.chk_force_recompute = QCheckBox("Force Recompute")
-        self.chk_force_recompute.setToolTip("Bypass results/cache/ and recalculate all convolutions from scratch.")
+        self.chk_force_recompute.setToolTip("Bypass results/cache/ and recalculate all convolutions from scratch (will take longer).")
         self.chk_force_recompute.stateChanged.connect(self._schedule_cache_check)
         h_cache_ctrl.addWidget(self.chk_force_recompute)
 
@@ -1008,12 +1008,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_cache_mgr.setToolTip(f"{stats['total_files']} foundation files ({stats['total_bytes']} bytes) in results/cache/")
 
         if hasattr(self, "chk_force_recompute") and self.chk_force_recompute.isChecked():
-            self.lbl_cache_badge.setText("⚡ Force Recompute Active (Bypassing All Caches)")
+            self.lbl_cache_badge.setText("⚡ Force Recompute Active: Bypassing Cache (Will Take Longer)")
             self.lbl_cache_badge.setStyleSheet(
                 "padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 11px; "
                 "background-color: rgba(234, 88, 12, 0.15); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.4);"
             )
-            self.lbl_cache_badge.setToolTip("All simulations will be calculated from scratch without reading from results/cache/.")
+            self.lbl_cache_badge.setToolTip("Force Recompute is active. All reusable foundations in results/cache/ will be ignored and computed from scratch, which will take longer.")
             return
 
         # Build current params dictionary

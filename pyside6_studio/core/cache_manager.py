@@ -292,16 +292,16 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
                     "state": "foundation",
                     "badge_text": "⚡ Base Σ Cached (Fast J_K Scaling)",
                     "badge_color": "#0891b2",
-                    "details": f"Base self-energy cached. Fast J_K^2 scaling will finish in < 0.2s!",
+                    "details": "Base self-energy cached in results/cache/. Fast analytical J_K² scaling will be applied.",
                     "foundation_file": base_file,
                     "data_file": None
                 }
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Full Calculation Required (~2-10s)",
+            "badge_text": "⚙️ No Cache: Full Computation Needed",
             "badge_color": "#64748b",
-            "details": "Full 1-loop & 3-loop convolutions will be calculated.",
+            "details": "No cache found. Full 1-loop & 3-loop convolutions will be computed.",
             "foundation_file": None,
             "data_file": None
         }
@@ -339,9 +339,9 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Full Dyson Evaluation (~1-3s)",
+            "badge_text": "⚙️ No Cache: Full Computation Needed",
             "badge_color": "#64748b",
-            "details": f"Computing single-point Dyson convolution at P=({ix},{iy}).",
+            "details": f"No cache found. Computing single-point Dyson convolution at P=({ix},{iy}).",
             "foundation_file": None,
             "data_file": None
         }
@@ -374,9 +374,9 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Full χ₀ + Bisection Search (~3-8s)",
+            "badge_text": "⚙️ No Cache: Full Computation Needed",
             "badge_color": "#64748b",
-            "details": f"Bare static bubble χ₀(q) will be computed once on {N}×{N} grid, then cached.",
+            "details": f"No cache found. Bare static bubble χ₀(q) will be computed on {N}×{N} grid, then cached.",
             "foundation_file": None,
             "data_file": None
         }
@@ -420,18 +420,18 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ Full χ₀ + RPA Evaluation",
+            "badge_text": "⚙️ No Cache: Full Computation Needed",
             "badge_color": "#64748b",
-            "details": "Bare bubble χ₀ array must be computed before RPA sweep.",
+            "details": "No cache found. Bare bubble χ₀ array must be computed before RPA sweep.",
             "foundation_file": None,
             "data_file": None
         }
 
     return {
         "state": "cold",
-        "badge_text": "⚙️ Ready to Compute",
+        "badge_text": "⚙️ No Cache: Full Computation Needed",
         "badge_color": "#64748b",
-        "details": "Parameters ready.",
+        "details": "No cache found. Full computation required.",
         "foundation_file": None,
         "data_file": None
     }
