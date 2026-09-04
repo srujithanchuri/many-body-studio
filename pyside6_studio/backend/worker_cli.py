@@ -25,6 +25,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
 
+import warnings
+warnings.filterwarnings("ignore", message="CUDA path could not be detected.*", category=UserWarning)
+
 # Ensure project roots are on sys.path
 PROJECT_ROOT = r"C:\Users\sruji\Projects\masters_thesis"
 GUI_ROOT = r"C:\Users\sruji\Projects\masters_thesis_gui"

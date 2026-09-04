@@ -8,7 +8,11 @@ NVIDIA CUDA Toolkit libraries (NVVM, libdevice, cudart) from pip wheel packages
 import os
 import sys
 import glob
+import warnings
 from collections import namedtuple
+
+# Suppress benign CuPy warning when using modular pip wheels on Windows
+warnings.filterwarnings("ignore", message="CUDA path could not be detected.*", category=UserWarning)
 
 _INITIALIZED = False
 
