@@ -39,6 +39,8 @@ from pyside6_studio.core.cache_manager import (
     purge_cache
 )
 from pyside6_studio.core import config
+from pyside6_studio.widgets.dataset_explorer import DatasetExplorerWidget
+from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas, VectorExportDialog
 
 DEFAULT_RESULTS_DIR = r"C:\Users\sruji\Projects\masters_thesis_gui\results"
 
@@ -279,14 +281,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self._build_bottom_drawer_dock()
         self._build_statusbar()
 
-        self.dock_nav.setMaximumWidth(320)
+        self.dock_nav.setMinimumWidth(280)
+        self.dock_nav.setMaximumWidth(420)
 
         # Ensure docks start with proper comfortable widths & compact bottom height
         self.resizeDocks([self.dock_bottom], [150], Qt.Vertical)
-        self.resizeDocks([self.dock_nav, self.dock_inspector], [240, 360], Qt.Horizontal)
+        self.resizeDocks([self.dock_nav, self.dock_inspector], [320, 360], Qt.Horizontal)
         QTimer.singleShot(0, lambda: (
             self.resizeDocks([self.dock_bottom], [150], Qt.Vertical),
-            self.resizeDocks([self.dock_nav, self.dock_inspector], [240, 360], Qt.Horizontal)
+            self.resizeDocks([self.dock_nav, self.dock_inspector], [320, 360], Qt.Horizontal)
         ))
 
         # Setup Smart Cache invalidation debounced timer
@@ -390,58 +393,104 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.central_container.setObjectName("CentralWidget")
         layout = QVBoxLayout(self.central_container)
         layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        # Segmented View Mode Switcher
+        header_bar = QHBoxLayout()
+        header_bar.setContentsMargins(4, 2, 4, 2)
+        header_bar.setSpacing(6)
+
+        lbl_vp = QLabel("CANVAS VIEW:")
+        lbl_vp.setStyleSheet("font-weight: 700; font-size: 11px; color: #64748b;")
+        header_bar.addWidget(lbl_vp)
+
+        self.btn_canvas_data = QPushButton("🔬 Interactive Data Studio")
+        self.btn_canvas_data.setCheckable(True)
+        self.btn_canvas_data.setChecked(True)
+        self.btn_canvas_data.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px; font-weight: 600; font-size: 11px;
+                border: 1px solid #cbd5e1; border-radius: 4px; background: transparent;
+            }
+            QPushButton:checked {
+                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
+            }
+        """)
+        self.btn_canvas_data.clicked.connect(lambda: self.set_canvas_mode(0))
+        header_bar.addWidget(self.btn_canvas_data)
+
+        self.btn_canvas_figure = QPushButton("🖼️ Publication Figure View")
+        self.btn_canvas_figure.setCheckable(True)
+        self.btn_canvas_figure.setChecked(False)
+        self.btn_canvas_figure.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px; font-weight: 600; font-size: 11px;
+                border: 1px solid #cbd5e1; border-radius: 4px; background: transparent;
+            }
+            QPushButton:checked {
+                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
+            }
+        """)
+        self.btn_canvas_figure.clicked.connect(lambda: self.set_canvas_mode(1))
+        header_bar.addWidget(self.btn_canvas_figure)
+
+        header_bar.addStretch()
+        layout.addLayout(header_bar)
+
+        self.central_view_stack = QStackedWidget()
+
+        # Page 0: Interactive Scientific Data Canvas (FigureCanvasQTAgg)
+        self.data_canvas = InteractiveDataCanvas(self)
+        self.data_canvas.coord_changed.connect(lambda text: self.lbl_coords.setText(text))
+        self.central_view_stack.addWidget(self.data_canvas)
+
+        # Page 1: CAD Publication Raster Split-View Canvas (QGraphicsView)
+        self.figure_view_container = QWidget()
+        fig_lay = QVBoxLayout(self.figure_view_container)
+        fig_lay.setContentsMargins(0, 0, 0, 0)
 
         self.view_splitter = QSplitter(Qt.Horizontal)
-
-        # Primary interactive canvas
         self.canvas_left = InteractivePlotCanvas()
         self.canvas_left.coord_changed.connect(self._on_left_coord)
         self.view_splitter.addWidget(self.canvas_left)
 
-        # Secondary comparison canvas (shown in split view)
         self.canvas_right = InteractivePlotCanvas()
         self.canvas_right.coord_changed.connect(self._on_right_coord)
         self.canvas_right.setVisible(False)
         self.view_splitter.addWidget(self.canvas_right)
 
-        layout.addWidget(self.view_splitter)
+        fig_lay.addWidget(self.view_splitter)
+        self.central_view_stack.addWidget(self.figure_view_container)
+
+        layout.addWidget(self.central_view_stack, 1)
         self.setCentralWidget(self.central_container)
 
+    def set_canvas_mode(self, mode_idx: int):
+        """Switches between Interactive Data Studio (0) and Publication Figure View (1)."""
+        self.central_view_stack.setCurrentIndex(mode_idx)
+        self.btn_canvas_data.setChecked(mode_idx == 0)
+        self.btn_canvas_figure.setChecked(mode_idx == 1)
+        if hasattr(self, "action_split"):
+            self.action_split.setVisible(mode_idx == 1)
+
     # =========================================================================
-    # LEFT DOCK: NAVIGATOR (SIMULATION) VS MULTI-PANEL ASSIGNER (PUBLICATION)
+    # LEFT DOCK: RESEARCH NAVIGATOR & DATASET EXPLORER
     # =========================================================================
     def _build_navigator_dock(self):
-        self.dock_nav = QDockWidget("🧭 Study Navigator & Datasets", self)
+        self.dock_nav = QDockWidget("🧭 Research Workspace & Datasets", self)
         self.dock_nav.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        self.dock_nav.setMinimumWidth(220)
+        self.dock_nav.setMinimumWidth(280)
 
         self.nav_stack = QStackedWidget()
 
-        # PAGE 1: Simulation Studies Tree
-        p_sim = QWidget()
-        l_sim = QVBoxLayout(p_sim); l_sim.setContentsMargins(4, 4, 4, 4)
-        lbl_hint = QLabel("Select active study to configure or past result to view:")
-        lbl_hint.setStyleSheet("color: #64748b; font-size: 11px;")
-        l_sim.addWidget(lbl_hint)
-
-        self.tree_nav = QTreeWidget()
-        self.tree_nav.setHeaderHidden(True)
-
-        self.grp_studies = QTreeWidgetItem(self.tree_nav, ["🔬 SELECT STUDY TO RUN"])
-        self.grp_studies.setExpanded(True)
-        self.item_se = QTreeWidgetItem(self.grp_studies, [self.STUDY_SE])
-        self.item_spec = QTreeWidgetItem(self.grp_studies, [self.STUDY_SPEC])
-        self.item_pd = QTreeWidgetItem(self.grp_studies, [self.STUDY_PD])
-        self.item_susc = QTreeWidgetItem(self.grp_studies, [self.STUDY_SUSC])
-
-        self.grp_results = QTreeWidgetItem(self.tree_nav, ["📁 PREVIOUS DATASETS & PLOTS"])
-        self.grp_results.setExpanded(True)
-        for name in self.plots.keys():
-            QTreeWidgetItem(self.grp_results, [name])
-
-        self.tree_nav.itemClicked.connect(self._on_nav_selected)
-        l_sim.addWidget(self.tree_nav)
-        self.nav_stack.addWidget(p_sim)
+        # PAGE 1: Smart Research Navigator & Dataset Explorer
+        out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
+        self.explorer = DatasetExplorerWidget(out_dir=out_dir, parent=self)
+        self.explorer.sig_view_plot.connect(self._on_explorer_view_plot)
+        self.explorer.sig_explore_data.connect(self._on_explorer_explore_data)
+        self.explorer.sig_compare.connect(self._on_explorer_compare)
+        self.explorer.sig_open_cache_dialog.connect(self._open_cache_manager)
+        self.nav_stack.addWidget(self.explorer)
 
         # PAGE 2: Publication Figure Layout Assigner
         p_pub = QWidget()
@@ -486,6 +535,23 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.dock_nav.setWidget(self.nav_stack)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.dock_nav)
+
+    def _on_explorer_view_plot(self, plot_path: str):
+        self.set_canvas_mode(1)
+        self.canvas_left.load_image(plot_path)
+        self.lbl_status.setText(f"Viewing Plot: {os.path.basename(plot_path)}")
+
+    def _on_explorer_explore_data(self, data_path: str, meta: dict):
+        self.set_canvas_mode(0)
+        self.data_canvas.load_dataset(data_path, meta)
+        self.lbl_status.setText(f"Exploring Dataset: {os.path.basename(data_path)}")
+
+    def _on_explorer_compare(self, path: str):
+        self.set_canvas_mode(1)
+        self.btn_split.setChecked(True)
+        if path.lower().endswith((".png", ".pdf", ".svg")):
+            self.canvas_right.load_image(path)
+        self.lbl_status.setText(f"Comparison View: Loaded {os.path.basename(path)}")
 
     # =========================================================================
     # RIGHT DOCK: PARAMETER INSPECTOR (WITH VERTICAL SCROLL AREA)
@@ -1086,18 +1152,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             chk.stateChanged.connect(self._schedule_cache_check)
 
     def refresh_dataset_tree(self):
-        """Refreshes the '📁 PREVIOUS DATASETS & PLOTS' tree from the currently configured output directory."""
+        """Refreshes the Dataset Explorer and publication comboboxes from the active output directory."""
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.plots = get_available_plots(out_dir)
 
-        if hasattr(self, "grp_results"):
-            # Clear previous items
-            while self.grp_results.childCount() > 0:
-                self.grp_results.removeChild(self.grp_results.child(0))
-
-            # Populate with plots from the active output directory
-            for name in sorted(self.plots.keys()):
-                QTreeWidgetItem(self.grp_results, [name])
+        if hasattr(self, "explorer"):
+            self.explorer.set_output_dir(out_dir)
 
         # Also update publication panel comboboxes if they exist
         if hasattr(self, "cb_panel_a"):
@@ -1612,6 +1672,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         all_plots = payload.get("all_plots", [])
         primary_plot = payload.get("plot_path", "")
+        data_path = payload.get("data_path", "")
         if not all_plots and primary_plot:
             all_plots = [primary_plot]
 
@@ -1621,6 +1682,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if primary_plot and os.path.exists(primary_plot):
             self.canvas_left.load_image(primary_plot)
             self.canvas_left.fit_in_view()
+
+        if data_path and os.path.exists(data_path) and hasattr(self, "data_canvas"):
+            self.data_canvas.load_dataset(data_path)
 
         # Auto-reset status label to Ready after 4 seconds
         QTimer.singleShot(4000, self._reset_status_to_ready)
@@ -1644,12 +1708,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
         QTimer.singleShot(6000, self._reset_status_to_ready)
 
     def _on_calc_cancelled(self):
-        # Keep Run button greyed out for the duration of the stopping procedure
-        self.btn_run.setEnabled(False)
-        self.btn_run.setText("⏳ Stopping...")
+        self.btn_run.setEnabled(True)
+        self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
         self.btn_cancel.setEnabled(False)
-        self.btn_cancel.setText("⏳ Stopping...")
-        self.lbl_status.setText("⏳ Purging GPU VRAM & finalizing stop...")
+        self.btn_cancel.setText("⏹ Cancel / Stop")
+        self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."
@@ -1658,17 +1721,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         sb = self.txt_console.verticalScrollBar()
         if sb:
             sb.setValue(sb.maximum())
-
-        # Once stopping cooldown and VRAM flush complete, re-enable Run button
-        def _finish_stopping():
-            self.btn_run.setEnabled(True)
-            self.btn_run.setText(f"⚡ Run Active: {self.active_study}")
-            self.btn_cancel.setEnabled(False)
-            self.btn_cancel.setText("⏹ Cancel / Stop")
-            self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")
-            QTimer.singleShot(2500, self._reset_status_to_ready)
-
-        QTimer.singleShot(800, _finish_stopping)
+        QTimer.singleShot(2500, self._reset_status_to_ready)
 
     def closeEvent(self, event: QCloseEvent):
         """Guarantees child process termination and immediate application shutdown upon window closing."""
@@ -1791,6 +1844,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
             app_inst.setStyleSheet(theme_qss)
         self.canvas_left.set_theme(self.is_dark)
         self.canvas_right.set_theme(self.is_dark)
+        if hasattr(self, "data_canvas"):
+            self.data_canvas.set_theme(self.is_dark)
+        if hasattr(self, "explorer"):
+            self.explorer.set_theme(self.is_dark)
         study_col = QColor("#60a5fa") if self.is_dark else QColor("#2563eb")
         snap_col = QColor("#94a3b8") if self.is_dark else QColor("#475569")
         for r in range(self.table_queue.rowCount()):
@@ -1800,9 +1857,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             if it_p: it_p.setForeground(snap_col)
 
     def reset_active_zoom(self):
-        self.canvas_left.fit_in_view()
-        if self.canvas_right.isVisible():
-            self.canvas_right.fit_in_view()
+        if hasattr(self, "central_view_stack") and self.central_view_stack.currentIndex() == 0 and hasattr(self, "data_canvas"):
+            self.data_canvas.reset_zoom()
+        else:
+            self.canvas_left.fit_in_view()
+            if self.canvas_right.isVisible():
+                self.canvas_right.fit_in_view()
 
     def _on_left_coord(self, x, y):
         self.lbl_coords.setText(f"Active Canvas: Pixel ({int(x)}, {int(y)})")

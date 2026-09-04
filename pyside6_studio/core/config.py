@@ -5,12 +5,13 @@ from dataclasses import dataclass
 
 # Application Metadata
 APP_NAME = "Many-Body Studio Pro"
-APP_VERSION = "alpha-v2"
-APP_RELEASE_TITLE = "Many-Body Studio Pro • Alpha v2"
+APP_VERSION = "alpha-v3"
+APP_RELEASE_TITLE = "Many-Body Studio Pro • Alpha v3"
 
 # Base repository paths
 STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GUI_REPO_ROOT = os.path.dirname(STUDIO_DIR)
+DEFAULT_RESULTS_DIR = os.path.join(GUI_REPO_ROOT, "results")
 
 # Locate physics repository root automatically via the installed package
 try:
