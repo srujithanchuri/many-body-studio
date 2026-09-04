@@ -1,6 +1,6 @@
 # Many-Body Studio Pro: Complete Architecture & Implementation Plan
 
-> **Document Version**: alpha-v3.5 (Milestone: 1/8th IBZ Storage Optimization & Interactive Scientific Plotting/Visualization Overhaul)  
+> **Document Version**: alpha-v3.7 (Milestone: Modular Analytical Modes, Numba JIT Multi-Core Acceleration, & Smart Cache Management)  
 > **Target Project**: `C:\Users\sruji\Projects\masters_thesis_gui`  
 > **Physics Engine Source**: `C:\Users\sruji\Projects\masters_thesis`  
 > **Author**: Antigravity Assistant & Srujith Anchuri  

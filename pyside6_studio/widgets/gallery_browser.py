@@ -491,7 +491,7 @@ class PlotGalleryWidget(QWidget):
         self.cb_observable.setStyleSheet("""
             QComboBox {
                 border: 1px solid #cbd5e1; border-radius: 4px;
-                padding: 1px 6px; font-size: 10.5px; background: #ffffff; color: #334155;
+                padding: 1px 6px; font-size: 11px; background: #ffffff; color: #334155;
             }
             QComboBox::drop-down { border: none; }
         """)
@@ -763,15 +763,15 @@ class PlotGalleryWidget(QWidget):
 
             # Category filter: all spectral plots in Spectral, all susceptibility & phase diagrams in Susceptibility
             if cat in ("Spectral Results", "Spectral"):
-                is_spectral = ("Spectral" in cat_tag) or any(k in p.lower() for k in ("spectral", "dos", "path", "fs", "both", "dispersion"))
+                is_spectral = ("Spectral" in cat_tag) or any(k in fname.lower() for k in ("spectral", "dos", "path", "fs", "both", "dispersion"))
                 if not is_spectral:
                     continue
             elif cat in ("Susceptibility Results", "Susceptibility"):
-                is_susc = ("Susceptibility" in cat_tag) or any(k in p.lower() for k in ("susc", "chi", "phase"))
+                is_susc = ("Susceptibility" in cat_tag) or any(k in fname.lower() for k in ("susc", "chi", "phase"))
                 if not is_susc:
                     continue
             elif cat == "Phase Diagram":
-                is_phase = ("Phase" in title) or ("Phase" in obs_type) or ("phase" in p.lower())
+                is_phase = ("Phase" in title) or ("Phase" in obs_type) or ("phase" in fname.lower())
                 if not is_phase:
                     continue
 

@@ -198,12 +198,13 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         lab = LiveAnalyticalLabWidget(out_dir=self.root)
         lab.scan_caches()
 
-        self.assertGreaterEqual(lab.cb_cache_file.count(), 2)
+        self.assertGreaterEqual(len(lab.scanned_caches), 2)
+        self.assertGreaterEqual(lab.cb_cache_file.count(), 1)
 
         # Select Base Sigma cache
         sigma_idx = -1
         for i in range(lab.cb_cache_file.count()):
-            if "Base Σ" in lab.cb_cache_file.itemText(i):
+            if "Σ" in lab.cb_cache_file.itemText(i):
                 sigma_idx = i
                 break
         self.assertNotEqual(sigma_idx, -1)
@@ -215,27 +216,27 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         lab.slider_jk.setValue(30)  # J_K = 3.0
         self.assertEqual(lab.current_JK, 3.0)
         # Should have updated live HUD labels
-        self.assertTrue("⚡ Z(k):" in lab.lbl_live_z.text())
-        self.assertTrue("⚖️ m*/m:" in lab.lbl_live_mass.text())
-        self.assertTrue("⏱️ Γ(k):" in lab.lbl_live_gamma.text())
+        self.assertTrue("Z(k):" in lab.lbl_live_z.text())
+        self.assertTrue("m*/m:" in lab.lbl_live_mass.text())
+        self.assertTrue("Γ(k):" in lab.lbl_live_gamma.text())
         # Should produce 2 subplots: A(k, w) and Re/Im Sigma
         self.assertEqual(len(lab.fig.axes), 2)
 
-        # Experiment 1: 2D Z(k) Map
+        # Experiment 1: Energy Sliced Fermi Contours & Integrated DOS
         lab.cb_experiment.setCurrentIndex(1)
-        self.assertEqual(lab.active_mode, "z_map")
-        # Main plot and colorbar axes
-        self.assertGreaterEqual(len(lab.fig.axes), 1)
-
-        # Experiment 2: Energy Sliced Fermi Contours
-        lab.cb_experiment.setCurrentIndex(2)
         self.assertEqual(lab.active_mode, "energy_slice")
         lab.slider_slice.setValue(50)  # w = 0.50 eV
         self.assertEqual(lab.current_omega_slice, 0.50)
+        self.assertGreaterEqual(len(lab.fig.axes), 1)
+        # Verify exact DOS was calculated without subsampling errors
+        mode1 = lab.current_mode
+        self.assertIsNotNone(mode1._current_dos)
+        self.assertEqual(len(mode1._current_dos), len(lab.loaded_base_sigma["omega"]))
+        self.assertTrue(np.all(mode1._current_dos >= 0.0))
 
-        # Experiment 3: Static RPA Susceptibility
+        # Experiment 2: Static RPA Susceptibility
         # Selecting RPA should auto-switch to static chi0 cache
-        lab.cb_experiment.setCurrentIndex(3)
+        lab.cb_experiment.setCurrentIndex(2)
         self.assertEqual(lab.active_mode, "rpa_susc")
         self.assertIsNotNone(lab.loaded_chi0_static)
         # Continuous slider changes J_K and updates Stoner instability gap

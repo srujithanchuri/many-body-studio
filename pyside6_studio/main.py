@@ -34,8 +34,8 @@ def configure_high_dpi():
 def main():
     configure_high_dpi()
     app = QApplication(sys.argv)
-    app.setApplicationName("Many-Body Physics Studio Pro • Alpha v3.5")
-    app.setApplicationVersion("alpha-v3.5")
+    app.setApplicationName("Many-Body Physics Studio Pro • Alpha v3.7")
+    app.setApplicationVersion("alpha-v3.7")
     app.setQuitOnLastWindowClosed(True)
     window = UnifiedWorkbenchWindow()
     window.showMaximized()
