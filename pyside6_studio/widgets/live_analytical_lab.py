@@ -138,14 +138,18 @@ def parse_cache_metadata(fname: str, ftype: str) -> dict:
 
 class ModernComboBox(QComboBox):
     """QComboBox that prevents long item text from artificially inflating minimumSizeHint."""
-    def __init__(self, parent=None, max_hint_width=160):
+    def __init__(self, parent=None, max_hint_width=180):
         super().__init__(parent)
         self._max_hint_width = max_hint_width
         self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.setMinimumContentsLength(12)
+        self.setMinimumContentsLength(8)
 
     def minimumSizeHint(self):
         sz = super().minimumSizeHint()
+        return QSize(min(sz.width(), self._max_hint_width), sz.height())
+
+    def sizeHint(self):
+        sz = super().sizeHint()
         return QSize(min(sz.width(), self._max_hint_width), sz.height())
 
 
@@ -267,13 +271,13 @@ class LiveAnalyticalLabWidget(QWidget):
             }
         """)
         h_lay = QVBoxLayout(self.header_frame)
-        h_lay.setContentsMargins(10, 6, 10, 6)
-        h_lay.setSpacing(6)
+        h_lay.setContentsMargins(6, 4, 6, 4)
+        h_lay.setSpacing(4)
 
         # Row 1: Mode + Foundation Cache + Quick Canvas Actions
         r1_lay = QHBoxLayout()
         r1_lay.setContentsMargins(0, 0, 0, 0)
-        r1_lay.setSpacing(8)
+        r1_lay.setSpacing(4)
         r1_lay.setAlignment(Qt.AlignVCenter)
 
         lbl_mode = QLabel("Mode:")
@@ -282,9 +286,9 @@ class LiveAnalyticalLabWidget(QWidget):
 
         combo_style = """
             QComboBox {
-                padding: 4px 22px 4px 8px;
+                padding: 2px 18px 2px 6px;
                 border: 1px solid #cbd5e1;
-                border-radius: 5px;
+                border-radius: 4px;
                 background: #ffffff;
                 color: #0f172a;
                 font-size: 11px;
@@ -294,7 +298,7 @@ class LiveAnalyticalLabWidget(QWidget):
             QComboBox::drop-down {
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
-                width: 18px;
+                width: 14px;
                 border-left: none;
             }
             QComboBox QAbstractItemView {
@@ -306,15 +310,14 @@ class LiveAnalyticalLabWidget(QWidget):
             }
         """
 
-        self.cb_experiment = ModernComboBox(max_hint_width=180)
-        self.cb_experiment.setStyleSheet(combo_style + "QComboBox { font-weight: 600; min-width: 130px; }")
+        self.cb_experiment = ModernComboBox(max_hint_width=135)
+        self.cb_experiment.setStyleSheet(combo_style + "QComboBox { font-weight: 600; min-width: 85px; max-width: 110px; }")
+        self.cb_experiment.setMaximumWidth(135)
         self.cb_experiment.addItems([
             self.modes[m_id].display_name for m_id in self.mode_order
         ])
         self.cb_experiment.currentIndexChanged.connect(self._on_experiment_changed)
         r1_lay.addWidget(self.cb_experiment)
-
-        r1_lay.addSpacing(6)
 
         # Chemical potential mu filter with pre-filled cached values and free-typing
         lbl_mu = QLabel("μ:")
@@ -324,7 +327,8 @@ class LiveAnalyticalLabWidget(QWidget):
         self.cb_filter_mu = QComboBox()
         self.cb_filter_mu.setEditable(True)
         self.cb_filter_mu.setInsertPolicy(QComboBox.NoInsert)
-        self.cb_filter_mu.setStyleSheet(combo_style + "QComboBox { min-width: 52px; max-width: 68px; font-weight: 600; }")
+        self.cb_filter_mu.setStyleSheet(combo_style + "QComboBox { min-width: 22px; max-width: 26px; font-weight: 600; padding: 2px 8px 2px 4px; }")
+        self.cb_filter_mu.setFixedWidth(40)
         self.cb_filter_mu.addItem("")  # Blank default implies all mu
         if self.cb_filter_mu.lineEdit():
             self.cb_filter_mu.lineEdit().clear()
@@ -334,32 +338,33 @@ class LiveAnalyticalLabWidget(QWidget):
 
         self.btn_clear_mu = QPushButton("✕")
         self.btn_clear_mu.setToolTip("Clear μ filter (show all caches)")
+        self.btn_clear_mu.setFixedSize(16, 20)
         self.btn_clear_mu.setStyleSheet("""
             QPushButton {
-                padding: 1px 4px;
+                padding: 1px 2px;
                 background: #f1f5f9;
                 border: 1px solid #cbd5e1;
                 border-radius: 4px;
                 font-size: 10px;
                 font-weight: bold;
                 color: #64748b;
-                min-width: 18px;
-                max-width: 18px;
-                min-height: 20px;
+                min-width: 15px;
+                max-width: 15px;
+                min-height: 18px;
+                max-height: 18px;
             }
             QPushButton:hover { background: #fee2e2; border-color: #ef4444; color: #dc2626; }
         """)
         self.btn_clear_mu.clicked.connect(self._clear_mu_filter)
         r1_lay.addWidget(self.btn_clear_mu)
 
-        r1_lay.addSpacing(6)
-
         lbl_cache = QLabel("Cache:")
         lbl_cache.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
         r1_lay.addWidget(lbl_cache)
 
-        self.cb_cache_file = ModernComboBox(max_hint_width=290)
-        self.cb_cache_file.setStyleSheet(combo_style + "QComboBox { min-width: 170px; max-width: 320px; }")
+        self.cb_cache_file = ModernComboBox(max_hint_width=165)
+        self.cb_cache_file.setStyleSheet(combo_style + "QComboBox { min-width: 95px; max-width: 140px; }")
+        self.cb_cache_file.setMaximumWidth(165)
         self.cb_cache_file.currentIndexChanged.connect(self._on_cache_selected)
         r1_lay.addWidget(self.cb_cache_file)
 
@@ -368,20 +373,19 @@ class LiveAnalyticalLabWidget(QWidget):
         self.btn_rescan.setVisible(False)
         self.btn_rescan.clicked.connect(self.scan_caches)
 
-        r1_lay.addSpacing(6)
-
         # Frequency range options for Spectral Function mode (±8 eV or ±15 eV, non-adaptive)
         # Kept immediately adjacent to Cache box as requested
         self.container_wmax = QWidget()
         wmax_lay = QHBoxLayout(self.container_wmax)
         wmax_lay.setContentsMargins(0, 0, 0, 0)
-        wmax_lay.setSpacing(3)
+        wmax_lay.setSpacing(2)
         wmax_lay.setAlignment(Qt.AlignVCenter)
         lbl_w = QLabel("ω:")
         lbl_w.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
         wmax_lay.addWidget(lbl_w)
-        self.cb_wmax = ModernComboBox(max_hint_width=72)
-        self.cb_wmax.setStyleSheet(combo_style + "QComboBox { min-width: 58px; max-width: 72px; font-weight: 600; padding: 3px 18px 3px 6px; }")
+        self.cb_wmax = ModernComboBox(max_hint_width=52)
+        self.cb_wmax.setStyleSheet(combo_style + "QComboBox { min-width: 28px; max-width: 34px; font-weight: 600; padding: 2px 8px 2px 4px; }")
+        self.cb_wmax.setFixedWidth(52)
         self.cb_wmax.addItems(["±8 eV", "±15 eV"])
         self.cb_wmax.currentIndexChanged.connect(self._on_wmax_changed)
         wmax_lay.addWidget(self.cb_wmax)
@@ -393,32 +397,35 @@ class LiveAnalyticalLabWidget(QWidget):
         # Canvas quick actions directly on header
         btn_action_style = """
             QPushButton {
-                padding: 3px 8px;
+                padding: 2px 6px;
                 background: #ffffff;
                 border: 1px solid #cbd5e1;
-                border-radius: 5px;
+                border-radius: 4px;
                 font-size: 11px;
                 font-weight: 600;
                 color: #334155;
             }
             QPushButton:hover { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
         """
-        self.btn_reset = QPushButton("🔄 Reset")
+        self.btn_reset = QPushButton("Reset")
         self.btn_reset.setToolTip("Reset view, zoom, slice, and pinned coordinates to default")
         self.btn_reset.setStyleSheet(btn_action_style)
+        self.btn_reset.setFixedWidth(46)
         self.btn_reset.clicked.connect(self._reset_view)
         self.btn_fit = self.btn_reset  # Backwards compatibility alias
         r1_lay.addWidget(self.btn_reset)
 
-        self.btn_copy = QPushButton("📋 Copy")
+        self.btn_copy = QPushButton("Copy")
         self.btn_copy.setToolTip("Copy high-resolution figure to clipboard (300 DPI)")
         self.btn_copy.setStyleSheet(btn_action_style)
+        self.btn_copy.setFixedWidth(44)
         self.btn_copy.clicked.connect(self._copy_figure_to_clipboard)
         r1_lay.addWidget(self.btn_copy)
 
-        self.btn_save = QPushButton("💾 Save")
+        self.btn_save = QPushButton("Save")
         self.btn_save.setToolTip("Save publication figure (PNG, PDF, SVG)")
         self.btn_save.setStyleSheet(btn_action_style)
+        self.btn_save.setFixedWidth(44)
         self.btn_save.clicked.connect(self._save_figure_dialog)
         r1_lay.addWidget(self.btn_save)
 

@@ -23,7 +23,7 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
     """Mode: Interactive Energy-Momentum Dynamic RPA Susceptibility [-Im χ_RPA(q, ω)]."""
 
     mode_id = "dynamic_susc"
-    display_name = "Dynamic Susceptibility [χ(q, ω)]"
+    display_name = "Dynamic Susceptibility"
     required_cache_type = "chi0_dynamic"
 
     def __init__(self, lab):

@@ -20,7 +20,7 @@ class SpectralFunctionMode(BaseAnalyticalMode):
     """Mode 0: Probes A(k, ω) and self-energy Re Σ, Im Σ at a given momentum k."""
 
     mode_id = "k_probe"
-    display_name = "Spectral Function [A(k, ω)]"
+    display_name = "Spectral Function"
     required_cache_type = "sigma"
 
     def __init__(self, lab):

@@ -71,7 +71,7 @@ class EnergySliceMode(BaseAnalyticalMode):
     """Mode 1: Dual-Panel DOS / Fermi Surface [A(k, ω)]."""
 
     mode_id = "energy_slice"
-    display_name = "DOS / FS [A(k, ω)]"
+    display_name = "Fermi Surface / DOS"
     required_cache_type = "sigma"
 
     def __init__(self, lab):

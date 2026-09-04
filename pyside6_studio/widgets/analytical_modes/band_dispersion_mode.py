@@ -34,7 +34,7 @@ class BandDispersionMode(BaseAnalyticalMode):
     """Mode: Interactive Energy-Momentum Band Dispersion [A(k_path, ω)]."""
 
     mode_id = "band_dispersion"
-    display_name = "Band Dispersion [A(k, ω)]"
+    display_name = "Band Dispersion"
     required_cache_type = "sigma"
 
     def __init__(self, lab):

@@ -23,7 +23,7 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
     """Mode: Static magnetic susceptibility χ_RPA(q) and Stoner instability gap."""
 
     mode_id = "static_susc"
-    display_name = "Static Susceptibility [χ(q)]"
+    display_name = "Static Susceptibility"
     required_cache_type = "chi0_static"
 
     def __init__(self, lab):
