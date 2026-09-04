@@ -331,22 +331,33 @@ class UnifiedWorkbenchWindow(QMainWindow):
         lbl_persp.setStyleSheet("font-weight: 700; color: #64748b; font-size: 11px;")
         self.tb.addWidget(lbl_persp)
 
+        # Unified Segmented Capsule for Workspace Modes
+        self.mode_container = QFrame()
+        self.mode_container.setObjectName("ModeSegmentedContainer")
+        mc_lay = QHBoxLayout(self.mode_container)
+        mc_lay.setContentsMargins(2, 2, 2, 2)
+        mc_lay.setSpacing(2)
+
         self.btn_mode_sim = QPushButton("🔬 Simulation Studio")
         self.btn_mode_sim.setObjectName("ModeSimActive")
+        self.btn_mode_sim.setCursor(Qt.PointingHandCursor)
         self.btn_mode_sim.clicked.connect(lambda: self.set_perspective("simulation"))
-        self.tb.addWidget(self.btn_mode_sim)
+        mc_lay.addWidget(self.btn_mode_sim)
 
-        self.btn_mode_pub = QPushButton("🎨 Publication Figure Studio")
+        self.btn_mode_pub = QPushButton("🎨 Publication Figures")
         self.btn_mode_pub.setObjectName("ModeInactive")
+        self.btn_mode_pub.setCursor(Qt.PointingHandCursor)
         self.btn_mode_pub.clicked.connect(lambda: self.set_perspective("publication"))
-        self.tb.addWidget(self.btn_mode_pub)
+        mc_lay.addWidget(self.btn_mode_pub)
+
+        self.tb.addWidget(self.mode_container)
 
         self.tb.addSeparator()
 
         # Simulation Studio Toolbar Actions
         self.btn_run = QToolButton()
-        self.btn_run.setObjectName("PrimaryBtn")
-        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setObjectName("BtnRun")
+        self.btn_run.setText("▶ Run Calculation")
         self.btn_run.setToolTip(f"Run {self.active_study} (Click arrow for other studies)")
         self.btn_run.setPopupMode(QToolButton.MenuButtonPopup)
         self.btn_run.setFixedWidth(160)
@@ -1781,6 +1792,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_mode_pub.setObjectName("ModeInactive")
             self.btn_mode_sim.setStyleSheet("")
             self.btn_mode_pub.setStyleSheet("")
+            for btn in (self.btn_mode_sim, self.btn_mode_pub):
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
 
             # Show simulation buttons, hide publication buttons
             self.action_run.setVisible(True)
@@ -1810,6 +1824,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_mode_pub.setObjectName("ModePubActive")
             self.btn_mode_sim.setStyleSheet("")
             self.btn_mode_pub.setStyleSheet("")
+            for btn in (self.btn_mode_sim, self.btn_mode_pub):
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
 
             # Hide simulation runner buttons, show publication export buttons
             self.action_run.setVisible(False)
@@ -1890,7 +1907,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     # =========================================================================
     def set_active_study(self, study_name):
         self.active_study = study_name
-        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setText("▶ Run Calculation")
         self.btn_run.setToolTip(f"Run {study_name} (Click arrow for study choices)")
         if self.cb_active_study.currentText() != study_name:
             self.cb_active_study.setCurrentText(study_name)
@@ -2197,7 +2214,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_completed(self, payload: dict):
         self.btn_run.setEnabled(True)
-        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setText("▶ Run Calculation")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"✅ Completed: {self.active_study} finished • Loaded into viewport.")
@@ -2260,7 +2277,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_error(self, error_msg: str):
         self.btn_run.setEnabled(True)
-        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setText("▶ Run Calculation")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText(f"❌ Error: {error_msg}")
@@ -2273,7 +2290,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_cancelled(self):
         self.btn_run.setEnabled(True)
-        self.btn_run.setText("⚡ Run Calculation")
+        self.btn_run.setText("▶ Run Calculation")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏹ Cancel / Stop")
         self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")

@@ -393,29 +393,66 @@ QPushButton#BtnCancel:disabled {
     font-weight: 500;
 }
 
-QPushButton#ModeSimActive {
+/* IDE Run Button (Emerald Green) */
+QPushButton#BtnRun:enabled, QToolButton#BtnRun:enabled {
+    background: #16a34a;
+    color: #ffffff;
+    border: 1px solid #15803d;
+    border-radius: 6px;
+    font-weight: 700;
+    padding: 6px 14px;
+}
+QPushButton#BtnRun:enabled:hover, QToolButton#BtnRun:enabled:hover {
+    background: #15803d;
+    border-color: #166534;
+}
+QPushButton#BtnRun:pressed, QToolButton#BtnRun:pressed {
+    background: #14532d;
+}
+QPushButton#BtnRun:disabled, QToolButton#BtnRun:disabled {
+    background: #e2e8f0;
+    color: #94a3b8;
+    border: 1px solid #cbd5e1;
+    font-weight: 500;
+}
+QToolButton#BtnRun::menu-button {
+    border-left: 1px solid #15803d;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    width: 18px;
+    background: transparent;
+}
+QToolButton#BtnRun::menu-button:hover {
+    background: #15803d;
+}
+QToolButton#BtnRun::menu-arrow {
+    image: url("@ICONS_DIR@/combo_down_dark.png");
+    width: 8px;
+    height: 8px;
+}
+
+/* Mode Segmented Capsule */
+QFrame#ModeSegmentedContainer {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    padding: 2px;
+}
+QPushButton#ModeSimActive, QPushButton#ModePubActive {
     background: #2563eb;
     color: #ffffff;
     font-weight: 700;
-    border-radius: 6px;
+    border-radius: 5px;
     border: none;
-    padding: 6px 14px;
-}
-QPushButton#ModePubActive {
-    background: #7c3aed;
-    color: #ffffff;
-    font-weight: 700;
-    border-radius: 6px;
-    border: none;
-    padding: 6px 14px;
+    padding: 5px 14px;
 }
 QPushButton#ModeInactive {
-    background: #f1f5f9;
-    color: #64748b;
+    background: transparent;
+    color: #475569;
     font-weight: 600;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 14px;
 }
 QPushButton#ModeInactive:hover {
     background: #e2e8f0;
@@ -902,32 +939,69 @@ QPushButton#BtnCancel:disabled {
     font-weight: 500;
 }
 
-QPushButton#ModeSimActive {
+/* IDE Run Button (Emerald Green) */
+QPushButton#BtnRun:enabled, QToolButton#BtnRun:enabled {
+    background: #059669;
+    color: #ffffff;
+    border: 1px solid #047857;
+    border-radius: 6px;
+    font-weight: 700;
+    padding: 6px 14px;
+}
+QPushButton#BtnRun:enabled:hover, QToolButton#BtnRun:enabled:hover {
+    background: #10b981;
+    border-color: #059669;
+}
+QPushButton#BtnRun:pressed, QToolButton#BtnRun:pressed {
+    background: #064e3b;
+}
+QPushButton#BtnRun:disabled, QToolButton#BtnRun:disabled {
+    background: #1e293b;
+    color: #64748b;
+    border: 1px solid #334155;
+    font-weight: 500;
+}
+QToolButton#BtnRun::menu-button {
+    border-left: 1px solid #047857;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    width: 18px;
+    background: transparent;
+}
+QToolButton#BtnRun::menu-button:hover {
+    background: #047857;
+}
+QToolButton#BtnRun::menu-arrow {
+    image: url("@ICONS_DIR@/combo_down_dark.png");
+    width: 8px;
+    height: 8px;
+}
+
+/* Mode Segmented Capsule */
+QFrame#ModeSegmentedContainer {
+    background: #0b1120;
+    border: 1px solid #334155;
+    border-radius: 7px;
+    padding: 2px;
+}
+QPushButton#ModeSimActive, QPushButton#ModePubActive {
     background: #2563eb;
     color: #ffffff;
     font-weight: 700;
-    border-radius: 6px;
+    border-radius: 5px;
     border: none;
-    padding: 6px 14px;
-}
-QPushButton#ModePubActive {
-    background: #8b5cf6;
-    color: #ffffff;
-    font-weight: 700;
-    border-radius: 6px;
-    border: none;
-    padding: 6px 14px;
+    padding: 5px 14px;
 }
 QPushButton#ModeInactive {
-    background: #1e293b;
+    background: transparent;
     color: #94a3b8;
     font-weight: 600;
-    border: 1px solid #475569;
-    border-radius: 6px;
-    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 14px;
 }
 QPushButton#ModeInactive:hover {
-    background: #334155;
+    background: #1e293b;
     color: #f8fafc;
 }
 
