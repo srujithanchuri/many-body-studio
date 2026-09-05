@@ -1,4 +1,4 @@
-"""Publication Figure Composer Engine for Many-Body Physics Studio.
+"""Figure Composer Engine for Many-Body Physics Studio.
 Directly loads raw numerical NumPy arrays from many_body_results/**/*.npz
 and renders multi-panel vector-grade figures with journal dimensions,
 LaTeX typography, and customizable colormaps.
@@ -43,13 +43,13 @@ def render_composite_figure(
     width_mm=178.0
 ):
     """
-    Renders a multi-panel publication composite figure directly from raw .npz data arrays.
+    Renders a multi-panel composite figure directly from raw .npz data arrays.
     Returns (png_bytes, matplotlib_figure)
     """
     data_files = find_data_files()
     width_in = width_mm / 25.4
 
-    # Configure publication aesthetics
+    # Configure figure aesthetics
     plt.rcParams.update({
         'font.size': font_size,
         'axes.labelsize': font_size + 1,

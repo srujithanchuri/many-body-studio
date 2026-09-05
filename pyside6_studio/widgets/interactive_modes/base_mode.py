@@ -1,7 +1,7 @@
 """
 base_mode.py
 -------------
-Defines the abstract base class BaseAnalyticalMode for analytical lab modes.
+Defines the abstract base class BaseInteractiveMode for analytical lab modes.
 Each mode encapsulates:
   1. Its own physics rendering logic (matplotlib plotting).
   2. Mode-specific contextual UI controls (e.g. momentum selector, energy slice slider).
@@ -12,17 +12,17 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pyside6_studio.widgets.live_analytical_lab import LiveAnalyticalLabWidget
+    from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
 
 
-class BaseAnalyticalMode(ABC):
+class BaseInteractiveMode(ABC):
     """Abstract base class for Live Analytical Lab modes."""
 
     mode_id: str = "base"
     display_name: str = "Base Mode"
     required_cache_type: str = "sigma"  # "sigma" or "chi0"
 
-    def __init__(self, lab: "LiveAnalyticalLabWidget"):
+    def __init__(self, lab: "InteractivePlotsWidget"):
         self.lab = lab
 
     @property
@@ -62,3 +62,7 @@ class BaseAnalyticalMode(ABC):
     def on_release(self, event) -> bool:
         """Handles mouse button release event on the canvas. Return True if handled."""
         return False
+
+
+# Backward-compatibility alias
+BaseAnalyticalMode = BaseInteractiveMode

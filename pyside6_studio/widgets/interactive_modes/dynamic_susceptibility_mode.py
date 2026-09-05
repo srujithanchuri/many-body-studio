@@ -16,10 +16,10 @@ import matplotlib.colors as mcolors
 from matplotlib import ticker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
+from pyside6_studio.widgets.interactive_modes.base_mode import BaseInteractiveMode
 
 
-class DynamicSusceptibilityMode(BaseAnalyticalMode):
+class DynamicSusceptibilityMode(BaseInteractiveMode):
     """Mode: Interactive Energy-Momentum Dynamic RPA Susceptibility [-Im χ_RPA(q, ω)]."""
 
     mode_id = "dynamic_susc"
@@ -51,8 +51,6 @@ class DynamicSusceptibilityMode(BaseAnalyticalMode):
         self.lab.lbl_map_tip.setText(
             "💡 Tip: Dynamic susceptibility along Γ(0,0) → X(π,0) → M(π,π) → Γ(0,0) • Drag J_K / J_⊥ or change K"
         )
-        if hasattr(self.lab, "container_wmax"):
-            self.lab.container_wmax.setVisible(False)
         self.lab.lbl_live_z.setVisible(False)
         self.lab.lbl_live_gamma.setVisible(False)
         self.lab.lbl_live_mass.setVisible(False)

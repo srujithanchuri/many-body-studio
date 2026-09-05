@@ -445,7 +445,7 @@ QFrame#ModeSegmentedContainer {
     border-radius: 7px;
     padding: 2px;
 }
-QPushButton#ModeSimActive, QPushButton#ModePubActive {
+QPushButton#ModeSimActive, QPushButton#ModeComposerActive {
     background: #2563eb;
     color: #ffffff;
     font-weight: 700;
@@ -998,7 +998,7 @@ QFrame#ModeSegmentedContainer {
     border-radius: 7px;
     padding: 2px;
 }
-QPushButton#ModeSimActive, QPushButton#ModePubActive {
+QPushButton#ModeSimActive, QPushButton#ModeComposerActive {
     background: #2563eb;
     color: #ffffff;
     font-weight: 700;

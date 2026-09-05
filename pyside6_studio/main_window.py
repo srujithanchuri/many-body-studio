@@ -42,7 +42,7 @@ from pyside6_studio.core import config
 from pyside6_studio.widgets.dataset_explorer import DatasetExplorerWidget
 from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas, VectorExportDialog
 from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot_metadata
-from pyside6_studio.widgets.live_analytical_lab import LiveAnalyticalLabWidget
+from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
 
 DEFAULT_RESULTS_DIR = r"C:\Users\sruji\Projects\masters_thesis_gui\results"
 
@@ -344,11 +344,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_mode_sim.clicked.connect(lambda: self.set_perspective("simulation"))
         mc_lay.addWidget(self.btn_mode_sim)
 
-        self.btn_mode_pub = QPushButton("🎨 Figure Composer")
-        self.btn_mode_pub.setObjectName("ModeInactive")
-        self.btn_mode_pub.setCursor(Qt.PointingHandCursor)
-        self.btn_mode_pub.clicked.connect(lambda: self.set_perspective("publication"))
-        mc_lay.addWidget(self.btn_mode_pub)
+        self.btn_mode_composer = QPushButton("🎨 Figure Composer")
+        self.btn_mode_composer.setObjectName("ModeInactive")
+        self.btn_mode_composer.setCursor(Qt.PointingHandCursor)
+        self.btn_mode_composer.clicked.connect(lambda: self.set_perspective("composer"))
+        mc_lay.addWidget(self.btn_mode_composer)
 
         self.tb.addWidget(self.mode_container)
 
@@ -390,7 +390,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_split.setVisible(False)
         self.action_split = None
 
-        # Publication Studio Toolbar Actions (Hidden by default in Simulation Mode)
+        # Figure Composer Toolbar Actions (Hidden by default in Simulation Mode)
         self.btn_export_pdf = QPushButton("📄 Save Vector PDF for LaTeX (300 DPI)")
         self.btn_export_pdf.setObjectName("PrimaryBtn")
         self.btn_export_pdf.clicked.connect(self.export_pdf_dialog)
@@ -468,13 +468,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.central_view_stack = QStackedWidget()
 
-        # Page 0: CAD Publication Raster Split-View Canvas (QGraphicsView)
+        # Page 0: CAD Plot Viewer Canvas (QGraphicsView)
         self.figure_view_container = QWidget()
         fig_lay = QVBoxLayout(self.figure_view_container)
         fig_lay.setContentsMargins(0, 0, 0, 0)
         fig_lay.setSpacing(4)
 
-        # Action bar for Publication Figure (matching the old GUI baseline)
+        # Action bar for Plot Viewer (matching the old GUI baseline)
         fig_toolbar = QHBoxLayout()
         fig_toolbar.setContentsMargins(4, 2, 4, 2)
         fig_toolbar.setSpacing(6)
@@ -531,9 +531,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         # Page 1: Interactive Plots (Real-time 60 FPS BZ probe, Fermi surfaces & continuous J_K scaling)
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
-        self.analytical_lab = LiveAnalyticalLabWidget(out_dir=out_dir, parent=self)
-        self.interactive_plots = self.analytical_lab
-        self.central_view_stack.addWidget(self.analytical_lab)
+        self.interactive_plots = InteractivePlotsWidget(out_dir=out_dir, parent=self)
+        self.analytical_lab = self.interactive_plots  # Alias for backward compatibility
+        self.central_view_stack.addWidget(self.interactive_plots)
 
         layout.addWidget(self.central_view_stack, 1)
         self.setCentralWidget(self.central_container)
@@ -594,24 +594,24 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.gallery.sig_plot_selected.connect(self._on_gallery_plot_selected)
         self.nav_stack.addWidget(self.gallery)
 
-        # PAGE 1: Publication Multi-Panel Layout Assigner
-        p_pub = QWidget()
-        l_pub = QVBoxLayout(p_pub)
-        l_pub.setContentsMargins(4, 4, 4, 4)
+        # PAGE 1: Figure Composer Multi-Panel Layout Assigner
+        p_composer = QWidget()
+        l_composer = QVBoxLayout(p_composer)
+        l_composer.setContentsMargins(4, 4, 4, 4)
 
         grp_panels = ModernCard("Multi-Panel Dataset Assignment")
         gp_lay = QVBoxLayout(grp_panels)
 
         gp_lay.addWidget(QLabel("Layout Template:"))
-        self.cb_pub_template = ModernComboBox()
-        self.cb_pub_template.addItems([
+        self.cb_composer_template = ModernComboBox()
+        self.cb_composer_template.addItems([
             "3-Panel Row [DOS (a) | Fermi Surface (b) | Path (c)]",
             "2-Panel Comparison [Static χ(q) | Dynamic χ(q, ω)]",
             "2x2 Full Suite [DOS | FS | Path | Phase Diagram]",
             "1x1 Single Focus Figure"
         ])
-        self.cb_pub_template.currentIndexChanged.connect(self._update_publication_preview)
-        gp_lay.addWidget(self.cb_pub_template)
+        self.cb_composer_template.currentIndexChanged.connect(self._update_composer_preview)
+        gp_lay.addWidget(self.cb_composer_template)
 
         gp_lay.addWidget(QLabel("\nPanel (a) Data Source:"))
         self.cb_panel_a = ModernComboBox()
@@ -632,12 +632,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         btn_refresh_comp = QPushButton("🔄 Refresh Composite Preview")
         btn_refresh_comp.setObjectName("PrimaryBtn")
-        btn_refresh_comp.clicked.connect(self._update_publication_preview)
+        btn_refresh_comp.clicked.connect(self._update_composer_preview)
         gp_lay.addWidget(btn_refresh_comp)
 
-        l_pub.addWidget(grp_panels)
-        l_pub.addStretch()
-        self.nav_stack.addWidget(p_pub)
+        l_composer.addWidget(grp_panels)
+        l_composer.addStretch()
+        self.nav_stack.addWidget(p_composer)
 
         self.dock_nav.setWidget(self.nav_stack)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.dock_nav)
@@ -1044,9 +1044,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         lay_sim.addStretch()
         self.inspector_stack.addWidget(panel_sim)
 
-        # PAGE 2: Publication Figure Styling & Typography
-        panel_pub = QWidget()
-        lay_pub = QVBoxLayout(panel_pub); lay_pub.setContentsMargins(4, 4, 4, 4)
+        # PAGE 2: Figure Composer Styling & Typography
+        panel_composer = QWidget()
+        lay_composer = QVBoxLayout(panel_composer); lay_composer.setContentsMargins(4, 4, 4, 4)
 
         grp_journal = ModernCard("Journal Dimensions && Standards")
         gj = QVBoxLayout(grp_journal)
@@ -1066,10 +1066,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gj.addWidget(self.cb_font_family)
 
         gj.addWidget(QLabel("Label Font Size:"))
-        self.cb_pub_font_size = ModernComboBox()
-        self.cb_pub_font_size.addItems(["9 pt (Standard Journal)", "10 pt (Thesis Standard)", "12 pt (Presentation)"])
-        gj.addWidget(self.cb_pub_font_size)
-        lay_pub.addWidget(grp_journal)
+        self.cb_composer_font_size = ModernComboBox()
+        self.cb_composer_font_size.addItems(["9 pt (Standard Journal)", "10 pt (Thesis Standard)", "12 pt (Presentation)"])
+        gj.addWidget(self.cb_composer_font_size)
+        lay_composer.addWidget(grp_journal)
 
         grp_style = ModernCard("Colormaps && Aesthetics")
         gs = QVBoxLayout(grp_style)
@@ -1086,7 +1086,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.chk_latex_ticks = QCheckBox("Render Axes with LaTeX Greek (π, ω, μ)")
         self.chk_latex_ticks.setChecked(True)
         gs.addWidget(self.chk_latex_ticks)
-        lay_pub.addWidget(grp_style)
+        lay_composer.addWidget(grp_style)
 
         grp_exp = ModernCard("Export && LaTeX Integration")
         ge = QVBoxLayout(grp_exp)
@@ -1102,10 +1102,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         b_code = QPushButton("📋 Copy LaTeX \\includegraphics Snippet")
         b_code.clicked.connect(self.copy_latex_snippet)
         ge.addWidget(b_code)
-        lay_pub.addWidget(grp_exp)
+        lay_composer.addWidget(grp_exp)
 
-        lay_pub.addStretch()
-        self.inspector_stack.addWidget(panel_pub)
+        lay_composer.addStretch()
+        self.inspector_stack.addWidget(panel_composer)
 
         self.inspector_scroll.setWidget(self.inspector_stack)
         self.dock_inspector.setWidget(self.inspector_scroll)
@@ -1271,10 +1271,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if hasattr(self, "gallery"):
             self.gallery.set_output_dir(out_dir)
 
-        if hasattr(self, "analytical_lab"):
-            self.analytical_lab.set_output_dir(out_dir)
+        if hasattr(self, "interactive_plots"):
+            self.interactive_plots.set_output_dir(out_dir)
 
-        # Update Active Plot combobox in publication toolbar
+        # Update Active Plot combobox in Plot Viewer toolbar
         if hasattr(self, "cb_active_plot") and hasattr(self, "gallery"):
             self.cb_active_plot.blockSignals(True)
             self.cb_active_plot.clear()
@@ -1296,7 +1296,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
                         self.cb_active_plot.blockSignals(False)
                         break
 
-        # Also update publication panel comboboxes if they exist
+        # Also update Figure Composer panel comboboxes if they exist
         if hasattr(self, "cb_panel_a"):
             plot_names = list(self.plots.keys())
             for cb in [self.cb_panel_a, self.cb_panel_b, self.cb_panel_c]:
@@ -1791,16 +1791,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
     # =========================================================================
     def set_perspective(self, mode):
         self.current_perspective = mode
-        if mode == "simulation":
+        if mode in ("simulation", "sim"):
             self.btn_mode_sim.setObjectName("ModeSimActive")
-            self.btn_mode_pub.setObjectName("ModeInactive")
+            self.btn_mode_composer.setObjectName("ModeInactive")
             self.btn_mode_sim.setStyleSheet("")
-            self.btn_mode_pub.setStyleSheet("")
-            for btn in (self.btn_mode_sim, self.btn_mode_pub):
+            self.btn_mode_composer.setStyleSheet("")
+            for btn in (self.btn_mode_sim, self.btn_mode_composer):
                 btn.style().unpolish(btn)
                 btn.style().polish(btn)
 
-            # Show simulation buttons, hide publication buttons
+            # Show simulation buttons, hide composer buttons
             self.action_run.setVisible(True)
             self.action_cancel.setVisible(True)
             self.action_queue.setVisible(True)
@@ -1825,14 +1825,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         else:
             self.btn_mode_sim.setObjectName("ModeInactive")
-            self.btn_mode_pub.setObjectName("ModePubActive")
+            self.btn_mode_composer.setObjectName("ModeComposerActive")
             self.btn_mode_sim.setStyleSheet("")
-            self.btn_mode_pub.setStyleSheet("")
-            for btn in (self.btn_mode_sim, self.btn_mode_pub):
+            self.btn_mode_composer.setStyleSheet("")
+            for btn in (self.btn_mode_sim, self.btn_mode_composer):
                 btn.style().unpolish(btn)
                 btn.style().polish(btn)
 
-            # Hide simulation runner buttons, show publication export buttons
+            # Hide simulation runner buttons, show composer export buttons
             self.action_run.setVisible(False)
             self.action_cancel.setVisible(False)
             self.action_queue.setVisible(False)
@@ -1849,22 +1849,22 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 self.canvas_right.setVisible(False)
                 self.btn_split.setChecked(False)
 
-            # Switch docks to Publication pages
+            # Switch docks to Figure Composer pages
             self.nav_stack.setCurrentIndex(1)
             self.dock_nav.setWindowTitle("🎨 Multi-Panel Subplot Layout")
 
             self.inspector_stack.setCurrentIndex(1)
             self.dock_inspector.setWindowTitle("🎨 Figure Styling & Typography")
 
-            # Render publication layout
-            self._update_publication_preview()
+            # Render composer layout
+            self._update_composer_preview()
             self.lbl_status.setText("Mode: [Figure Composer] — Compose multi-panel figures for LaTeX.")
 
     # =========================================================================
-    # PUBLICATION FIGURE DISPLAY
+    # FIGURE COMPOSER DISPLAY
     # =========================================================================
-    def _update_publication_preview(self):
-        idx = self.cb_pub_template.currentIndex()
+    def _update_composer_preview(self):
+        idx = self.cb_composer_template.currentIndex()
         if idx == 0:
             p = self.plots.get("sweep_FS_atJ_perp_6.0_mu_1.0.png") or (list(self.plots.values())[0] if self.plots else None)
         elif idx == 1:
@@ -1876,20 +1876,20 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         if p:
             self.canvas_left.load_image(p)
-            self.lbl_status.setText(f"Publication Composite: {self.cb_pub_template.currentText()}")
+            self.lbl_status.setText(f"Figure Composite: {self.cb_composer_template.currentText()}")
 
     def export_pdf_dialog(self):
-        dest, _ = QFileDialog.getSaveFileName(self, "Export Publication Vector PDF", "thesis_composite_figure.pdf", "PDF Documents (*.pdf)")
+        dest, _ = QFileDialog.getSaveFileName(self, "Export Vector PDF", "thesis_composite_figure.pdf", "PDF Documents (*.pdf)")
         if dest:
             QMessageBox.information(
                 self, "Export Successful",
                 f"Generated Vector PDF:\n\n{dest}\n\n"
                 f"• Target Standard: {self.cb_target_journal.currentText()}\n"
                 f"• Colormap: {self.cb_cmap.currentText()}\n"
-                f"• Typography: {self.cb_font_family.currentText()} ({self.cb_pub_font_size.currentText()})\n"
+                f"• Typography: {self.cb_font_family.currentText()} ({self.cb_composer_font_size.currentText()})\n"
                 f"• Resolution: Infinite Vector Precision (LaTeX Ready)"
             )
-            self.lbl_status.setText(f"Exported publication PDF: {os.path.basename(dest)}")
+            self.lbl_status.setText(f"Exported composite PDF: {os.path.basename(dest)}")
 
     def copy_latex_snippet(self):
         code = r"""\begin{figure}[tbp]
@@ -2271,8 +2271,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.refresh_dataset_tree()
         self._update_cache_badge()
-        if hasattr(self, "analytical_lab") and self.analytical_lab:
-            self.analytical_lab.scan_caches()
+        if hasattr(self, "interactive_plots") and self.interactive_plots:
+            self.interactive_plots.scan_caches()
         if hasattr(self, "gallery") and self.gallery:
             self.gallery.refresh_gallery()
 
@@ -2446,8 +2446,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 self.btn_cancel.update()
                 self.refresh_dataset_tree()
                 self._update_cache_badge()
-                if hasattr(self, "analytical_lab") and self.analytical_lab:
-                    self.analytical_lab.scan_caches()
+                if hasattr(self, "interactive_plots") and self.interactive_plots:
+                    self.interactive_plots.scan_caches()
                 if hasattr(self, "gallery") and self.gallery:
                     self.gallery.refresh_gallery()
 

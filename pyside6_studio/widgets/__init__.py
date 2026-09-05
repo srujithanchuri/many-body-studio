@@ -6,17 +6,14 @@ Reusable UI viewports and workbenches:
 - PlotGalleryWidget: Left thumbnail card and compact list visual gallery browser.
 - DatasetExplorerWidget: Left dock dataset tree scanner with metadata inspection cards.
 - InteractiveDataCanvas: Dynamic multi-curve dataset slice plotter.
-- InteractivePlotsWidget / LiveAnalyticalLabWidget: 60 FPS real-time J_K coupler and analytical modes.
+- InteractivePlotsWidget: 60 FPS real-time J_K coupler and interactive plot modes.
 """
 
 from pyside6_studio.canvas import InteractivePlotCanvas
 from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot_metadata
 from pyside6_studio.widgets.dataset_explorer import DatasetExplorerWidget
 from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas
-from pyside6_studio.widgets.live_analytical_lab import (
-    LiveAnalyticalLabWidget,
-    InteractivePlotsWidget,
-)
+from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
 
 __all__ = [
     "InteractivePlotCanvas",
@@ -24,6 +21,5 @@ __all__ = [
     "parse_plot_metadata",
     "DatasetExplorerWidget",
     "InteractiveDataCanvas",
-    "LiveAnalyticalLabWidget",
     "InteractivePlotsWidget",
 ]

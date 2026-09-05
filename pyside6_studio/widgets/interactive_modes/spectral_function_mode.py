@@ -13,10 +13,10 @@ Features:
 """
 
 import numpy as np
-from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
+from pyside6_studio.widgets.interactive_modes.base_mode import BaseInteractiveMode
 
 
-class SpectralFunctionMode(BaseAnalyticalMode):
+class SpectralFunctionMode(BaseInteractiveMode):
     """Mode 0: Probes A(k, ω) and self-energy Re Σ, Im Σ at a given momentum k."""
 
     mode_id = "k_probe"
@@ -42,8 +42,7 @@ class SpectralFunctionMode(BaseAnalyticalMode):
         if hasattr(self.lab, "container_susc_params"):
             self.lab.container_susc_params.setVisible(False)
         self.lab.lbl_map_tip.setVisible(False)
-        if hasattr(self.lab, "container_wmax"):
-            self.lab.container_wmax.setVisible(True)
+        self.w_max = 8.0
         self.lab.lbl_live_z.setVisible(True)
         self.lab.lbl_live_gamma.setVisible(True)
         self.lab.lbl_live_mass.setVisible(True)

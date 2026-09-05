@@ -20,7 +20,7 @@ Features:
 
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
+from pyside6_studio.widgets.interactive_modes.base_mode import BaseInteractiveMode
 from pyside6_studio.core.cache_manager import get_ibz_indices_and_map, LazyIBZArray
 
 try:
@@ -67,7 +67,7 @@ if HAS_NUMBA:
 
 
 
-class EnergySliceMode(BaseAnalyticalMode):
+class EnergySliceMode(BaseInteractiveMode):
     """Mode 1: Dual-Panel DOS / Fermi Surface [A(k, ω)]."""
 
     mode_id = "energy_slice"
@@ -105,8 +105,6 @@ class EnergySliceMode(BaseAnalyticalMode):
             "Click DOS to slice • Right-click DOS resets • Double-click map opens A(k, ω)"
         )
         self.lab.lbl_map_tip.setVisible(True)
-        if hasattr(self.lab, "container_wmax"):
-            self.lab.container_wmax.setVisible(False)
         self.lab.lbl_live_z.setVisible(False)
         self.lab.lbl_live_gamma.setVisible(False)
         self.lab.lbl_live_mass.setVisible(False)

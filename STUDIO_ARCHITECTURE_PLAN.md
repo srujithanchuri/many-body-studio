@@ -28,11 +28,11 @@
 | Feature | Description | Benefit |
 |---|---|---|
 | **Dockable Multi-Window Layout** | Four specialized dock areas: Left Navigator, Central Canvas, Right Inspector, Bottom Drawer. | Can be rearranged, tabbed, collapsed, or undocked to a second monitor. |
-| **Smart Dataset Explorer (Left Panel)** | Dedicated view of finished publication plots and observable datasets with automatic run grouping and multi-file pairing. | Internal cache files removed to eliminate workspace clutter; clean research overview. |
+| **Smart Dataset Explorer (Left Panel)** | Dedicated view of finished plots and observable datasets with automatic run grouping and multi-file pairing. | Internal cache files removed to eliminate workspace clutter; clean research overview. |
 | **High-Precision Scientific Search** | Parameter-aware token search (`mu=1.0`, `JK=3.0`, `N=64`, `dos 6.0`) with numerical float parsing and instant tree auto-expansion. | Locates matching runs across thousands of files with typed accuracy. |
 | **Context-Adaptive Inspector** | The right-hand parameter inspector dynamically morphs its fields depending on the active study. | You only see the knobs relevant to your current calculation; zero visual clutter. |
 | **Pinned Hamiltonian Core** | Fundamental model variables ($t, t', \mu, K$) remain pinned at the bottom of the inspector. | Tweak band dispersion and chemical potential without navigating away. |
-| **Numerical Presets** | Three built-in presets: `Fast Preview (N=64)`, `Standard (N=100)`, `Production (N=256)`. | Instant switching between 1-second sanity checks and publication-grade runs. |
+| **Numerical Presets** | Three built-in presets: `Fast Preview (N=64)`, `Standard (N=100)`, `Production (N=256)`. | Instant switching between 1-second sanity checks and production-grade runs. |
 | **Hardware Diagnostics Badge** | Real-time detector reporting CUDA availability, GPU device name (e.g. *RTX 5060 Laptop GPU*), and VRAM status. | Transparent feedback on whether calculations run on GPU or CPU fallback. |
 | **Theme Engine** | Fluid switching between **Slate-50 Light** and **OLED Dark** stylesheets. | High-contrast readability during daytime research or low-light night sessions. |
 | **Keyboard Shortcuts** | `Ctrl+Enter` (Run Active), `Ctrl+Space` (Add to Queue), `Ctrl+F` (Fit Canvas), `Ctrl+T` (Theme). | High-speed ergonomics for power users. |
@@ -57,11 +57,11 @@
 
 | Feature | Description | Benefit |
 |---|---|---|
-| **Hybrid Canvas Architecture** | Seamlessly tabs between high-DPI raster/vector Publication Figures (`QGraphicsView`) and native Interactive Curves (`FigureCanvasQTAgg` / `pyqtgraph`). | Best of both worlds: publication-ready figure presentation alongside deep interactive data exploration. |
+| **Hybrid Canvas Architecture** | Seamlessly tabs between high-DPI raster/vector Plot Viewer (`QGraphicsView`) and native Interactive Curves (`FigureCanvasQTAgg` / `pyqtgraph`). | Best of both worlds: crisp figure presentation alongside deep interactive data exploration. |
 | **Interactive Curve Analytics** | Live crosshairs, curve toggle visibility, toolbar zoom/pan, coordinate readouts, and observable switching (DOS, self-energy slices, susceptibilities). | Direct physical insight from raw `.npz` arrays without having to open an external notebook. |
 | **Split-Screen Comparative Mode** | Side-by-side viewports (`QSplitter`) with synchronized or independent zoom/pan. | Instant comparison across coupling regimes (e.g. $J_K=3.0$ vs $J_K=9.0$) or cross-validation between datasets. |
 | **Hardware-Accelerated Smooth Zoom/Pan** | Subpixel rendering with smooth transformation anchors centered directly on cursor position. | Butter-smooth navigation of high-density colormaps and fine spectral features. |
-| **Publication Figure Quick Actions** | Context actions: `Copy to Clipboard`, `Save High-Res PNG`, `Open in System Viewer`, `Reveal in File Explorer`. | Instant workflow integration for drafting presentations and writing manuscripts. |
+| **Plot Viewer Quick Actions** | Context actions: `Copy to Clipboard`, `Save High-Res PNG`, `Open in System Viewer`, `Reveal in File Explorer`. | Instant workflow integration for drafting presentations and writing manuscripts. |
 
 ### 2.4 The Core Paradigm Shift: Static PNGs vs. Native Interactive Data
 
@@ -74,7 +74,7 @@ Rather than confining analysis to flat raster pictures, the Studio architecture 
 | **Interactive Crosshairs & Peak Readout** | Binds mouse cursor hover events over the 1D & 2D spectral arrays ($A(\mathbf{k}, \omega)$, $\operatorname{Im}\Sigma(\mathbf{k}, \omega)$, $\chi(\mathbf{q}, \omega)$). Real-time interpolation displays the exact numerical frequency $\omega$, quasiparticle energy shifts $\operatorname{Re}\Sigma$, scattering rates, and peak heights directly in the viewport readout HUD. | Quantitative extraction of quasiparticle lifetimes and peak positions on the fly without manual raw data exports. |
 | **Interactive Brillouin Zone Cutlines** | An interactive vector line tool drawn across the 2D Static Susceptibility $\chi(\mathbf{q})$ Brillouin zone map. Slicing through the underlying 2D array dynamically extracts and plots the 1D intensity profile $\chi(q)$ along that custom trajectory in a companion sub-view in real time. | Real-time exploration of incommensurate nesting peaks and directional anisotropy along arbitrary BZ paths. |
 | **Instant Parametric Sliders (Zero-Wait Physics)** | Because the bare bubble $\chi_0(\mathbf{q}, \omega)$ is computationally intensive but completely independent of $J_K$ and $J_\perp$, it is cached in RAM/disk. Dragging real-time interactive sliders for $J_K$ evaluates the scalar RPA inversion formula $\chi = \chi_0 / [1 - \Gamma \chi_0]$ instantaneously at **60 FPS** without recomputing the bubble. | Zero-wait physical exploration of magnetic phase boundaries and peak divergences in real time. |
-| **Vector Export on Demand** | One-click export of native figure elements to vector formats (**`.pdf`**, **`.svg`**, **`.eps`**) with embedded LaTeX fonts and scalable vector line art directly from the underlying data. | Thesis-ready, publication-grade vector graphics that scale infinitely in LaTeX documents without bitmap rasterization artifacts. |
+| **Vector Export on Demand** | One-click export of native figure elements to vector formats (**`.pdf`**, **`.svg`**, **`.eps`**) with embedded LaTeX fonts and scalable vector line art directly from the underlying data. | Thesis-ready vector graphics that scale infinitely in LaTeX documents without bitmap rasterization artifacts. |
 
 ---
 
@@ -118,10 +118,10 @@ masters_thesis_gui/
 ├── pyside6_studio/
 │   ├── __init__.py
 │   ├── main.py                  # Application entry point
-│   ├── main_window.py           # Flagship studio window (Simulation + Dummy Publication)
+│   ├── main_window.py           # Flagship studio window (Simulation Studio + Figure Composer)
 │   ├── theme.py                 # Slate-50 Light & Slate-900 Dark QSS
 │   ├── canvas.py                # High-performance CAD zoom/pan canvas (QGraphicsView)
-│   ├── composer.py              # Dummy publication figure composer (staged for future)
+│   ├── composer.py              # Figure Composer multi-panel engine
 │   │
 │   ├── core/                    # Engine Configuration & Diagnostics
 │   │   ├── __init__.py
@@ -177,7 +177,7 @@ masters_thesis_gui/
 1. **Interactive Crosshairs & Peak Readout**: Real-time HUD displaying numerical $\omega, A(\mathbf{k}, \omega), \operatorname{Re}\Sigma, \operatorname{Im}\Sigma, \chi(\mathbf{q}, \omega)$ on cursor hover.
 2. **Interactive Brillouin Zone Cutlines**: Free-hand or guided vector slice tool on 2D Static $\chi(\mathbf{q})$ maps extracting real-time 1D intensity cuts.
 3. **Instant Parametric Sliders (Zero-Wait Physics)**: GPU/RAM-cached bubble $\chi_0$ enables continuous 60 FPS slider manipulation of $J_K / J_\perp$ with instant RPA inversion.
-4. **Vector Export on Demand**: Direct export of figures to `.pdf`, `.svg`, and `.eps` with embedded LaTeX typography for thesis publication.
+4. **Vector Export on Demand**: Direct export of figures to `.pdf`, `.svg`, and `.eps` with embedded LaTeX typography for thesis manuscripts.
 
 ---
 

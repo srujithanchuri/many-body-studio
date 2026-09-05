@@ -8,7 +8,7 @@ Features:
         Γ(0, 0) -> M(π, π) -> X(π, 0) -> Γ(0, 0)
       * Bare non-interacting tight-binding dispersion ξ(k) overlaid (dashed curve)
       * High-symmetry boundary dividers and Fermi level (ω = 0)
-      * Exact publication color scaling: magma colormap with logarithmic normalization,
+      * Exact color scaling: magma colormap with logarithmic normalization,
         vmin=0.005, dynamic vmax, and exact LogLocator colorbar ticks.
   - Performance:
       * Exact 1/8th IBZ boundary mapping (all points lie directly on the IBZ perimeter).
@@ -26,11 +26,11 @@ import matplotlib.colors as mcolors
 import matplotlib.ticker as ticker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
+from pyside6_studio.widgets.interactive_modes.base_mode import BaseInteractiveMode
 from pyside6_studio.core.cache_manager import get_ibz_indices_and_map, LazyIBZArray
 
 
-class BandDispersionMode(BaseAnalyticalMode):
+class BandDispersionMode(BaseInteractiveMode):
     """Mode: Interactive Energy-Momentum Band Dispersion [A(k_path, ω)]."""
 
     mode_id = "band_dispersion"
@@ -83,13 +83,7 @@ class BandDispersionMode(BaseAnalyticalMode):
             self.lab.container_susc_params.setVisible(False)
         self.lab.lbl_map_tip.setText("💡 Tip: Band dispersion along high-symmetry path Γ(0, 0) → M(π, π) → X(π, 0) → Γ(0, 0) • Scroll to zoom, drag to pan")
         self.lab.lbl_map_tip.setVisible(True)
-        if hasattr(self.lab, "container_wmax"):
-            self.lab.container_wmax.setVisible(True)
-        if hasattr(self.lab, "cb_wmax"):
-            self.lab.cb_wmax.blockSignals(True)
-            self.lab.cb_wmax.setCurrentIndex(1)
-            self.lab.cb_wmax.blockSignals(False)
-        self.w_max = 15.0
+        self.w_max = 8.0
         self.lab.lbl_live_z.setVisible(False)
         self.lab.lbl_live_gamma.setVisible(False)
         self.lab.lbl_live_mass.setVisible(False)
@@ -97,13 +91,9 @@ class BandDispersionMode(BaseAnalyticalMode):
     def fit_view(self):
         self._user_xlim = None
         self._user_ylim = None
-        self.w_max = 15.0
-        if hasattr(self.lab, "cb_wmax"):
-            self.lab.cb_wmax.blockSignals(True)
-            self.lab.cb_wmax.setCurrentText("±15 eV")
-            self.lab.cb_wmax.blockSignals(False)
+        self.w_max = 8.0
         self.render()
-        self.lab.sig_status_msg.emit("Band dispersion view reset to full path (±15 eV).")
+        self.lab.sig_status_msg.emit("Band dispersion view reset to full path (±8 eV).")
 
     def reset_view(self):
         self.fit_view()
@@ -197,11 +187,8 @@ class BandDispersionMode(BaseAnalyticalMode):
             sr_path = sig_r[:, self._path_ix, self._path_iy].astype(np.float32)
             si_path = self._sig_im_clean[:, self._path_ix, self._path_iy].astype(np.float32)
 
-        # Apply frequency bounds (±8 eV or ±15 eV based on cb_wmax)
-        if hasattr(self.lab, "cb_wmax"):
-            self.w_max = 15.0 if self.lab.cb_wmax.currentIndex() == 1 else 8.0
-        else:
-            self.w_max = getattr(self, "w_max", 15.0)
+        # Apply fixed frequency bounds (±8.0 eV)
+        self.w_max = 8.0
         w_mask = np.abs(omega) <= (self.w_max + 1e-4)
         w_eval = omega[w_mask].astype(np.float32)
         sr_eval = sr_path[w_mask]

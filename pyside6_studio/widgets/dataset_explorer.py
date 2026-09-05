@@ -395,7 +395,7 @@ class DatasetExplorerWidget(QWidget):
         self.btn_row.setSpacing(4)
 
         self.btn_view_plot = QPushButton("👁️ View Plot")
-        self.btn_view_plot.setToolTip("View publication figure in presentation canvas")
+        self.btn_view_plot.setToolTip("View plot in Plot Viewer canvas")
         self.btn_view_plot.setStyleSheet("padding: 4px 8px; font-size: 11px; font-weight: 600;")
         self.btn_view_plot.clicked.connect(self._on_action_view_plot)
         self.btn_row.addWidget(self.btn_view_plot)
@@ -480,7 +480,7 @@ class DatasetExplorerWidget(QWidget):
         """Scans results folder and builds unified calculation run records."""
         results_dir, plots_dir, data_dir, _ = normalize_results_dir(self.out_dir)
 
-        # 1. Collect strictly observable outputs: publication plots and observable datasets (no cache)
+        # 1. Collect strictly observable outputs: generated plots and observable datasets (no cache)
         plots = [p for p in glob.glob(os.path.join(plots_dir, "*.*")) if p.lower().endswith((".png", ".pdf", ".svg"))]
         data_files = [d for d in glob.glob(os.path.join(data_dir, "*.npz"))]
 
@@ -906,7 +906,7 @@ class DatasetExplorerWidget(QWidget):
             meta = parse_filename_parameters(path)
 
             self.lbl_card_title.setText(base)
-            self.lbl_card_badge.setText("PUBLICATION PLOT")
+            self.lbl_card_badge.setText("PLOT FIGURE")
             self.lbl_card_badge.setStyleSheet("font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background-color: #dbeafe; color: #1e40af;")
             self.lbl_card_badge.setVisible(True)
             self.lbl_card_stats.setText(f"Size: {size}  •  Modified: {mtime}")

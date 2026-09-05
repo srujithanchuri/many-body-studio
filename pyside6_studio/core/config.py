@@ -51,7 +51,7 @@ PRESETS = {
         "Nw": 8001,
         "w_max": 40.0,
         "eta": 0.03,
-        "description": "Publication-grade resolution (~60-90s). Razor-sharp Fermi arcs and peak splitting."
+        "description": "Maximum production resolution (~60-90s). Razor-sharp Fermi arcs and peak splitting."
     }
 }
 

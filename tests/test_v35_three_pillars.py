@@ -1,6 +1,6 @@
 """Comprehensive test suite for the 2-Perspective Visualization Architecture:
-- Perspective 1: Publication Figures (PlotGalleryWidget + Interactive Canvas)
-- Perspective 2: Live Analytical Lab (LiveAnalyticalLabWidget + Cache-driven real-time physics)
+- Perspective 1: Figure Composer & Plot Viewer (PlotGalleryWidget + Interactive Canvas)
+- Perspective 2: Interactive Plots (InteractivePlotsWidget + Cache-driven real-time physics)
 - Dual-Perspective Integration in UnifiedWorkbenchWindow
 """
 
@@ -25,7 +25,7 @@ from pyside6_studio.widgets.gallery_browser import (
     CompactRowCard,
     parse_plot_metadata
 )
-from pyside6_studio.widgets.live_analytical_lab import LiveAnalyticalLabWidget
+from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
 from pyside6_studio.main_window import UnifiedWorkbenchWindow
 
 
@@ -43,7 +43,7 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         for d in [self.plots_dir, self.data_dir, self.cache_dir]:
             os.makedirs(d, exist_ok=True)
 
-        # Generate sample publication plots
+        # Generate sample plots
         self.plot_path_disp = os.path.join(self.plots_dir, "sweep_Path_atJ_perp_6.0_mu_1.0.png")
         self.plot_path_dos = os.path.join(self.plots_dir, "sweep_DOS_atJ_perp_6.0_mu_1.0.png")
         self.plot_path_fs = os.path.join(self.plots_dir, "sweep_FS_atJ_perp_6.0_mu_1.0.png")
@@ -211,11 +211,11 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         self.assertIsInstance(list(gallery.card_widgets.values())[0], ThumbnailCard)
 
     # -------------------------------------------------------------------------
-    # Perspective 2 Tests: Live Analytical Lab On-The-Fly Physics
+    # Perspective 2 Tests: Interactive Plots On-The-Fly Physics
     # -------------------------------------------------------------------------
-    def test_03_live_analytical_lab_experiments(self):
+    def test_03_interactive_plots_experiments(self):
         """Verifies cache discovery, real-time J_K scaling, and analytical experiments."""
-        lab = LiveAnalyticalLabWidget(out_dir=self.root)
+        lab = InteractivePlotsWidget(out_dir=self.root)
         lab.scan_caches()
 
         self.assertGreaterEqual(len(lab.scanned_caches), 2)

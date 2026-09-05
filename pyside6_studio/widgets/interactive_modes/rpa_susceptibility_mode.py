@@ -16,10 +16,10 @@ Features:
 
 import numpy as np
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from pyside6_studio.widgets.analytical_modes.base_mode import BaseAnalyticalMode
+from pyside6_studio.widgets.interactive_modes.base_mode import BaseInteractiveMode
 
 
-class StaticSusceptibilityMode(BaseAnalyticalMode):
+class StaticSusceptibilityMode(BaseInteractiveMode):
     """Mode: Static magnetic susceptibility χ_RPA(q) and Stoner instability gap."""
 
     mode_id = "static_susc"
@@ -52,8 +52,6 @@ class StaticSusceptibilityMode(BaseAnalyticalMode):
         self.lab.lbl_map_tip.setText(
             "💡 Tip: Hover to track q • Click to pin • Right-click to clear • Drag J_K / J_⊥ or change K for live RPA scaling"
         )
-        if hasattr(self.lab, "container_wmax"):
-            self.lab.container_wmax.setVisible(False)
         self.lab.lbl_live_z.setVisible(False)
         self.lab.lbl_live_gamma.setVisible(False)
         self.lab.lbl_live_mass.setVisible(False)

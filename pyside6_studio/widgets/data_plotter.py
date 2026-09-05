@@ -6,7 +6,7 @@ Key Capabilities (Studio Architecture Sections 2.3 & 2.4):
 2. Automated Quasiparticle Lifetime (τ), Weight (Z), and Peak Extraction.
 3. 2D Brillouin Zone Colormap with Interactive High-Symmetry & Arbitrary Momentum Slicing.
 4. Instant Zero-Wait RPA Parametric Coupler (60 FPS real-time J_K / J_⊥ sweep from cached χ₀).
-5. Thesis Publication Vector Export (PDF, SVG, EPS) with LaTeX Typography.
+5. Thesis Vector Export (PDF, SVG, EPS) with LaTeX Typography.
 """
 
 import os
@@ -29,12 +29,12 @@ from PySide6.QtWidgets import (
 
 
 class VectorExportDialog(QDialog):
-    """Dialog for configuring publication-grade vector export with LaTeX snippets."""
+    """Dialog for configuring vector export with LaTeX snippets."""
 
     def __init__(self, fig: Figure, parent=None):
         super().__init__(parent)
         self.fig = fig
-        self.setWindowTitle("Export Publication Vector Figure (LaTeX Ready)")
+        self.setWindowTitle("Export Vector Figure (LaTeX Ready)")
         self.resize(560, 420)
         self._build_ui()
 
@@ -64,7 +64,7 @@ class VectorExportDialog(QDialog):
         r2 = QHBoxLayout()
         r2.addWidget(QLabel("DPI Resolution:"))
         self.cb_dpi = QComboBox()
-        self.cb_dpi.addItems(["300 DPI (Standard Publication)", "600 DPI (Archival Ultra-Res)", "1200 DPI (Maximum Quality)"])
+        self.cb_dpi.addItems(["300 DPI (Standard Print / Vector)", "600 DPI (Archival Ultra-Res)", "1200 DPI (Maximum Quality)"])
         r2.addWidget(self.cb_dpi, 1)
         g_lay.addLayout(r2)
 
@@ -206,7 +206,7 @@ class InteractiveDataCanvas(QWidget):
         top_bar.addWidget(self.btn_reset_zoom)
 
         self.btn_vector_export = QPushButton("📄 Export Vector PDF...")
-        self.btn_vector_export.setToolTip("Export publication-grade vector graphics with LaTeX typography")
+        self.btn_vector_export.setToolTip("Export vector graphics with LaTeX typography")
         self.btn_vector_export.setStyleSheet("font-weight: 600; color: #1d4ed8; background-color: #eff6ff; border: 1px solid #bfdbfe;")
         self.btn_vector_export.clicked.connect(self.open_vector_export_dialog)
         top_bar.addWidget(self.btn_vector_export)
@@ -809,6 +809,6 @@ class InteractiveDataCanvas(QWidget):
         self.canvas.draw_idle()
 
     def open_vector_export_dialog(self):
-        """Launches publication vector export dialog."""
+        """Launches vector export dialog."""
         dlg = VectorExportDialog(self.fig, self)
         dlg.exec()
