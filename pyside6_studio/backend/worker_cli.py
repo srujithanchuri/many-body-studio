@@ -550,6 +550,118 @@ def run_susceptibility_task(params: dict, results_dir: str, out_plots_dir: str, 
     emit_completed(plot_path=primary_plot, data_path=primary_data, all_plots=all_plots)
 
 
+def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str, out_cache_dir: str):
+    """
+    Direct in-situ synthesizer for intermediate foundation arrays:
+    - Base Self-Energy Sigma_base(k, omega) (1-loop and 3-loop FFT)
+    - Bare Static Susceptibility chi0_static(q)
+    - Bare Dynamic Susceptibility chi0_dynamic(q, omega)
+
+    Skips batch loops and plotting routines entirely, executing in ~0.3s - 2.5s.
+    """
+    cache_category = params.get("cache_category", "sigma_base")  # "sigma_base", "chi0_static", "chi0_dynamic"
+    t = float(params.get("t", 1.0))
+    t1 = float(params.get("t1", 0.0))
+    mu = float(params.get("mu", 0.0))
+    K = float(params.get("K", 1.0))
+    N = int(params.get("N", 100))
+    raw_solver = params.get("solver_choice", "gpu").lower()
+    solver_choice = "cpu" if "cpu" in raw_solver else "gpu64"
+    force_recompute = bool(params.get("force_recompute", True))
+
+    if cache_category == "sigma_base" or "sigma" in cache_category:
+        fixed_jperp = float(params.get("fixed_jperp", params.get("Jperp", 6.0)))
+        num_omega = int(params.get("num_omega", params.get("Nw", 4801 if N >= 100 else 2001)))
+        omega_max = float(params.get("omega_max", params.get("w_max", 40.0 if N >= 100 else 20.0)))
+        eta = float(params.get("eta", 0.05 if N >= 100 else 0.08))
+
+        emit_status(f"Synthesizing Total Base Self-Energy Σ (1-Loop + 3-Loop) on {solver_choice.upper()} (N={N}, μ={mu:.1f}, J⊥={fixed_jperp:.1f})...")
+        from parameters import ModelParameters
+        import sweep_core
+
+        p = ModelParameters(
+            t=t, t1=t1, mu=mu, K=K,
+            N=N, num_omega=num_omega, omega_max=omega_max, eta=eta,
+            solver=solver_choice,
+            cpu_limit=0.80
+        )
+
+        sweep_core.run_J_k_sweep(
+            j_k_values=[1.0],
+            fixed_jperp=fixed_jperp,
+            mu=mu,
+            p=p,
+            output_dir=results_dir,
+            use_cache=True,
+            force_recompute=force_recompute
+        )
+
+        cache_name = sweep_core.get_sigma_base_filename(fixed_jperp, p)
+        target_fpath = os.path.join(out_cache_dir, cache_name)
+        if not os.path.exists(target_fpath):
+            target_fpath = os.path.join(out_data_dir, cache_name)
+
+        emit_status(f"✅ Total Base Self-Energy Foundation Σ (1-Loop + 3-Loop) synthesized: {cache_name}")
+        emit_completed(plot_path="", data_path=target_fpath, all_plots=[])
+
+    else:
+        SUSC_DIR = os.path.join(PROJECT_ROOT, "susceptibility")
+        if SUSC_DIR in sys.path:
+            sys.path.remove(SUSC_DIR)
+        sys.path.insert(0, SUSC_DIR)
+        if "solvers" in sys.modules:
+            del sys.modules["solvers"]
+        if "sweeper" in sys.modules:
+            del sys.modules["sweeper"]
+
+        if solver_choice == "cpu":
+            try:
+                from solvers import set_cpu_threads
+                total = os.cpu_count() or 4
+                workers = max(1, int(round(total * 0.80)))
+                set_cpu_threads(workers)
+            except Exception:
+                pass
+
+        import sweeper
+
+        is_dynamic = ("dynamic" in cache_category)
+        omega_max = float(params.get("omega_max", 10.0))
+        num_omega = int(params.get("num_omega", 600 if N <= 100 else 1600))
+        eta = float(params.get("eta", 0.01 if N <= 100 else 0.004))
+
+        emit_status(f"Synthesizing Bare {'Dynamic' if is_dynamic else 'Static'} χ₀ on {solver_choice.upper()} (N={N}, μ={mu:.1f})...")
+
+        sweeper.run_sweep(
+            run_static=not is_dynamic,
+            run_dynamic=is_dynamic,
+            sweep_mode="JK",
+            sweep_values=[1.0],
+            fixed_J=1.0,
+            mu=mu,
+            t=t,
+            t1=t1,
+            K_coupling=K,
+            N=N,
+            omega_max=omega_max,
+            num_omegas=num_omega,
+            eta=eta,
+            solver_choice=solver_choice,
+            output_dir=results_dir,
+            force_recompute=force_recompute
+        )
+
+        if is_dynamic:
+            cache_file = os.path.join(out_cache_dir, f"chi0_dynamic_t_{t:.2f}_t1_{t1:.2f}_mu_{mu:.2f}_K_{K:.2f}_N_{N}_wmax_{omega_max:.1f}_Nw_{num_omega}_eta_{eta:.4f}.npz")
+        else:
+            cache_file = os.path.join(out_cache_dir, f"chi0_static_t_{t:.2f}_t1_{t1:.2f}_mu_{mu:.2f}_K_{K:.2f}_N_{N}.npz")
+        if not os.path.exists(cache_file):
+            cache_file = ""
+
+        emit_status(f"✅ Bare χ₀ Foundation synthesized successfully (N={N}, μ={mu:.1f}).")
+        emit_completed(plot_path="", data_path=cache_file, all_plots=[])
+
+
 def run_worker(params: dict):
     """Dispatches requested calculation task."""
     task = params.get("task", "spectral_sweep").lower()
@@ -560,7 +672,9 @@ def run_worker(params: dict):
     results_dir, out_plots_dir, out_data_dir, out_cache_dir = normalize_results_dir(base_out_dir)
 
     try:
-        if "phase" in task or "diagram" in task or "bisection" in task:
+        if "foundation" in task or "direct_cache" in task or ("cache" in task and "sweep" not in task):
+            run_foundation_cache_task(params, results_dir, out_plots_dir, out_data_dir, out_cache_dir)
+        elif "phase" in task or "diagram" in task or "bisection" in task:
             run_phase_diagram_task(params, results_dir, out_plots_dir, out_data_dir)
         elif "susc" in task or "rpa" in task or "chi" in task:
             run_susceptibility_task(params, results_dir, out_plots_dir, out_data_dir)

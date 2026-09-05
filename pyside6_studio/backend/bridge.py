@@ -135,7 +135,7 @@ class CalculationBridge(QObject):
 
     def parse_line(self, line: str):
         """Parses stdout line; routes JSON status or plain log lines."""
-        if not line:
+        if self._was_cancelled or not line:
             return
 
         # Attempt to parse as JSON protocol
@@ -197,12 +197,23 @@ class CalculationBridge(QObject):
         self._was_cancelled = True
         pid_to_kill = self.pid
 
-        # Immediate non-blocking kill on active QProcess
-        if self._process and self._process.state() != QProcess.NotRunning:
-            self._process.kill()
+        # Disconnect IO signals immediately to suppress lingering buffer chunks
+        if self._process:
+            try:
+                self._process.readyReadStandardOutput.disconnect()
+            except Exception:
+                pass
+            try:
+                self._process.readyReadStandardError.disconnect()
+            except Exception:
+                pass
+
+            if self._process.state() != QProcess.NotRunning:
+                self._process.kill()
+
+        self._stdout_buffer = ""
 
         # Run auxiliary process tree taskkill and VRAM flush asynchronously in background thread
-        # so the GUI event loop never stalls or freezes
         import threading
         if pid_to_kill:
             threading.Thread(target=kill_process_tree, args=(pid_to_kill,), daemon=True).start()
@@ -238,6 +249,12 @@ class CalculationBridge(QObject):
 
     def _on_process_finished(self, exit_code: int, exit_status):
         """Handles process termination and exit code inspection."""
+        if self._was_cancelled:
+            self._running = False
+            import threading
+            threading.Thread(target=flush_gpu_vram, daemon=True).start()
+            return
+
         # Flush any remaining buffer
         if self._stdout_buffer.strip():
             self.parse_line(self._stdout_buffer.strip())
@@ -248,9 +265,6 @@ class CalculationBridge(QObject):
 
         was_running = self._running
         self._running = False
-
-        if self._was_cancelled:
-            return
 
         if exit_code != 0:
             self.sig_error.emit(f"Calculation process failed with exit code {exit_code}")

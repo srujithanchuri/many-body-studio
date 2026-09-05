@@ -23,7 +23,7 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSlider, QFrame, QMessageBox, QFileDialog, QDoubleSpinBox,
-    QSizePolicy
+    QSizePolicy, QToolButton, QMenu
 )
 
 from pyside6_studio.core.config import DEFAULT_RESULTS_DIR
@@ -42,6 +42,7 @@ from pyside6_studio.widgets.interactive_modes import (
     DynamicSusceptibilityMode,
     RpaSusceptibilityMode,
 )
+from pyside6_studio.widgets.foundation_cache_dialog import FoundationCacheDialog
 
 
 def format_smart_cache_label(fname: str, ftype: str) -> str:
@@ -148,6 +149,7 @@ class InteractivePlotsWidget(QWidget):
     Uses cached Base Sigma or Bare Chi0 to evaluate physical observables instantaneously.
     """
     sig_status_msg = Signal(str)
+    sig_send_to_sweeper = Signal(dict)
 
     def __init__(self, out_dir: str = DEFAULT_RESULTS_DIR, parent=None):
         super().__init__(parent)
@@ -335,14 +337,16 @@ class InteractivePlotsWidget(QWidget):
             }
         """
 
-        self.cb_experiment = ModernComboBox(max_hint_width=180)
-        self.cb_experiment.setStyleSheet(combo_style + "QComboBox { font-weight: 600; min-width: 140px; max-width: 180px; }")
-        self.cb_experiment.setMaximumWidth(180)
+        self.cb_experiment = ModernComboBox(max_hint_width=155)
+        self.cb_experiment.setStyleSheet(combo_style + "QComboBox { font-weight: 600; min-width: 130px; max-width: 155px; }")
+        self.cb_experiment.setFixedWidth(150)
         self.cb_experiment.addItems([
             self.modes[m_id].display_name for m_id in self.mode_order
         ])
         self.cb_experiment.currentIndexChanged.connect(self._on_experiment_changed)
         r1_lay.addWidget(self.cb_experiment)
+
+        r1_lay.addSpacing(6)
 
         # Chemical potential mu filter with pre-filled cached values and free-typing
         lbl_mu = QLabel("μ:")
@@ -352,8 +356,8 @@ class InteractivePlotsWidget(QWidget):
         self.cb_filter_mu = QComboBox()
         self.cb_filter_mu.setEditable(True)
         self.cb_filter_mu.setInsertPolicy(QComboBox.NoInsert)
-        self.cb_filter_mu.setStyleSheet(combo_style + "QComboBox { min-width: 42px; max-width: 68px; font-weight: 600; padding: 2px 14px 2px 6px; }")
-        self.cb_filter_mu.setFixedWidth(68)
+        self.cb_filter_mu.setStyleSheet(combo_style + "QComboBox { min-width: 44px; max-width: 58px; font-weight: 600; padding: 2px 14px 2px 6px; }")
+        self.cb_filter_mu.setFixedWidth(56)
         self.cb_filter_mu.addItem("")  # Blank default implies all mu
         if self.cb_filter_mu.lineEdit():
             self.cb_filter_mu.lineEdit().clear()
@@ -383,17 +387,39 @@ class InteractivePlotsWidget(QWidget):
         self.btn_clear_mu.clicked.connect(self._clear_mu_filter)
         r1_lay.addWidget(self.btn_clear_mu)
 
+        r1_lay.addSpacing(6)
+
         lbl_cache = QLabel("Cache:")
         lbl_cache.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
         r1_lay.addWidget(lbl_cache)
 
-        self.cb_cache_file = ModernComboBox(max_hint_width=290)
-        self.cb_cache_file.setStyleSheet(combo_style + "QComboBox { min-width: 210px; max-width: 290px; font-weight: 600; }")
-        self.cb_cache_file.setMaximumWidth(290)
+        self.cb_cache_file = ModernComboBox(max_hint_width=280)
+        self.cb_cache_file.setStyleSheet(combo_style + "QComboBox { min-width: 180px; max-width: 280px; font-weight: 600; }")
+        self.cb_cache_file.setMaximumWidth(280)
         if self.cb_cache_file.view():
             self.cb_cache_file.view().setMinimumWidth(260)
         self.cb_cache_file.currentIndexChanged.connect(self._on_cache_selected)
         r1_lay.addWidget(self.cb_cache_file)
+
+        # In-Situ Foundation Synthesizer Button (Direct Modal Launcher)
+        self.btn_compute_cache = QPushButton("▶ Run Cache")
+        self.btn_compute_cache.setToolTip("Run/Synthesize foundation cache for real-time exploration")
+        self.btn_compute_cache.setStyleSheet("""
+            QPushButton {
+                padding: 2px 10px;
+                background: #0891b2;
+                border: 1px solid #0e7490;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 700;
+                color: #ffffff;
+                min-height: 20px;
+            }
+            QPushButton:hover { background: #0e7490; }
+            QPushButton:pressed { background: #155e75; }
+        """)
+        self.btn_compute_cache.clicked.connect(self._open_compute_cache_dialog)
+        r1_lay.addWidget(self.btn_compute_cache)
 
         # Hidden rescan proxy button for full backwards compatibility
         self.btn_rescan = QPushButton("🔄", parent=self)
@@ -993,10 +1019,11 @@ class InteractivePlotsWidget(QWidget):
         ax = self.fig.add_subplot(111)
         if msg is None:
             msg = (
-                "⚡ No cache arrays found in results/cache/\n\n"
-                "Run a calculation in the Spectral Sweep or Susceptibility tab to generate cache arrays.\n"
-                "Once cached, this lab enables real-time 60 FPS continuous J_K scaling, BZ k-probing,\n"
-                "and 2D quasiparticle weight Z(k) maps instantaneously!"
+                "▶ No matching foundation cache found in results/cache/\n\n"
+                "Click [ ▶ Run Cache ] in the toolbar above to directly evaluate\n"
+                "a base self-energy Σ or bare χ₀ foundation array in ~0.3s.\n\n"
+                "Once evaluated, explore 60 FPS J_K scaling, k-probing,\n"
+                "and RPA instabilities instantaneously without running batch sweeps!"
             )
         ax.text(
             0.5, 0.5,
@@ -1008,6 +1035,98 @@ class InteractivePlotsWidget(QWidget):
         ax.set_yticks([])
         ax.set_frame_on(False)
         self.canvas.draw()
+
+    def _open_compute_cache_dialog(self):
+        """Opens the in-situ foundation synthesizer dialog for the active mode."""
+        target_cat = "sigma_base"
+        if self.active_mode in ["rpa_susc", "static_susc"]:
+            target_cat = "chi0_static"
+        elif self.active_mode == "dynamic_susc":
+            target_cat = "chi0_dynamic"
+
+        curr_mu = 0.0
+        try:
+            mu_txt = self.cb_filter_mu.currentText().strip()
+            if mu_txt:
+                curr_mu = float(mu_txt)
+        except Exception:
+            curr_mu = 0.0
+
+        self._foundation_dlg = FoundationCacheDialog(
+            parent=self,
+            out_dir=self.out_dir,
+            default_category=target_cat,
+            default_mu=curr_mu,
+            default_jperp=self.current_Jperp
+        )
+        self._foundation_dlg.sig_cache_generated.connect(self._on_foundation_cache_generated)
+        self._foundation_dlg.show()
+
+    def _quick_synthesize_foundation(self, category: str, N: int):
+        """Quickly opens and configures FoundationCacheDialog with selected preset."""
+        curr_mu = 0.0
+        try:
+            mu_txt = self.cb_filter_mu.currentText().strip()
+            if mu_txt:
+                curr_mu = float(mu_txt)
+        except Exception:
+            curr_mu = 0.0
+
+        self._foundation_dlg = FoundationCacheDialog(
+            parent=self,
+            out_dir=self.out_dir,
+            default_category=category,
+            default_mu=curr_mu,
+            default_jperp=self.current_Jperp
+        )
+        if N == 100:
+            self._foundation_dlg.cb_n.setCurrentIndex(0)
+        elif N == 256:
+            self._foundation_dlg.cb_n.setCurrentIndex(1)
+        elif N == 64:
+            self._foundation_dlg.cb_n.setCurrentIndex(2)
+
+        self._foundation_dlg.sig_cache_generated.connect(self._on_foundation_cache_generated)
+        self._foundation_dlg.show()
+
+    def _on_foundation_cache_generated(self, cache_path: str):
+        """Rescans cache list and auto-selects newly generated foundation array."""
+        self.scan_caches()
+        if cache_path:
+            target_base = os.path.basename(cache_path)
+            for i in range(self.cb_cache_file.count()):
+                item_p = self.cb_cache_file.itemData(i)
+                if item_p == cache_path or (item_p and target_base in os.path.basename(str(item_p))):
+                    self.cb_cache_file.setCurrentIndex(i)
+                    break
+        self.sig_status_msg.emit("⚡ Foundation cache ready & loaded into Interactive Plots.")
+
+    def _on_send_to_sweeper(self):
+        """Dispatches active exploration parameters to Simulation Studio Parameter Dock."""
+        active_mu = 0.0
+        if self.loaded_base_sigma and "mu" in self.loaded_base_sigma:
+            try: active_mu = float(self.loaded_base_sigma["mu"])
+            except Exception: pass
+        elif hasattr(self, "cb_filter_mu"):
+            try: active_mu = float(self.cb_filter_mu.currentText().strip())
+            except Exception: pass
+
+        params = {
+            "mu": active_mu,
+            "JK": float(self.current_JK),
+            "Jperp": float(self.current_Jperp),
+            "K": float(self.current_K),
+            "active_mode": self.active_mode
+        }
+        if self.loaded_base_sigma and "N" in self.loaded_base_sigma:
+            try: params["N"] = int(self.loaded_base_sigma["N"])
+            except Exception: pass
+        elif self.loaded_chi0_static and "N" in self.loaded_chi0_static:
+            try: params["N"] = int(self.loaded_chi0_static["N"])
+            except Exception: pass
+
+        self.sig_send_to_sweeper.emit(params)
+        self.sig_status_msg.emit(f"🚀 Sent parameters (μ={params['mu']:.1f}, J_K={params['JK']:.2f}, J_⊥={params['Jperp']:.1f}) to Simulation Studio Parameter Dock.")
 
     def _on_cache_selected(self):
         fpath = self.cb_cache_file.currentData()

@@ -272,11 +272,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.bridge.sig_error.connect(self._on_calc_error)
         self.bridge.sig_cancelled.connect(self._on_calc_cancelled)
 
-        # Simulation Queue Timer for UI demonstration
-        self.queue_timer = QTimer(self)
-        self.queue_timer.timeout.connect(self._on_queue_tick)
+        # Simulation Queue and Batch Execution
+        self.queued_param_list = []
         self.active_queue_row = -1
-        self.active_queue_progress = 0
 
         self._build_toolbar()
         self._build_central_workspace()
@@ -288,11 +286,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.dock_nav.setMinimumWidth(240)
         self.dock_nav.setMaximumWidth(320)
 
-        # Ensure docks start with proper comfortable widths & compact bottom height
-        self.resizeDocks([self.dock_bottom], [150], Qt.Vertical)
+        # Ensure docks start with proper comfortable widths & dynamic bottom height
+        self._adjust_bottom_dock_height()
         self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal)
         QTimer.singleShot(0, lambda: (
-            self.resizeDocks([self.dock_bottom], [150], Qt.Vertical),
+            self._adjust_bottom_dock_height(),
             self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal)
         ))
 
@@ -316,7 +314,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         super().showEvent(event)
         if not getattr(self, "_docks_initially_sized", False):
             self._docks_initially_sized = True
-            self.resizeDocks([self.dock_bottom], [150], Qt.Vertical)
+            self._adjust_bottom_dock_height()
             self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal)
 
     # =========================================================================
@@ -533,6 +531,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.interactive_plots = InteractivePlotsWidget(out_dir=out_dir, parent=self)
         self.analytical_lab = self.interactive_plots  # Alias for backward compatibility
+        self.interactive_plots.sig_send_to_sweeper.connect(self._on_receive_interactive_parameters)
         self.central_view_stack.addWidget(self.interactive_plots)
 
         layout.addWidget(self.central_view_stack, 1)
@@ -723,6 +722,29 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_cache_mgr.clicked.connect(self._open_cache_manager)
         h_cache_ctrl.addWidget(self.btn_cache_mgr)
         gc.addLayout(h_cache_ctrl)
+
+        # Dual-action execution buttons: Fast Foundation Cache vs Full Sweep
+        h_exec_actions = QHBoxLayout()
+        self.btn_dock_foundation = QPushButton("▶ Run Cache")
+        self.btn_dock_foundation.setToolTip("Directly evaluate foundation cache (base self-energy Σ & bare susceptibility bubble) and jump straight into Interactive Plots.")
+        self.btn_dock_foundation.setStyleSheet(
+            "QPushButton { background: #0891b2; color: #ffffff; font-weight: 700; font-size: 11px; padding: 6px 8px; border-radius: 6px; border: 1px solid #0e7490; } "
+            "QPushButton:hover { background: #0e7490; } "
+            "QPushButton:disabled { background: #94a3b8; border-color: #94a3b8; }"
+        )
+        self.btn_dock_foundation.clicked.connect(self.run_foundation_cache_ui)
+        h_exec_actions.addWidget(self.btn_dock_foundation)
+
+        self.btn_dock_sweep = QPushButton("🔬 Run Full Sweep")
+        self.btn_dock_sweep.setToolTip("Execute complete multi-parameter sweep, calculate spectral data, and render publication plots in Plot Viewer CAD.")
+        self.btn_dock_sweep.setStyleSheet(
+            "QPushButton { background: #2563eb; color: #ffffff; font-weight: 700; font-size: 11px; padding: 6px 8px; border-radius: 6px; border: 1px solid #1d4ed8; } "
+            "QPushButton:hover { background: #1d4ed8; } "
+            "QPushButton:disabled { background: #94a3b8; border-color: #94a3b8; }"
+        )
+        self.btn_dock_sweep.clicked.connect(self.run_simulation_ui)
+        h_exec_actions.addWidget(self.btn_dock_sweep)
+        gc.addLayout(h_exec_actions)
 
         lay_sim.addWidget(grp_cache)
 
@@ -1621,7 +1643,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _build_bottom_drawer_dock(self):
         self.dock_bottom = QDockWidget("⚡ Calculation Engine • Batch Queue & Process Console", self)
         self.dock_bottom.setAllowedAreas(Qt.BottomDockWidgetArea)
-        self.dock_bottom.setMaximumHeight(260)
+        self.dock_bottom.setMaximumHeight(450)
 
         self.bottom_tabs = QTabWidget()
 
@@ -1670,9 +1692,31 @@ class UnifiedWorkbenchWindow(QMainWindow):
         row.addWidget(self.btn_add_to_queue)
 
         self.btn_clear = QPushButton("🗑 Clear Finished")
-        self.btn_clear.setToolTip("Remove all completed or pending entries from the queue")
+        self.btn_clear.setToolTip("Remove all completed or cancelled entries from the queue")
         self.btn_clear.clicked.connect(self.clear_queue)
         row.addWidget(self.btn_clear)
+
+        self.btn_cancel_all = QPushButton("⏹ Cancel All")
+        self.btn_cancel_all.setObjectName("BtnCancelAll")
+        self.btn_cancel_all.setToolTip("Immediately stop active calculation and cancel all queued jobs")
+        self.btn_cancel_all.setStyleSheet("""
+            QPushButton {
+                padding: 4px 11px;
+                background: #fef2f2;
+                border: 1px solid #fca5a5;
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #b91c1c;
+            }
+            QPushButton:hover {
+                background: #fee2e2;
+                border-color: #ef4444;
+                color: #991b1b;
+            }
+        """)
+        self.btn_cancel_all.clicked.connect(self.cancel_all_queue)
+        row.addWidget(self.btn_cancel_all)
 
         row.addStretch(1)
 
@@ -1683,6 +1727,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.table_queue = QTableWidget(0, 6)
         self.table_queue.setHorizontalHeaderLabels(["#", "Study", "Parameters Snapshot", "Solver", "Progress", "Status"])
+        self.table_queue.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table_queue.customContextMenuRequested.connect(self._on_queue_table_context_menu)
         qh = self.table_queue.horizontalHeader()
         qh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         qh.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -1959,11 +2005,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.canvas_left.load_image(self.plots[text])
             self.lbl_status.setText(f"Viewing Dataset: {text}")
 
-    def run_simulation_ui(self):
-        """Starts real calculation via isolated QProcess bridge on RTX 5060."""
-        if self.bridge.is_running():
-            return
-
+    def _extract_active_study_params(self) -> tuple[dict | None, str, str]:
+        """Extracts and validates simulation parameters from current UI controls without dispatching."""
         out_dir = self.edit_out_dir.text().strip()
         if not out_dir:
             out_dir = os.path.join(GUI_ROOT, "results")
@@ -1991,14 +2034,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
             raw_sweep = self.edit_se_vals.text().strip()
             if not raw_sweep:
                 QMessageBox.warning(self, "Validation Error", "Sweep values cannot be empty")
-                return
+                return None, "", ""
             try:
                 sweep_vals = [float(x.strip()) for x in raw_sweep.split(",") if x.strip()]
                 if not sweep_vals:
                     raise ValueError("No valid numeric values in sweep list")
             except Exception as e:
                 QMessageBox.warning(self, "Validation Error", f"Invalid sweep values: {e}")
-                return
+                return None, "", ""
 
             params = {
                 **common_params,
@@ -2007,19 +2050,20 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "jk_values": sweep_vals,
                 "fixed_jperp": float(self.spin_se_fixed.value())
             }
+            summary = f"Sweep: [{self.edit_se_vals.text()}], J_⊥={self.spin_se_fixed.value():.1f}, μ={self.spin_mu.value():.1f}, N={self.spin_n.value()}"
 
         elif self.active_study == self.STUDY_SPEC:
             raw_sweep = self.edit_spec_vals.text().strip()
             if not raw_sweep:
                 QMessageBox.warning(self, "Validation Error", "Sweep coupling values cannot be empty")
-                return
+                return None, "", ""
             try:
                 sweep_vals = [float(x.strip()) for x in raw_sweep.split(",") if x.strip()]
                 if not sweep_vals:
                     raise ValueError("No valid numeric values in sweep list")
             except Exception as e:
                 QMessageBox.warning(self, "Validation Error", f"Invalid sweep values: {e}")
-                return
+                return None, "", ""
 
             params = {
                 **common_params,
@@ -2031,6 +2075,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "spec_custom_k": self.edit_custom_k.text().strip(),
                 "spec_plot_mode": self.cb_layout.currentText()
             }
+            summary = f"k={self.cb_mom.currentText().split()[0]}, [{self.edit_spec_vals.text()}], J_⊥={self.spin_spec_fixed.value():.1f}, N={self.spin_n.value()}"
+
         elif self.active_study == self.STUDY_PD:
             params = {
                 **common_params,
@@ -2039,23 +2085,24 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "JK_max": float(self.s_max.value()),
                 "JK_pts": int(self.s_pts.value())
             }
+            summary = f"Bisection J_K ∈ [{self.s_min.value():.1f}, {self.s_max.value():.1f}], pts={self.s_pts.value()}, μ={self.spin_mu.value():.1f}"
 
         elif self.active_study == self.STUDY_SUSC:
             raw_sweep = self.edit_susc_vals.text().strip()
             if not raw_sweep:
                 QMessageBox.warning(self, "Validation Error", "Susceptibility coupling values cannot be empty")
-                return
+                return None, "", ""
             try:
                 sweep_vals = [float(x.strip()) for x in raw_sweep.split(",") if x.strip()]
                 if not sweep_vals:
                     raise ValueError("No valid numeric values in sweep list")
             except Exception as e:
                 QMessageBox.warning(self, "Validation Error", f"Invalid sweep values: {e}")
-                return
+                return None, "", ""
 
             if not self.chk_static.isChecked() and not self.chk_dynamic.isChecked():
                 QMessageBox.warning(self, "Validation Error", "Please select at least one mode: Static χ(q) or Dynamic χ(q, ω)")
-                return
+                return None, "", ""
 
             params = {
                 **common_params,
@@ -2066,25 +2113,172 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "susc_sweep_vals": sweep_vals,
                 "fixed_J": float(self.spin_se_fixed.value())
             }
+            modes = []
+            if self.chk_static.isChecked(): modes.append("Static χ(q)")
+            if self.chk_dynamic.isChecked(): modes.append("Dynamic χ(q,ω)")
+            mode_str = "+".join(modes) if modes else "None"
+            summary = f"{mode_str}, vals=[{self.edit_susc_vals.text()}], N={self.spin_n.value()}"
         else:
             QMessageBox.warning(self, "Unknown Study", f"Unrecognized calculation study: {self.active_study}")
+            return None, "", ""
+
+        return params, self.active_study, summary
+
+    def run_simulation_ui(self):
+        """Starts real calculation via isolated QProcess bridge or enqueues if engine is busy."""
+        params, study_name, summary = self._extract_active_study_params()
+        if not params:
+            return
+        self.run_or_queue_job(params, study_name=study_name, summary=summary)
+
+    def add_to_queue(self):
+        """Extracts active study parameters and appends job directly to batch execution queue without hijacking console."""
+        params, study_name, summary = self._extract_active_study_params()
+        if not params:
             return
 
-        # Auto-switch bottom drawer to the Live Solver Console so logs are visible without expanding dock
-        self.bottom_tabs.setCurrentIndex(1)
-        self.resizeDocks([self.dock_bottom], [140], Qt.Vertical)
+        solver_choice = params.get("solver_choice", "gpu")
+        row = self._create_queue_row(study_name, summary, solver_choice, status="⏳ Queued")
+        if not hasattr(self, "queued_param_list"):
+            self.queued_param_list = []
+        self.queued_param_list.append({
+            "params": params,
+            "study": study_name,
+            "summary": summary,
+            "row_idx": row
+        })
+        self.lbl_status.setText(f"➕ Added {study_name} as Job #{row + 1} to batch queue.")
+        self.bottom_tabs.setCurrentIndex(0)  # Always stay on / switch to Batch Execution Queue tab
+        self._adjust_bottom_dock_height()
+
+    def _create_queue_row(self, study_name: str, summary: str, solver_choice: str, status: str = "⏳ Queued") -> int:
+        """Helper to create and insert a standardized row into self.table_queue."""
+        row = self.table_queue.rowCount()
+        self.table_queue.insertRow(row)
+
+        item_num = QTableWidgetItem(str(row + 1))
+        item_num.setTextAlignment(Qt.AlignCenter)
+        self.table_queue.setItem(row, 0, item_num)
+
+        item_study = QTableWidgetItem(study_name)
+        font_study = item_study.font()
+        font_study.setBold(True)
+        item_study.setFont(font_study)
+        item_study.setForeground(QColor("#60a5fa") if self.is_dark else QColor("#2563eb"))
+        self.table_queue.setItem(row, 1, item_study)
+
+        item_snap = QTableWidgetItem(summary)
+        item_snap.setTextAlignment(Qt.AlignCenter)
+        item_snap.setForeground(QColor("#94a3b8") if self.is_dark else QColor("#475569"))
+        self.table_queue.setItem(row, 2, item_snap)
+
+        solver_str = "NVIDIA RTX 5060 (GPU)" if solver_choice == "gpu" else "CPU (Multi-Core)"
+        item_solver = QTableWidgetItem(solver_str)
+        item_solver.setTextAlignment(Qt.AlignCenter)
+        self.table_queue.setItem(row, 3, item_solver)
+
+        prog = QProgressBar()
+        prog.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                text-align: center;
+                background: #f1f5f9;
+                font-size: 10px;
+                font-weight: 600;
+                color: #0f172a;
+                height: 16px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #2563eb);
+                border-radius: 3px;
+            }
+        """)
+        if status.startswith("🔄"):
+            prog.setRange(0, 0)
+        else:
+            prog.setRange(0, 100)
+            prog.setValue(0)
+        self.table_queue.setCellWidget(row, 4, prog)
+
+        item_status = QTableWidgetItem(status)
+        item_status.setTextAlignment(Qt.AlignCenter)
+        self.table_queue.setItem(row, 5, item_status)
+
+        self._adjust_bottom_dock_height()
+        return row
+
+    def run_or_queue_job(self, params: dict, study_name: str = None, summary: str = None) -> str:
+        """Central serialization gateway: starts execution immediately if idle, or enqueues if busy."""
+        if not study_name:
+            if params.get("task") == "foundation_cache":
+                cat = params.get("cache_category", "sigma_base")
+                study_name = "Foundation Σ" if "sigma" in cat else "Foundation χ₀"
+            else:
+                study_name = self.active_study
+
+        if not summary:
+            if params.get("task") == "foundation_cache":
+                cat = params.get("cache_category", "sigma_base")
+                summary = f"{cat}, μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
+                if "sigma" in cat:
+                    summary += f", J_⊥={params.get('fixed_jperp', 6.0):.2f}"
+            else:
+                summary = f"μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
+
+        solver_choice = params.get("solver_choice", "gpu")
+
+        if hasattr(self, "bridge") and self.bridge.is_running():
+            # Engine is busy: Append to queue and display in queue table
+            row = self._create_queue_row(study_name, summary, solver_choice, status="⏳ Queued")
+            if not hasattr(self, "queued_param_list"):
+                self.queued_param_list = []
+            self.queued_param_list.append({
+                "params": params,
+                "study": study_name,
+                "summary": summary,
+                "row_idx": row
+            })
+            self.lbl_status.setText(f"➕ Queued {study_name} (Job #{row + 1})")
+            self.bottom_tabs.setCurrentIndex(0)  # Switch to Batch Queue tab so user sees it queued
+            self._adjust_bottom_dock_height()
+            return "queued"
+
+        # Engine is idle: Add active running row and launch calculation immediately
+        row = self._create_queue_row(study_name, summary, solver_choice, status="🔄 Running...")
+        self.active_queue_row = row
+
+        if params.get("task") == "foundation_cache":
+            self._foundation_requested = True
+        else:
+            self._foundation_requested = False
+
+        self.bottom_tabs.setCurrentIndex(1)  # Switch to Live Solver Console for active run
+        self._adjust_bottom_dock_height()
 
         try:
             self._update_execution_buttons(is_running=True)
             self.bridge.start_calculation(params)
+            return "running"
         except RuntimeError as e:
+            self._foundation_requested = False
             self._update_execution_buttons(is_running=False)
+            if self.active_queue_row < self.table_queue.rowCount():
+                self.table_queue.setItem(self.active_queue_row, 5, QTableWidgetItem("❌ Error"))
             QMessageBox.warning(self, "Execution Warning", str(e))
+            return "error"
+
+    def run_or_queue_foundation_job(self, params: dict) -> str:
+        """Runs a foundation cache job directly if engine is idle, or queues it if busy."""
+        cat = params.get("cache_category", "sigma_base")
+        study_name = "Foundation Σ" if "sigma" in cat else "Foundation χ₀"
+        summary = f"{cat}, μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
+        if "sigma" in cat:
+            summary += f", J_⊥={params.get('fixed_jperp', 6.0):.2f}"
+        return self.run_or_queue_job(params, study_name=study_name, summary=summary)
 
     def _on_precompute_bubble(self):
         """Precomputes and caches the bare bubble chi0 on the selected backend."""
-        if hasattr(self, "bridge") and self.bridge.is_running():
-            return
         out_dir = self.edit_out_dir.text().strip() or os.path.join(GUI_ROOT, "results")
         solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
         cpu_limit = self.cb_cpu_limit.currentText().split()[0]
@@ -2108,14 +2302,62 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "susc_sweep_vals": [1.0],
             "fixed_J": 6.0
         }
-        self.bottom_tabs.setCurrentIndex(1)
-        self.resizeDocks([self.dock_bottom], [140], Qt.Vertical)
-        try:
-            self._update_execution_buttons(is_running=True)
-            self.bridge.start_calculation(params)
-        except RuntimeError as e:
-            self._update_execution_buttons(is_running=False)
-            QMessageBox.warning(self, "Execution Warning", str(e))
+        self.run_or_queue_job(params, study_name="Precompute χ₀ Bubble", summary=f"Bare bubble χ₀, μ={params['mu']:.1f}, N={params['N']}")
+
+    def run_foundation_cache_ui(self):
+        """Directly synthesizes base self-energy or bare susceptibility foundation caches and auto-switches to Interactive Plots."""
+        out_dir = self.edit_out_dir.text().strip() or os.path.join(GUI_ROOT, "results")
+        solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
+        cpu_limit = self.cb_cpu_limit.currentText().split()[0] if hasattr(self, "cb_cpu_limit") else "80%"
+
+        target_category = "sigma_base" if ("Spectral" in self.active_study or "Self" in self.active_study) else "chi0_static"
+
+        params = {
+            "task": "foundation_cache",
+            "cache_category": target_category,
+            "solver_choice": solver_choice,
+            "cpu_limit": cpu_limit,
+            "t": float(self.spin_t.value()),
+            "t1": float(self.spin_t1.value()),
+            "mu": float(self.spin_mu.value()),
+            "K": float(self.spin_k.value()),
+            "N": int(self.spin_n.value()),
+            "num_omega": int(self.spin_nw.value()),
+            "omega_max": float(self.spin_wmax.value()),
+            "eta": float(self.spin_eta.value()),
+            "fixed_jperp": float(self.spin_se_fixed.value()),
+            "Jperp": float(self.spin_se_fixed.value()),
+            "output_dir": out_dir,
+            "force_recompute": bool(self.chk_force_recompute.isChecked()) if hasattr(self, "chk_force_recompute") else False,
+        }
+
+        self.run_or_queue_foundation_job(params)
+
+    def _on_receive_interactive_parameters(self, params: dict):
+        """Pre-fills Simulation Studio Parameter Dock with parameters discovered in Interactive Plots."""
+        mu_val = params.get("mu", 0.0)
+        jk_val = params.get("JK", 6.0)
+        jperp_val = params.get("Jperp", 6.0)
+        k_val = params.get("K", 1.0)
+        n_val = params.get("N", None)
+
+        if hasattr(self, "spin_mu"):
+            self.spin_mu.setValue(mu_val)
+        if hasattr(self, "spin_k"):
+            self.spin_k.setValue(k_val)
+        if hasattr(self, "spin_se_fixed"):
+            self.spin_se_fixed.setValue(jperp_val)
+        if hasattr(self, "edit_se_vals"):
+            self.edit_se_vals.setText(str(round(jk_val, 3)))
+        if hasattr(self, "edit_susc_vals"):
+            self.edit_susc_vals.setText(str(round(jk_val, 3)))
+        if n_val is not None and hasattr(self, "spin_n"):
+            self.spin_n.setValue(int(n_val))
+
+        # Switch perspective to Simulation Studio and viewport to Plot Viewer CAD
+        self.set_perspective("simulation")
+        self.set_canvas_mode(0)
+        self.lbl_status.setText(f"🚀 Loaded parameters from Interactive Plots: μ={mu_val:.2f}, J_K={jk_val:.2f}, J_⊥={jperp_val:.2f}")
 
     def _update_execution_buttons(self, is_running: bool):
         """Updates Run and Cancel/Stop buttons cleanly and forces Qt stylesheet re-evaluation."""
@@ -2129,38 +2371,101 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_run.setText("▶ Run Calculation")
             self.btn_cancel.setEnabled(False)
             self.btn_cancel.setText("⏹ Cancel / Stop")
+        if hasattr(self, "btn_dock_foundation"):
+            self.btn_dock_foundation.setEnabled(not is_running)
+        if hasattr(self, "btn_dock_sweep"):
+            self.btn_dock_sweep.setEnabled(not is_running)
         for btn in (self.btn_run, self.btn_cancel):
             btn.style().unpolish(btn)
             btn.style().polish(btn)
             btn.update()
 
+        # Update any open FoundationCacheDialog or subdialogs
+        for w in QApplication.topLevelWidgets():
+            if hasattr(w, "update_engine_state"):
+                try:
+                    w.update_engine_state(is_running)
+                except Exception:
+                    pass
+
     def cancel_simulation_ui(self):
-        """Cancels active computation immediately with clean stopping cooldown and VRAM flush."""
-        if hasattr(self, "queue_timer") and self.queue_timer.isActive():
-            self.queue_timer.stop()
+        """Cancels ONLY the currently active running calculation and automatically advances to the next queued job."""
+        if hasattr(self, "_foundation_requested"):
+            self._foundation_requested = False
+
         if not hasattr(self, "bridge") or not self.bridge.is_running():
             self._update_execution_buttons(is_running=False)
             return
 
-        # Keep both Run and Cancel disabled during stopping procedure
+        self._cancelling_active_only = True
+
+        # Mark active queue table row as Cancelled
+        if hasattr(self, "active_queue_row") and 0 <= self.active_queue_row < self.table_queue.rowCount():
+            prog = self.table_queue.cellWidget(self.active_queue_row, 4)
+            if prog:
+                prog.setRange(0, 100)
+                prog.setValue(0)
+            item_cancel = QTableWidgetItem("⏹ Cancelled")
+            item_cancel.setTextAlignment(Qt.AlignCenter)
+            item_cancel.setForeground(QColor("#ef4444"))
+            self.table_queue.setItem(self.active_queue_row, 5, item_cancel)
+
+        # Keep buttons in stopping feedback
         self.btn_run.setEnabled(False)
         self.btn_run.setText("⏳ Stopping...")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setText("⏳ Stopping...")
+        if hasattr(self, "btn_dock_foundation"):
+            self.btn_dock_foundation.setEnabled(False)
+        if hasattr(self, "btn_dock_sweep"):
+            self.btn_dock_sweep.setEnabled(False)
         for btn in (self.btn_run, self.btn_cancel):
             btn.style().unpolish(btn)
             btn.style().polish(btn)
             btn.update()
-        self.lbl_status.setText("⏳ Stopping simulation & purging GPU VRAM...")
+
+        self.lbl_status.setText("⏳ Stopping active calculation & purging GPU VRAM...")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
-            f"[{time.strftime('%H:%M:%S')}] ⏹ [CANCEL REQUESTED] Terminating process tree & purging VRAM cache..."
+            f"[{time.strftime('%H:%M:%S')}] ⏹ [CANCEL ACTIVE] Terminating active calculation..."
             f"</div>"
         )
         sb = self.txt_console.verticalScrollBar()
         if sb:
             sb.setValue(sb.maximum())
         QApplication.processEvents()
+
+        self.bridge.cancel_calculation()
+
+    def cancel_all_queue(self):
+        """Aborts active calculation, purges queued list, and cancels all pending jobs in the batch execution queue."""
+        self._cancelling_active_only = False
+        if hasattr(self, "_foundation_requested"):
+            self._foundation_requested = False
+
+        if hasattr(self, "queued_param_list"):
+            self.queued_param_list.clear()
+
+        # Mark all running and queued rows as Cancelled
+        for r in range(self.table_queue.rowCount()):
+            st_item = self.table_queue.item(r, 5)
+            if st_item and any(k in st_item.text() for k in ["Queued", "Running", "Pending", "Solving", "🔄", "⏳"]):
+                st_item.setText("⏹ Cancelled")
+                st_item.setForeground(QColor("#ef4444"))
+                prog = self.table_queue.cellWidget(r, 4)
+                if prog:
+                    prog.setRange(0, 100)
+                    prog.setValue(0)
+
+        self.lbl_status.setText("⏹ All calculations cancelled and batch queue purged.")
+        self.txt_console.append(
+            f"<div style='color: #ef4444; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
+            f"[{time.strftime('%H:%M:%S')}] ⏹ [CANCEL ALL] Aborted active job and purged all queued calculations."
+            f"</div>"
+        )
+        sb = self.txt_console.verticalScrollBar()
+        if sb:
+            sb.setValue(sb.maximum())
 
         if hasattr(self, "lbl_console_engine_status"):
             self.lbl_console_engine_status.setText("🟢 Engine Ready [Idle]")
@@ -2176,7 +2481,67 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 }
             """)
 
-        self.bridge.cancel_calculation()
+        if hasattr(self, "bridge") and self.bridge.is_running():
+            self.btn_run.setEnabled(False)
+            self.btn_run.setText("⏳ Stopping...")
+            self.btn_cancel.setEnabled(False)
+            self.btn_cancel.setText("⏳ Stopping...")
+            self.bridge.cancel_calculation()
+        else:
+            self._update_execution_buttons(is_running=False)
+
+    def _on_queue_table_context_menu(self, pos):
+        """Context menu for right-clicking items in the batch execution queue."""
+        row = self.table_queue.rowAt(pos.y())
+        if row < 0 or row >= self.table_queue.rowCount():
+            return
+        st_item = self.table_queue.item(row, 5)
+        st_text = st_item.text() if st_item else ""
+
+        menu = QMenu(self)
+        if any(k in st_text for k in ["Running", "Solving", "🔄"]):
+            act_cancel = menu.addAction("⏹ Cancel Active Calculation")
+            act_cancel.triggered.connect(self.cancel_simulation_ui)
+        elif any(k in st_text for k in ["Queued", "Pending", "⏳"]):
+            act_remove = menu.addAction("🗑 Remove from Queue")
+            act_remove.triggered.connect(lambda: self._remove_queued_row(row))
+        else:
+            act_remove = menu.addAction("🗑 Remove Entry")
+            act_remove.triggered.connect(lambda: self._remove_queued_row(row))
+
+        menu.addSeparator()
+        act_clear_fin = menu.addAction("🗑 Clear All Finished / Cancelled")
+        act_clear_fin.triggered.connect(self.clear_queue)
+        act_cancel_all = menu.addAction("⏹ Cancel All Calculations")
+        act_cancel_all.triggered.connect(self.cancel_all_queue)
+
+        menu.exec(self.table_queue.viewport().mapToGlobal(pos))
+
+    def _remove_queued_row(self, row: int):
+        """Removes a specific queued or finished row from table and param list."""
+        if 0 <= row < self.table_queue.rowCount():
+            st_item = self.table_queue.item(row, 5)
+            st_text = st_item.text() if st_item else ""
+            if any(k in st_text for k in ["Running", "Solving", "🔄"]):
+                self.cancel_simulation_ui()
+                return
+
+            # Remove from queued_param_list if queued
+            if hasattr(self, "queued_param_list"):
+                self.queued_param_list = [j for j in self.queued_param_list if j.get("row_idx") != row]
+                for j in self.queued_param_list:
+                    if j.get("row_idx", 0) > row:
+                        j["row_idx"] -= 1
+
+            self.table_queue.removeRow(row)
+            if hasattr(self, "active_queue_row") and self.active_queue_row > row:
+                self.active_queue_row -= 1
+
+            # Re-number
+            for r in range(self.table_queue.rowCount()):
+                self.table_queue.setItem(r, 0, QTableWidgetItem(str(r + 1)))
+
+            self._adjust_bottom_dock_height()
 
     def _on_calc_started(self):
         self._update_execution_buttons(is_running=True)
@@ -2237,9 +2602,19 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.lbl_status.setText(f"⏳ Running: {message}")
 
     def _on_calc_progress(self, percent: int, step: str):
-        """Updates status cleanly without arbitrary percentage prefixes."""
+        """Updates status cleanly and updates real progress in the active queue table row."""
         if step:
             self.lbl_status.setText(f"⏳ Running: {step}")
+        if hasattr(self, "active_queue_row") and 0 <= self.active_queue_row < self.table_queue.rowCount():
+            prog = self.table_queue.cellWidget(self.active_queue_row, 4)
+            if prog:
+                if percent > 0:
+                    prog.setRange(0, 100)
+                    prog.setValue(percent)
+                else:
+                    prog.setRange(0, 0)
+            st_text = f"🔄 {step}" if step else (f"🔄 Solving ({percent}%)" if percent > 0 else "🔄 Running...")
+            self.table_queue.setItem(self.active_queue_row, 5, QTableWidgetItem(st_text))
 
     def _on_calc_completed(self, payload: dict):
         self._update_execution_buttons(is_running=False)
@@ -2263,6 +2638,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
             f"</div>"
         )
 
+        # Mark active queue table row as completed
+        if hasattr(self, "active_queue_row") and 0 <= self.active_queue_row < self.table_queue.rowCount():
+            prog = self.table_queue.cellWidget(self.active_queue_row, 4)
+            if prog:
+                prog.setRange(0, 100)
+                prog.setValue(100)
+            item_done = QTableWidgetItem("✅ Completed")
+            item_done.setTextAlignment(Qt.AlignCenter)
+            item_done.setForeground(QColor("#16a34a"))
+            self.table_queue.setItem(self.active_queue_row, 5, item_done)
+
         all_plots = payload.get("all_plots", [])
         primary_plot = payload.get("plot_path", "")
         data_path = payload.get("data_path", "")
@@ -2273,8 +2659,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self._update_cache_badge()
         if hasattr(self, "interactive_plots") and self.interactive_plots:
             self.interactive_plots.scan_caches()
+            if data_path:
+                self.interactive_plots._on_foundation_cache_generated(data_path)
         if hasattr(self, "gallery") and self.gallery:
             self.gallery.refresh_gallery()
+
+        if getattr(self, "_foundation_requested", False):
+            self._foundation_requested = False
+            self.lbl_status.setText("⚡ Foundation cache ready! Switched to Interactive Plots.")
+            self.set_canvas_mode(1)
 
         if primary_plot and os.path.exists(primary_plot):
             self.current_view_plot_path = primary_plot
@@ -2293,27 +2686,95 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if data_path and os.path.exists(data_path) and hasattr(self, "data_canvas"):
             self.data_canvas.load_dataset(data_path)
 
-        # Auto-reset status label to Ready after 4 seconds
-        QTimer.singleShot(4000, self._reset_status_to_ready)
+        # Advance to next queued job if available
+        if not self._launch_next_queued_job():
+            QTimer.singleShot(4000, self._reset_status_to_ready)
 
     def _reset_status_to_ready(self):
         """Resets status bar to default Ready state when idle."""
         if hasattr(self, "bridge") and not self.bridge.is_running():
             self.lbl_status.setText("Ready. [Simulation Studio Active]")
 
+    def _launch_next_queued_job(self) -> bool:
+        """Pops and launches the next queued calculation job in the batch sequence. Returns True if a job started."""
+        if getattr(self, "_queue_paused", False):
+            self._update_execution_buttons(is_running=False)
+            self.lbl_status.setText("⏸ Batch queue paused. Click 'Run All Pending' to resume.")
+            return False
+
+        if not getattr(self, "queued_param_list", None) or len(self.queued_param_list) == 0:
+            self._update_execution_buttons(is_running=False)
+            return False
+
+        next_job = self.queued_param_list.pop(0)
+        next_params = next_job["params"]
+        next_study = next_job.get("study", "Calculation")
+
+        row_idx = next_job.get("row_idx", None)
+        if row_idx is None or row_idx >= self.table_queue.rowCount() or "Queued" not in (self.table_queue.item(row_idx, 5).text() if self.table_queue.item(row_idx, 5) else ""):
+            for r in range(self.table_queue.rowCount()):
+                st_item = self.table_queue.item(r, 5)
+                if st_item and any(k in st_item.text() for k in ["Queued", "Pending", "⏳"]):
+                    row_idx = r
+                    break
+
+        if row_idx is not None and row_idx < self.table_queue.rowCount():
+            self.active_queue_row = row_idx
+            item_run = QTableWidgetItem("🔄 Running...")
+            item_run.setTextAlignment(Qt.AlignCenter)
+            item_run.setForeground(QColor("#2563eb"))
+            self.table_queue.setItem(row_idx, 5, item_run)
+            prog = self.table_queue.cellWidget(row_idx, 4)
+            if prog:
+                prog.setRange(0, 0)
+
+        if next_params.get("task") == "foundation_cache":
+            self._foundation_requested = True
+        else:
+            self._foundation_requested = False
+
+        try:
+            self._update_execution_buttons(is_running=True)
+            self.lbl_status.setText(f"⚡ Running queued job: {next_study}...")
+            self.txt_console.append(
+                f"<div style='color: #38bdf8; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
+                f"[{time.strftime('%H:%M:%S')}] ⚡ [BATCH QUEUE] Launching next job: {next_study}"
+                f"</div>"
+            )
+            self.bridge.start_calculation(next_params)
+            return True
+        except Exception as e:
+            self._update_execution_buttons(is_running=False)
+            if row_idx is not None and row_idx < self.table_queue.rowCount():
+                self.table_queue.setItem(row_idx, 5, QTableWidgetItem("❌ Error"))
+            self.lbl_status.setText(f"❌ Failed to launch queued job: {e}")
+            return self._launch_next_queued_job()
+
     def _on_calc_error(self, error_msg: str):
         self._update_execution_buttons(is_running=False)
         self.lbl_status.setText(f"❌ Error: {error_msg}")
+        if hasattr(self, "active_queue_row") and 0 <= self.active_queue_row < self.table_queue.rowCount():
+            prog = self.table_queue.cellWidget(self.active_queue_row, 4)
+            if prog:
+                prog.setRange(0, 100)
+                prog.setValue(0)
+            item_err = QTableWidgetItem("❌ Failed")
+            item_err.setTextAlignment(Qt.AlignCenter)
+            item_err.setForeground(QColor("#dc2626"))
+            self.table_queue.setItem(self.active_queue_row, 5, item_err)
         self.txt_console.append(
             f"<div style='color: #ff6b68; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ❌ [ERROR] {error_msg}"
             f"</div>"
         )
-        QTimer.singleShot(6000, self._reset_status_to_ready)
+
+        # Advance to next queued job if available
+        if not self._launch_next_queued_job():
+            QTimer.singleShot(6000, self._reset_status_to_ready)
 
     def _on_calc_cancelled(self):
         self._update_execution_buttons(is_running=False)
-        self.lbl_status.setText("⏹ Stopped: Simulation cancelled • Ready for next run.")
+        self.lbl_status.setText("⏹ Stopped: Calculation cancelled • GPU VRAM released.")
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."
@@ -2322,147 +2783,97 @@ class UnifiedWorkbenchWindow(QMainWindow):
         sb = self.txt_console.verticalScrollBar()
         if sb:
             sb.setValue(sb.maximum())
+
+        # If user cancelled active only and there are more jobs waiting in queue, automatically advance!
+        if getattr(self, "_cancelling_active_only", False) and getattr(self, "queued_param_list", None) and len(self.queued_param_list) > 0:
+            self._cancelling_active_only = False
+            self.txt_console.append(
+                f"<div style='color: #38bdf8; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
+                f"[{time.strftime('%H:%M:%S')}] ⚡ Advancing to next queued job in batch..."
+                f"</div>"
+            )
+            self._launch_next_queued_job()
+            return
+
+        self._cancelling_active_only = False
         QTimer.singleShot(2500, self._reset_status_to_ready)
 
     def closeEvent(self, event: QCloseEvent):
-        """Guarantees child process termination and immediate application shutdown upon window closing."""
-        if hasattr(self, "queue_timer"):
-            self.queue_timer.stop()
+        """Guarantees child process termination upon window closing."""
         if hasattr(self, "cache_timer"):
             self.cache_timer.stop()
         if hasattr(self, "bridge"):
             self.bridge.kill_hard()
+        if hasattr(self, "wheel_filter") and QApplication.instance():
+            try:
+                QApplication.instance().removeEventFilter(self.wheel_filter)
+            except Exception:
+                pass
         event.accept()
-        app = QApplication.instance()
-        if app:
-            app.quit()
 
     def _adjust_bottom_dock_height(self):
         """Automatically expands/contracts Execution Center vertical height based on queued sweep jobs."""
         n_rows = self.table_queue.rowCount()
-        base_h = 145
-        row_h = 26
-        max_allowed = min(360, int(self.height() * 0.42))
-        desired_h = min(max_allowed, base_h + (n_rows * row_h))
+        base_h = 165
+        row_h = 30
+        max_allowed = min(420, int(self.height() * 0.50))
+        desired_h = min(max_allowed, base_h + max(1, n_rows) * row_h)
         self.dock_bottom.setMaximumHeight(max_allowed + 30)
         self.resizeDocks([self.dock_bottom], [desired_h], Qt.Vertical)
 
         # Update dynamic badges and tab label
         if hasattr(self, "lbl_queue_badge"):
-            self.lbl_queue_badge.setText(f"{n_rows} Job{'s' if n_rows != 1 else ''} Queued")
+            self.lbl_queue_badge.setText(f"{n_rows} Job{'s' if n_rows != 1 else ''} Total")
         if hasattr(self, "bottom_tabs"):
             self.bottom_tabs.setTabText(0, f"📋 Batch Execution Queue ({n_rows})")
 
-    def add_to_queue(self):
-        row = self.table_queue.rowCount()
-        self.table_queue.insertRow(row)
-
-        if self.active_study == self.STUDY_SE:
-            summary = f"Sweep: [{self.edit_se_vals.text()}], Fixed J_⊥ = {self.spin_se_fixed.value():.1f}, μ = {self.spin_mu.value():.1f}, N = {self.spin_n.value()}"
-        elif self.active_study == self.STUDY_SPEC:
-            summary = f"k = {self.cb_mom.currentText().split()[0]}, [{self.edit_spec_vals.text()}], J_⊥ = {self.spin_spec_fixed.value():.1f}, N = {self.spin_n.value()}"
-        elif self.active_study == self.STUDY_PD:
-            summary = f"Bisection J_K ∈ [{self.s_min.value():.1f}, {self.s_max.value():.1f}], pts = {self.s_pts.value()}, μ = {self.spin_mu.value():.1f}"
-        else:
-            modes = []
-            if self.chk_static.isChecked(): modes.append("Static χ(q)")
-            if self.chk_dynamic.isChecked(): modes.append("Dynamic χ(q,ω)")
-            mode_str = "+".join(modes) if modes else "None"
-            summary = f"{mode_str}, vals = [{self.edit_susc_vals.text()}], N = {self.spin_n.value()}"
-
-        item_num = QTableWidgetItem(str(row + 1))
-        item_num.setTextAlignment(Qt.AlignCenter)
-        self.table_queue.setItem(row, 0, item_num)
-
-        item_study = QTableWidgetItem(self.active_study)
-        font_study = item_study.font()
-        font_study.setBold(True)
-        item_study.setFont(font_study)
-        item_study.setForeground(QColor("#60a5fa") if self.is_dark else QColor("#2563eb"))
-        self.table_queue.setItem(row, 1, item_study)
-
-        item_snap = QTableWidgetItem(summary)
-        item_snap.setTextAlignment(Qt.AlignCenter)
-        item_snap.setForeground(QColor("#94a3b8") if self.is_dark else QColor("#475569"))
-        self.table_queue.setItem(row, 2, item_snap)
-
-        solver_str = "NVIDIA RTX 5060 (GPU)" if self.cb_solver_choice.currentIndex() == 0 else f"CPU ({self.cb_cpu_limit.currentText().split()[0]} Cores)"
-        item_solver = QTableWidgetItem(solver_str)
-        item_solver.setTextAlignment(Qt.AlignCenter)
-        self.table_queue.setItem(row, 3, item_solver)
-
-        prog = QProgressBar()
-        prog.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #cbd5e1;
-                border-radius: 4px;
-                text-align: center;
-                background: #f1f5f9;
-                font-size: 10px;
-                font-weight: 600;
-                color: #0f172a;
-                height: 16px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #2563eb);
-                border-radius: 3px;
-            }
-        """)
-        prog.setValue(0)
-        self.table_queue.setCellWidget(row, 4, prog)
-
-        item_status = QTableWidgetItem("⏳ Pending")
-        item_status.setTextAlignment(Qt.AlignCenter)
-        self.table_queue.setItem(row, 5, item_status)
-
-        self.lbl_status.setText(f"Added {self.active_study} as Job #{row + 1} to queue.")
-        self.bottom_tabs.setCurrentIndex(0)
-        self._adjust_bottom_dock_height()
-
     def start_queue(self):
-        if self.table_queue.rowCount() == 0: self.add_to_queue()
-        self.active_queue_row = 0; self.active_queue_progress = 0
-        self.queue_timer.start(80); self.lbl_status.setText("🔄 Running batch queue...")
-        self.btn_cancel.setEnabled(True)
-        self.btn_cancel.style().unpolish(self.btn_cancel)
-        self.btn_cancel.style().polish(self.btn_cancel)
-        self.btn_cancel.update()
-
-    def _on_queue_tick(self):
-        self.active_queue_progress += 5
-        if self.active_queue_row < self.table_queue.rowCount():
-            prog = self.table_queue.cellWidget(self.active_queue_row, 4)
-            if prog: prog.setValue(self.active_queue_progress)
-            self.table_queue.setItem(self.active_queue_row, 5, QTableWidgetItem(f"🔄 Solving ({self.active_queue_progress}%)"))
-        if self.active_queue_progress >= 100:
-            self.table_queue.setItem(self.active_queue_row, 5, QTableWidgetItem("✅ Completed"))
-            self.active_queue_row += 1; self.active_queue_progress = 0
-            if self.active_queue_row >= self.table_queue.rowCount():
-                self.queue_timer.stop()
-                self.lbl_status.setText("🎉 Batch queue completed successfully!")
-                self.btn_cancel.setEnabled(False)
-                self.btn_cancel.style().unpolish(self.btn_cancel)
-                self.btn_cancel.style().polish(self.btn_cancel)
-                self.btn_cancel.update()
-                self.refresh_dataset_tree()
-                self._update_cache_badge()
-                if hasattr(self, "interactive_plots") and self.interactive_plots:
-                    self.interactive_plots.scan_caches()
-                if hasattr(self, "gallery") and self.gallery:
-                    self.gallery.refresh_gallery()
+        """Starts batch queue execution if idle with remaining queued jobs."""
+        self._queue_paused = False
+        if self.bridge.is_running():
+            return
+        if not self._launch_next_queued_job():
+            self.run_simulation_ui()
 
     def pause_queue(self):
-        self.queue_timer.stop()
-        self.btn_cancel.setEnabled(False)
-        self.btn_cancel.style().unpolish(self.btn_cancel)
-        self.btn_cancel.style().polish(self.btn_cancel)
-        self.btn_cancel.update()
-        self.lbl_status.setText("⏸ Batch queue paused.")
+        """Pauses batch queue execution after current running job finishes."""
+        self._queue_paused = True
+        self.lbl_status.setText("⏸ Batch queue paused. Active job will complete.")
+        self.txt_console.append(
+            f"<div style='color: #fcd34d; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
+            f"[{time.strftime('%H:%M:%S')}] ⏸ [BATCH QUEUE] Paused. Active calculation will complete, remaining jobs held."
+            f"</div>"
+        )
 
     def clear_queue(self):
-        self.table_queue.setRowCount(0)
+        """Clears finished, failed, and cancelled jobs from the execution table while preserving running and queued jobs."""
+        if not self.bridge.is_running() and (not getattr(self, "queued_param_list", None) or len(self.queued_param_list) == 0):
+            if hasattr(self, "queued_param_list"):
+                self.queued_param_list.clear()
+            self.table_queue.setRowCount(0)
+            self.active_queue_row = -1
+            self._adjust_bottom_dock_height()
+            self.lbl_status.setText("Batch queue cleared.")
+            return
+
+        # Engine is running or queued items exist: remove only finished/cancelled rows
+        r = 0
+        while r < self.table_queue.rowCount():
+            st_item = self.table_queue.item(r, 5)
+            st_text = st_item.text() if st_item else ""
+            if any(done_tag in st_text for done_tag in ["Completed", "Failed", "Cancelled", "Error", "⏹", "✅", "❌"]):
+                self.table_queue.removeRow(r)
+                if hasattr(self, "active_queue_row") and self.active_queue_row > r:
+                    self.active_queue_row -= 1
+            else:
+                r += 1
+
+        # Re-number the row index column
+        for idx in range(self.table_queue.rowCount()):
+            self.table_queue.setItem(idx, 0, QTableWidgetItem(str(idx + 1)))
+
         self._adjust_bottom_dock_height()
-        self.lbl_status.setText("Batch queue cleared.")
+        self.lbl_status.setText("Cleared finished jobs from batch queue.")
 
     def toggle_split_view(self, checked):
         self.canvas_right.setVisible(checked)
