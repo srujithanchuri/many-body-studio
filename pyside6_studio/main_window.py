@@ -531,6 +531,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.interactive_plots = InteractivePlotsWidget(out_dir=out_dir, parent=self)
         self.analytical_lab = self.interactive_plots  # Alias for backward compatibility
+        self.live_lab = self.interactive_plots        # Alias for backward compatibility
         self.interactive_plots.sig_send_to_sweeper.connect(self._on_receive_interactive_parameters)
         self.central_view_stack.addWidget(self.interactive_plots)
 
@@ -2881,7 +2882,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.explorer.set_theme(self.is_dark)
         if hasattr(self, "gallery"):
             self.gallery.set_theme(self.is_dark)
-        if hasattr(self, "live_lab"):
+        if hasattr(self, "interactive_plots"):
+            self.interactive_plots.set_theme(self.is_dark)
+        elif hasattr(self, "live_lab"):
             self.live_lab.set_theme(self.is_dark)
         self._update_bottom_dock_theme(self.is_dark)
         self._update_statusbar_theme(self.is_dark)

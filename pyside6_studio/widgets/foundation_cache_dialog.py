@@ -58,54 +58,130 @@ class ComputeCacheDialog(QDialog):
                 return w
         return None
 
-    def _build_ui(self, default_cat: str, default_mu: float, default_jperp: float):
-        lay = QVBoxLayout(self)
-        lay.setSpacing(12)
-        lay.setContentsMargins(16, 16, 16, 16)
+    def showEvent(self, event):
+        super().showEvent(event)
+        main_win = self._find_main_window()
+        is_dark = getattr(main_win, "is_dark", False) if main_win else getattr(self.parent(), "is_dark", False)
+        if not is_dark:
+            app_inst = QApplication.instance()
+            if app_inst:
+                is_dark = getattr(app_inst, "is_dark", False) or (app_inst.palette().window().color().lightness() < 128)
+        self.set_theme(is_dark)
 
-        is_dark = False
-        if self.parent() and hasattr(self.parent(), "is_dark"):
-            is_dark = self.parent().is_dark
-        else:
-            win_col = self.palette().window().color()
-            is_dark = win_col.lightness() < 128
-
+    def set_theme(self, is_dark: bool):
+        self.is_dark = is_dark
         title_color = "#f8fafc" if is_dark else "#0f172a"
         desc_color = "#94a3b8" if is_dark else "#475569"
         border_color = "#334155" if is_dark else "#cbd5e1"
-        grp_color = "#cbd5e1" if is_dark else "#334155"
+        grp_color = "#60a5fa" if is_dark else "#2563eb"
+        status_color = "#60a5fa" if is_dark else "#2563eb"
+        text_color = "#f8fafc" if is_dark else "#0f172a"
+        input_bg = "#1e293b" if is_dark else "#ffffff"
+        dialog_bg = "#0f172a" if is_dark else "#f8fafc"
 
-        # Header info
-        lbl_title = QLabel("▶ Compute Cache")
-        lbl_title.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {title_color};")
-        lay.addWidget(lbl_title)
-
-        lbl_desc = QLabel(
-            "Compute self-energy or bare static/dynamic susceptibility "
-            "for instant loading and interactive exploration."
-        )
-        lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet(f"font-size: 11px; color: {desc_color}; line-height: 1.3;")
-        lay.addWidget(lbl_desc)
-
-        # Form Card
-        grp_form = QGroupBox("Cache Parameters")
-        grp_form.setStyleSheet(f"""
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {dialog_bg};
+                color: {text_color};
+            }}
+            QLabel {{
+                color: {text_color};
+                font-size: 11px;
+            }}
             QGroupBox {{
                 font-weight: 700;
                 font-size: 11px;
                 color: {grp_color};
                 border: 1px solid {border_color};
                 border-radius: 6px;
-                margin-top: 8px;
+                margin-top: 10px;
                 padding-top: 14px;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 4px;
+                background: {dialog_bg};
+                color: {grp_color};
+            }}
+            QComboBox, QDoubleSpinBox {{
+                background: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 11px;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {input_bg};
+                color: {text_color};
+                selection-background-color: {"#1e3a8a" if is_dark else "#eff6ff"};
+                selection-color: {"#93c5fd" if is_dark else "#1d4ed8"};
+                border: 1px solid {border_color};
             }}
         """)
+
+        if hasattr(self, "lbl_title"):
+            self.lbl_title.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {title_color};")
+        if hasattr(self, "lbl_desc"):
+            self.lbl_desc.setStyleSheet(f"font-size: 11px; color: {desc_color}; line-height: 1.3;")
+        if hasattr(self, "lbl_status"):
+            self.lbl_status.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {status_color};")
+        if hasattr(self, "pbar"):
+            self.pbar.setStyleSheet(f"""
+                QProgressBar {{
+                    background: {"#1e293b" if is_dark else "#e2e8f0"};
+                    border-radius: 4px;
+                    border: none;
+                }}
+                QProgressBar::chunk {{
+                    background: {"#3b82f6" if is_dark else "#2563eb"};
+                    border-radius: 4px;
+                }}
+            """)
+        if hasattr(self, "btn_cancel"):
+            self.btn_cancel.setStyleSheet(f"""
+                QPushButton {{
+                    padding: 5px 14px;
+                    background: {"#1e293b" if is_dark else "#f1f5f9"};
+                    border: 1px solid {border_color};
+                    border-radius: 5px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: {"#cbd5e1" if is_dark else "#475569"};
+                }}
+                QPushButton:hover {{
+                    background: {"#334155" if is_dark else "#e2e8f0"};
+                    color: {title_color};
+                }}
+            """)
+
+    def _build_ui(self, default_cat: str, default_mu: float, default_jperp: float):
+        lay = QVBoxLayout(self)
+        lay.setSpacing(12)
+        lay.setContentsMargins(16, 16, 16, 16)
+
+        main_win = self._find_main_window()
+        is_dark = getattr(main_win, "is_dark", False) if main_win else getattr(self.parent(), "is_dark", False)
+        if not is_dark:
+            app_inst = QApplication.instance()
+            if app_inst:
+                is_dark = getattr(app_inst, "is_dark", False) or (app_inst.palette().window().color().lightness() < 128)
+        self.is_dark = is_dark
+
+        # Header info
+        self.lbl_title = QLabel("▶ Compute Cache")
+        lay.addWidget(self.lbl_title)
+
+        self.lbl_desc = QLabel(
+            "Compute self-energy or bare static/dynamic susceptibility "
+            "for instant loading and interactive exploration."
+        )
+        self.lbl_desc.setWordWrap(True)
+        lay.addWidget(self.lbl_desc)
+
+        # Form Card
+        grp_form = QGroupBox("Cache Parameters")
         f_lay = QVBoxLayout(grp_form)
         f_lay.setSpacing(8)
 
@@ -182,7 +258,6 @@ class ComputeCacheDialog(QDialog):
 
         # Progress bar & status label
         self.lbl_status = QLabel("Ready to compute cache.")
-        self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 600; color: #2563eb;")
         lay.addWidget(self.lbl_status)
 
         self.pbar = QProgressBar()
@@ -190,17 +265,6 @@ class ComputeCacheDialog(QDialog):
         self.pbar.setRange(0, 100)
         self.pbar.setValue(0)
         self.pbar.setFixedHeight(8)
-        self.pbar.setStyleSheet("""
-            QProgressBar {
-                background: #e2e8f0;
-                border-radius: 4px;
-                border: none;
-            }
-            QProgressBar::chunk {
-                background: #2563eb;
-                border-radius: 4px;
-            }
-        """)
         lay.addWidget(self.pbar)
 
         # Action Buttons
@@ -208,18 +272,6 @@ class ComputeCacheDialog(QDialog):
         h_btn.addStretch(1)
 
         self.btn_cancel = QPushButton("Close")
-        self.btn_cancel.setStyleSheet("""
-            QPushButton {
-                padding: 5px 14px;
-                background: #f1f5f9;
-                border: 1px solid #cbd5e1;
-                border-radius: 5px;
-                font-size: 11px;
-                font-weight: 600;
-                color: #475569;
-            }
-            QPushButton:hover { background: #e2e8f0; color: #0f172a; }
-        """)
         self.btn_cancel.clicked.connect(self._on_cancel)
         h_btn.addWidget(self.btn_cancel)
 
@@ -243,6 +295,7 @@ class ComputeCacheDialog(QDialog):
 
         lay.addLayout(h_btn)
 
+        self.set_theme(self.is_dark)
         self._on_category_changed(self.cb_category.currentIndex())
 
     def update_engine_state(self, is_running: bool):
