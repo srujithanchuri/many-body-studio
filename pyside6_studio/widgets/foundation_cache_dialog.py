@@ -1,5 +1,5 @@
-"""In-situ Foundation Cache Synthesizer dialog for Many-Body Studio Pro.
-Allows direct evaluation of base self-energy (1-loop & 3-loop FFT) or bare susceptibility
+"""In-situ Compute Cache dialog for Many-Body Studio Pro.
+Allows direct evaluation of self-energy (1-loop & 3-loop FFT) or bare susceptibility
 without requiring the user to configure or run batch parameter sweeps.
 """
 
@@ -15,10 +15,10 @@ from pyside6_studio.backend.bridge import CalculationBridge
 from pyside6_studio.core.config import DEFAULT_RESULTS_DIR
 
 
-class FoundationCacheDialog(QDialog):
+class ComputeCacheDialog(QDialog):
     """
-    Direct in-situ synthesizer dialog for intermediate foundation arrays:
-    - Sigma_base(k, omega) (Total 1-loop + 3-loop FFT convolution)
+    Direct in-situ dialog for computing cache arrays:
+    - Sigma(k, omega) (Total 1-loop + 3-loop FFT convolution)
     - Bare Static chi0(q)
     - Bare Dynamic chi0(q, omega)
     """
@@ -29,7 +29,7 @@ class FoundationCacheDialog(QDialog):
                  default_jperp: float = 6.0):
         super().__init__(parent)
         self.out_dir = out_dir
-        self.setWindowTitle("▶ Foundation Cache Synthesizer")
+        self.setWindowTitle("▶ Compute Cache")
         self.setMinimumWidth(440)
         self.setModal(False)
 
@@ -76,20 +76,20 @@ class FoundationCacheDialog(QDialog):
         grp_color = "#cbd5e1" if is_dark else "#334155"
 
         # Header info
-        lbl_title = QLabel("▶ In-Situ Foundation Synthesizer")
+        lbl_title = QLabel("▶ Compute Cache")
         lbl_title.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {title_color};")
         lay.addWidget(lbl_title)
 
         lbl_desc = QLabel(
-            "Synthesize base foundation arrays in milliseconds for real-time 60 FPS exploration "
-            "in Interactive Plots. No batch sweeper or plot generation required."
+            "Compute self-energy or bare static/dynamic susceptibility "
+            "for instant loading and interactive exploration."
         )
         lbl_desc.setWordWrap(True)
         lbl_desc.setStyleSheet(f"font-size: 11px; color: {desc_color}; line-height: 1.3;")
         lay.addWidget(lbl_desc)
 
         # Form Card
-        grp_form = QGroupBox("Foundation Parameters")
+        grp_form = QGroupBox("Cache Parameters")
         grp_form.setStyleSheet(f"""
             QGroupBox {{
                 font-weight: 700;
@@ -181,7 +181,7 @@ class FoundationCacheDialog(QDialog):
         lay.addWidget(grp_form)
 
         # Progress bar & status label
-        self.lbl_status = QLabel("Ready to synthesize.")
+        self.lbl_status = QLabel("Ready to compute cache.")
         self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 600; color: #2563eb;")
         lay.addWidget(self.lbl_status)
 
@@ -317,14 +317,14 @@ class FoundationCacheDialog(QDialog):
                 self.pbar.setRange(0, 100)
                 self.pbar.setValue(0)
             else:
-                self.lbl_status.setText("▶ Synthesizing on main engine in background...")
+                self.lbl_status.setText("▶ Computing cache on main engine in background...")
                 self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 600; color: #2563eb;")
                 self.pbar.setRange(0, 0)
                 self.update_engine_state(True)
         else:
             # Fallback for isolated execution / unit testing
             self.pbar.setRange(0, 0)
-            self.lbl_status.setText("▶ Synthesizing foundation array...")
+            self.lbl_status.setText("▶ Computing cache array...")
             self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 600; color: #2563eb;")
             self.bridge.start_calculation(params)
             self.update_engine_state(True)
@@ -335,7 +335,7 @@ class FoundationCacheDialog(QDialog):
     def _on_bridge_completed(self, payload: dict):
         self.pbar.setRange(0, 100)
         self.pbar.setValue(100)
-        self.lbl_status.setText("✅ Foundation synthesis completed successfully.")
+        self.lbl_status.setText("✅ Cache computation completed successfully.")
         self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 700; color: #16a34a;")
         self.update_engine_state(False)
 
@@ -345,7 +345,7 @@ class FoundationCacheDialog(QDialog):
     def _on_bridge_error(self, err: str):
         self.pbar.setRange(0, 100)
         self.pbar.setValue(0)
-        self.lbl_status.setText(f"❌ Synthesis failed: {err}")
+        self.lbl_status.setText(f"❌ Computation failed: {err}")
         self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 700; color: #dc2626;")
         self.update_engine_state(False)
 
@@ -361,3 +361,8 @@ class FoundationCacheDialog(QDialog):
     def closeEvent(self, event):
         # Dialog close does NOT kill running calculations on the main engine
         event.accept()
+
+
+# Backward compatibility alias
+FoundationCacheDialog = ComputeCacheDialog
+

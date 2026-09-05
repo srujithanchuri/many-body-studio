@@ -723,29 +723,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h_cache_ctrl.addWidget(self.btn_cache_mgr)
         gc.addLayout(h_cache_ctrl)
 
-        # Dual-action execution buttons: Fast Foundation Cache vs Full Sweep
-        h_exec_actions = QHBoxLayout()
-        self.btn_dock_foundation = QPushButton("▶ Run Cache")
-        self.btn_dock_foundation.setToolTip("Directly evaluate foundation cache (base self-energy Σ & bare susceptibility bubble) and jump straight into Interactive Plots.")
-        self.btn_dock_foundation.setStyleSheet(
-            "QPushButton { background: #0891b2; color: #ffffff; font-weight: 700; font-size: 11px; padding: 6px 8px; border-radius: 6px; border: 1px solid #0e7490; } "
-            "QPushButton:hover { background: #0e7490; } "
-            "QPushButton:disabled { background: #94a3b8; border-color: #94a3b8; }"
-        )
-        self.btn_dock_foundation.clicked.connect(self.run_foundation_cache_ui)
-        h_exec_actions.addWidget(self.btn_dock_foundation)
-
-        self.btn_dock_sweep = QPushButton("🔬 Run Full Sweep")
-        self.btn_dock_sweep.setToolTip("Execute complete multi-parameter sweep, calculate spectral data, and render publication plots in Plot Viewer CAD.")
-        self.btn_dock_sweep.setStyleSheet(
-            "QPushButton { background: #2563eb; color: #ffffff; font-weight: 700; font-size: 11px; padding: 6px 8px; border-radius: 6px; border: 1px solid #1d4ed8; } "
-            "QPushButton:hover { background: #1d4ed8; } "
-            "QPushButton:disabled { background: #94a3b8; border-color: #94a3b8; }"
-        )
-        self.btn_dock_sweep.clicked.connect(self.run_simulation_ui)
-        h_exec_actions.addWidget(self.btn_dock_sweep)
-        gc.addLayout(h_exec_actions)
-
         lay_sim.addWidget(grp_cache)
 
         # 2. Study-specific stacked parameters
@@ -2211,14 +2188,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def run_or_queue_job(self, params: dict, study_name: str = None, summary: str = None) -> str:
         """Central serialization gateway: starts execution immediately if idle, or enqueues if busy."""
         if not study_name:
-            if params.get("task") == "foundation_cache":
+            if params.get("task") in ("foundation_cache", "compute_cache"):
                 cat = params.get("cache_category", "sigma_base")
-                study_name = "Foundation Σ" if "sigma" in cat else "Foundation χ₀"
+                study_name = "Self-Energy Σ" if "sigma" in cat else "Bare χ₀"
             else:
                 study_name = self.active_study
 
         if not summary:
-            if params.get("task") == "foundation_cache":
+            if params.get("task") in ("foundation_cache", "compute_cache"):
                 cat = params.get("cache_category", "sigma_base")
                 summary = f"{cat}, μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
                 if "sigma" in cat:
@@ -2248,7 +2225,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         row = self._create_queue_row(study_name, summary, solver_choice, status="🔄 Running...")
         self.active_queue_row = row
 
-        if params.get("task") == "foundation_cache":
+        if params.get("task") in ("foundation_cache", "compute_cache"):
             self._foundation_requested = True
         else:
             self._foundation_requested = False
@@ -2269,13 +2246,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
             return "error"
 
     def run_or_queue_foundation_job(self, params: dict) -> str:
-        """Runs a foundation cache job directly if engine is idle, or queues it if busy."""
+        """Runs a compute cache job directly if engine is idle, or queues it if busy."""
         cat = params.get("cache_category", "sigma_base")
-        study_name = "Foundation Σ" if "sigma" in cat else "Foundation χ₀"
+        study_name = "Self-Energy Σ" if "sigma" in cat else "Bare χ₀"
         summary = f"{cat}, μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
         if "sigma" in cat:
             summary += f", J_⊥={params.get('fixed_jperp', 6.0):.2f}"
         return self.run_or_queue_job(params, study_name=study_name, summary=summary)
+
+    run_or_queue_cache_job = run_or_queue_foundation_job  # Canonical alias
 
     def _on_precompute_bubble(self):
         """Precomputes and caches the bare bubble chi0 on the selected backend."""
@@ -2666,7 +2645,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         if getattr(self, "_foundation_requested", False):
             self._foundation_requested = False
-            self.lbl_status.setText("⚡ Foundation cache ready! Switched to Interactive Plots.")
+            self.lbl_status.setText("⚡ Cache ready! Switched to Interactive Plots.")
             self.set_canvas_mode(1)
 
         if primary_plot and os.path.exists(primary_plot):
@@ -2817,7 +2796,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         base_h = 165
         row_h = 30
         max_allowed = min(420, int(self.height() * 0.50))
-        desired_h = min(max_allowed, base_h + max(1, n_rows) * row_h)
+        desired_h = min(max_allowed, base_h + n_rows * row_h)
         self.dock_bottom.setMaximumHeight(max_allowed + 30)
         self.resizeDocks([self.dock_bottom], [desired_h], Qt.Vertical)
 
@@ -2846,8 +2825,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         )
 
     def clear_queue(self):
-        """Clears finished, failed, and cancelled jobs from the execution table while preserving running and queued jobs."""
-        if not self.bridge.is_running() and (not getattr(self, "queued_param_list", None) or len(self.queued_param_list) == 0):
+        """Clears batch execution queue. If engine is idle, clears all queued jobs; if running, preserves active job and clears completed/cancelled."""
+        if not self.bridge.is_running():
             if hasattr(self, "queued_param_list"):
                 self.queued_param_list.clear()
             self.table_queue.setRowCount(0)

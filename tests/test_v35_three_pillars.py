@@ -285,6 +285,32 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
         lab.slider_jk.setValue(40)  # J_K = 4.0
         self.assertEqual(lab.current_JK, 4.0)
 
+        # Experiment 5: Electrical Conductivity Mode
+        # Selecting Electrical Conductivity should auto-switch to sigma_base cache
+        lab.cb_experiment.setCurrentIndex(5)
+        self.assertEqual(lab.active_mode, "conductivity")
+        self.assertIsNotNone(lab.loaded_base_sigma)
+        self.assertEqual(len(lab.fig.axes), 2)  # 2 subplots: full scale & zoomed
+        mode5 = lab.current_mode
+        self.assertIsNotNone(mode5.line1)
+        self.assertIsNotNone(mode5.line2)
+        # Contextual UI checks (using isHidden for headless environment)
+        self.assertFalse(lab.container_conductivity.isHidden())
+        self.assertFalse(lab.lbl_conductivity_stats.isHidden())
+        self.assertTrue(lab.container_mom.isHidden())
+        self.assertTrue(lab.container_slice.isHidden())
+        # Slider change triggers update
+        lab.slider_jk.setValue(50)  # J_K = 5.0
+        self.assertEqual(lab.current_JK, 5.0)
+        # Device toggle (CPU)
+        lab.cb_device.setCurrentIndex(2)  # CPU
+        self.assertEqual(lab.conductivity_device, "cpu")
+        self.assertIn("DC σ(0):", lab.lbl_conductivity_stats.text())
+        self.assertIn("CPU", lab.lbl_conductivity_stats.toolTip())
+        # Device toggle (Auto)
+        lab.cb_device.setCurrentIndex(0)  # Auto
+        self.assertEqual(lab.conductivity_device, "auto")
+
     # -------------------------------------------------------------------------
     # Integration Test: Mode Switcher & Two Perspectives Integration
     # -------------------------------------------------------------------------

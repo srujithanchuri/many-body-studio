@@ -575,7 +575,7 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
         omega_max = float(params.get("omega_max", params.get("w_max", 40.0 if N >= 100 else 20.0)))
         eta = float(params.get("eta", 0.05 if N >= 100 else 0.08))
 
-        emit_status(f"Synthesizing Total Base Self-Energy Σ (1-Loop + 3-Loop) on {solver_choice.upper()} (N={N}, μ={mu:.1f}, J⊥={fixed_jperp:.1f})...")
+        emit_status(f"Computing Total Self-Energy Σ (1-Loop + 3-Loop) on {solver_choice.upper()} (N={N}, μ={mu:.1f}, J⊥={fixed_jperp:.1f})...")
         from parameters import ModelParameters
         import sweep_core
 
@@ -601,7 +601,7 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
         if not os.path.exists(target_fpath):
             target_fpath = os.path.join(out_data_dir, cache_name)
 
-        emit_status(f"✅ Total Base Self-Energy Foundation Σ (1-Loop + 3-Loop) synthesized: {cache_name}")
+        emit_status(f"✅ Total Self-Energy Σ (1-Loop + 3-Loop) computed: {cache_name}")
         emit_completed(plot_path="", data_path=target_fpath, all_plots=[])
 
     else:
@@ -658,7 +658,7 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
         if not os.path.exists(cache_file):
             cache_file = ""
 
-        emit_status(f"✅ Bare χ₀ Foundation synthesized successfully (N={N}, μ={mu:.1f}).")
+        emit_status(f"✅ Bare χ₀ computed successfully (N={N}, μ={mu:.1f}).")
         emit_completed(plot_path="", data_path=cache_file, all_plots=[])
 
 

@@ -8,4 +8,11 @@ call .venv\Scripts\activate.bat
 set PYTHONPATH=C:\Users\sruji\Projects\masters_thesis;C:\Users\sruji\Projects\masters_thesis\self_energy;C:\Users\sruji\Projects\masters_thesis\susceptibility;%PYTHONPATH%
 
 python pyside6_studio\main.py
-pause
+
+:: Only pause if the application exited with an error code
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo [ERROR] Studio exited with error code %ERRORLEVEL%
+    pause
+)
+

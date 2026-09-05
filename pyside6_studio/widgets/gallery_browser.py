@@ -91,7 +91,25 @@ def parse_plot_metadata(filepath: str) -> Tuple[str, str, str, str, str]:
         params = [sweep_name, f'{fixed_name} = {fixed_val}', f'μ = {mu}']
         return title, '  •  '.join(params), '🌊 Spectral', obs_type, fname
 
-    # 5. Composite sweeps: sweep_JK_vals_3.00_6.00_9.00_Jperp_6.00...png
+    # 5. Conductivity plots and sweeps: conductivity_JK_... or sweep_conductivity_...
+    if stem.lower().startswith('sweep_conductivity_') or stem.lower().startswith('conductivity_'):
+        is_sweep = stem.lower().startswith('sweep_conductivity_')
+        title = 'Electrical Conductivity Sweep' if is_sweep else 'Electrical Conductivity σ(ω)'
+        obs_type = 'Electrical Conductivity σ(ω)'
+        cat = '⚡ Conductivity'
+        params = []
+        jk_m = re.search(r'JK_([0-9.]+)', stem)
+        if jk_m: params.append(f'J_K = {jk_m.group(1)}')
+        jp_m = re.search(r'Jperp_([0-9.]+)', stem) or re.search(r'J_perp_([0-9.]+)', stem)
+        if jp_m: params.append(f'J_⊥ = {jp_m.group(1)}')
+        mu_m = re.search(r'mu_([0-9.-]+)', stem)
+        if mu_m: params.append(f'μ = {mu_m.group(1)}')
+        if is_sweep:
+            mode_m = 'J_K Sweep' if 'vals' in stem and 'jk' in stem.lower() else 'J_⊥ Sweep'
+            params.insert(0, mode_m)
+        return title, '  •  '.join(params), cat, obs_type, fname
+
+    # 6. Composite sweeps: sweep_JK_vals_3.00_6.00_9.00_Jperp_6.00...png
     if 'sweep_jk' in stem.lower() or 'sweep_jperp' in stem.lower():
         title = 'Spectral Sweep Suite [DOS, FS, Path]'
         params = []

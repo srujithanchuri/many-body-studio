@@ -76,42 +76,39 @@ class TestFoundationWorkflow(unittest.TestCase):
         dlg.close()
 
     def test_foundation_button_menu_and_actions(self):
-        """Test InteractivePlotsWidget foundation button is a direct Run Cache launcher."""
+        """Test InteractivePlotsWidget button is a direct Compute Cache launcher."""
         w = InteractivePlotsWidget(out_dir=self.root)
         self.assertIsNotNone(w.btn_compute_cache)
-        self.assertIn("Run Cache", w.btn_compute_cache.text())
+        self.assertIn("Compute Cache", w.btn_compute_cache.text())
         w.close()
 
     def test_dual_action_dock_buttons_and_execution_state(self):
-        """Test Fast Foundation vs Full Sweep button state management in inspector dock."""
+        """Test primary execution buttons and verify redundant dock buttons are removed."""
         window = UnifiedWorkbenchWindow()
         window.edit_out_dir.setText(self.root)
 
+        # Redundant dock run buttons are removed from Computation & Cache Status
+        self.assertFalse(hasattr(window, "btn_dock_foundation"))
+        self.assertFalse(hasattr(window, "btn_dock_sweep"))
+
         # Initially idle
-        self.assertIn("Run Cache", window.btn_dock_foundation.text())
-        self.assertTrue(window.btn_dock_foundation.isEnabled())
-        self.assertTrue(window.btn_dock_sweep.isEnabled())
         self.assertTrue(window.btn_run.isEnabled())
         self.assertFalse(window.btn_cancel.isEnabled())
 
         # Update to running state
         window._update_execution_buttons(is_running=True)
-        self.assertFalse(window.btn_dock_foundation.isEnabled())
-        self.assertFalse(window.btn_dock_sweep.isEnabled())
         self.assertFalse(window.btn_run.isEnabled())
         self.assertTrue(window.btn_cancel.isEnabled())
 
         # Update back to idle state
         window._update_execution_buttons(is_running=False)
-        self.assertTrue(window.btn_dock_foundation.isEnabled())
-        self.assertTrue(window.btn_dock_sweep.isEnabled())
         self.assertTrue(window.btn_run.isEnabled())
         self.assertFalse(window.btn_cancel.isEnabled())
 
         window.close()
 
     def test_foundation_completion_auto_switches_canvas(self):
-        """Test that completing a direct foundation task switches automatically to Interactive Plots."""
+        """Test that completing a direct cache task switches automatically to Interactive Plots."""
         window = UnifiedWorkbenchWindow()
         window.edit_out_dir.setText(self.root)
 
@@ -119,7 +116,7 @@ class TestFoundationWorkflow(unittest.TestCase):
         window.set_canvas_mode(0)
         self.assertEqual(window.central_view_stack.currentIndex(), 0)
 
-        # Flag that a foundation cache was requested
+        # Flag that a cache was requested
         window._foundation_requested = True
 
         # Simulate completion payload
@@ -133,7 +130,7 @@ class TestFoundationWorkflow(unittest.TestCase):
         # Should auto-switch to Interactive Plots (mode 1) and reset flag
         self.assertFalse(window._foundation_requested)
         self.assertEqual(window.central_view_stack.currentIndex(), 1)
-        self.assertIn('Foundation cache ready', window.lbl_status.text())
+        self.assertIn('cache ready', window.lbl_status.text().lower())
 
         window.close()
 

@@ -16,17 +16,18 @@ from pyside6_studio.widgets.interactive_modes.energy_slice_mode import EnergySli
 from pyside6_studio.widgets.interactive_modes.band_dispersion_mode import BandDispersionMode
 from pyside6_studio.widgets.interactive_modes.rpa_susceptibility_mode import StaticSusceptibilityMode, RpaSusceptibilityMode
 from pyside6_studio.widgets.interactive_modes.dynamic_susceptibility_mode import DynamicSusceptibilityMode
+from pyside6_studio.widgets.interactive_modes.conductivity_mode import ElectricalConductivityMode
 
 BaseAnalyticalMode = BaseInteractiveMode
 
 __all__ = [
     "BaseAnalyticalMode",
     "BaseInteractiveMode",
-    "BaseAnalyticalMode",
     "SpectralFunctionMode",
     "EnergySliceMode",
     "BandDispersionMode",
     "StaticSusceptibilityMode",
     "DynamicSusceptibilityMode",
     "RpaSusceptibilityMode",
+    "ElectricalConductivityMode",
 ]

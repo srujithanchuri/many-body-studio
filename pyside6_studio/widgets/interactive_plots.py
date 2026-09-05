@@ -41,6 +41,7 @@ from pyside6_studio.widgets.interactive_modes import (
     StaticSusceptibilityMode,
     DynamicSusceptibilityMode,
     RpaSusceptibilityMode,
+    ElectricalConductivityMode,
 )
 from pyside6_studio.widgets.foundation_cache_dialog import FoundationCacheDialog
 
@@ -169,6 +170,7 @@ class InteractivePlotsWidget(QWidget):
         self.current_Jperp = 6.0
         self.current_K = 1.0
         self.current_omega_slice = 0.0
+        self.conductivity_device = "auto"
 
         # Modular Analytical Mode Handlers
         self.modes: dict[str, BaseInteractiveMode] = {
@@ -178,8 +180,9 @@ class InteractivePlotsWidget(QWidget):
             "rpa_susc": StaticSusceptibilityMode(self),
             "static_susc": StaticSusceptibilityMode(self),
             "dynamic_susc": DynamicSusceptibilityMode(self),
+            "conductivity": ElectricalConductivityMode(self),
         }
-        self.mode_order = ["k_probe", "energy_slice", "band_dispersion", "static_susc", "dynamic_susc"]
+        self.mode_order = ["k_probe", "energy_slice", "band_dispersion", "static_susc", "dynamic_susc", "conductivity"]
         self.is_dark: bool = False
 
         self._build_ui()
@@ -401,9 +404,9 @@ class InteractivePlotsWidget(QWidget):
         self.cb_cache_file.currentIndexChanged.connect(self._on_cache_selected)
         r1_lay.addWidget(self.cb_cache_file)
 
-        # In-Situ Foundation Synthesizer Button (Direct Modal Launcher)
-        self.btn_compute_cache = QPushButton("▶ Run Cache")
-        self.btn_compute_cache.setToolTip("Run/Synthesize foundation cache for real-time exploration")
+        # In-Situ Compute Cache Button (Direct Modal Launcher)
+        self.btn_compute_cache = QPushButton("▶ Compute Cache")
+        self.btn_compute_cache.setToolTip("Compute self-energy or susceptibility cache for real-time exploration")
         self.btn_compute_cache.setStyleSheet("""
             QPushButton {
                 padding: 2px 10px;
@@ -711,6 +714,35 @@ class InteractivePlotsWidget(QWidget):
         self.container_susc_params.setVisible(False)
         r2_lay.addWidget(self.container_susc_params)
 
+        # Contextual Sub-container: Electrical Conductivity Parameters (Device Selector)
+        self.container_conductivity = QWidget()
+        cond_lay = QHBoxLayout(self.container_conductivity)
+        cond_lay.setContentsMargins(0, 0, 0, 0)
+        cond_lay.setSpacing(5)
+        cond_lay.setAlignment(Qt.AlignVCenter)
+
+        lbl_device = QLabel("Device:")
+        lbl_device.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
+        cond_lay.addWidget(lbl_device)
+
+        self.cb_device = ModernComboBox(max_hint_width=135)
+        self.cb_device.setStyleSheet(combo_style + "QComboBox { min-width: 105px; max-width: 140px; font-weight: 600; }")
+        gpu_detected = False
+        try:
+            from conductivity import is_gpu_available
+            gpu_detected = is_gpu_available()
+        except Exception:
+            pass
+        auto_label = "Auto (GPU)" if gpu_detected else "Auto (CPU)"
+        self.cb_device.addItem(auto_label, "auto")
+        self.cb_device.addItem("GPU (CUDA)", "gpu")
+        self.cb_device.addItem("CPU (Multi-core)", "cpu")
+        self.cb_device.currentIndexChanged.connect(self._on_device_changed)
+        cond_lay.addWidget(self.cb_device)
+
+        self.container_conductivity.setVisible(False)
+        r2_lay.addWidget(self.container_conductivity)
+
         # Contextual Tip for 2D Maps
         self.lbl_map_tip = QLabel("💡 Tip: Click map to probe k • Double-click for A(k, ω)")
         self.lbl_map_tip.setStyleSheet("color: #64748b; font-size: 10px; font-style: italic;")
@@ -767,6 +799,12 @@ class InteractivePlotsWidget(QWidget):
             "  - Proportional to the Sommerfeld electronic specific heat coefficient γ<sub>C</sub> ∝ m*/m."
         )
         r2_lay.addWidget(self.lbl_live_mass)
+
+        self.lbl_conductivity_stats = QLabel("DC σ(0): —")
+        self.lbl_conductivity_stats.setStyleSheet(chip_style_z)
+        self.lbl_conductivity_stats.setFixedHeight(24)
+        self.lbl_conductivity_stats.setVisible(False)
+        r2_lay.addWidget(self.lbl_conductivity_stats)
 
         h_lay.addLayout(r2_lay)
         lay.addWidget(self.header_frame)
@@ -1019,9 +1057,9 @@ class InteractivePlotsWidget(QWidget):
         ax = self.fig.add_subplot(111)
         if msg is None:
             msg = (
-                "▶ No matching foundation cache found in results/cache/\n\n"
-                "Click [ ▶ Run Cache ] in the toolbar above to directly evaluate\n"
-                "a base self-energy Σ or bare χ₀ foundation array in ~0.3s.\n\n"
+                "▶ No matching cache found in results/cache/\n\n"
+                "Click [ ▶ Compute Cache ] in the toolbar above to directly evaluate\n"
+                "a self-energy Σ or bare χ₀ array in ~0.3s.\n\n"
                 "Once evaluated, explore 60 FPS J_K scaling, k-probing,\n"
                 "and RPA instabilities instantaneously without running batch sweeps!"
             )
@@ -1037,7 +1075,7 @@ class InteractivePlotsWidget(QWidget):
         self.canvas.draw()
 
     def _open_compute_cache_dialog(self):
-        """Opens the in-situ foundation synthesizer dialog for the active mode."""
+        """Opens the in-situ compute cache dialog for the active mode."""
         target_cat = "sigma_base"
         if self.active_mode in ["rpa_susc", "static_susc"]:
             target_cat = "chi0_static"
@@ -1090,7 +1128,7 @@ class InteractivePlotsWidget(QWidget):
         self._foundation_dlg.show()
 
     def _on_foundation_cache_generated(self, cache_path: str):
-        """Rescans cache list and auto-selects newly generated foundation array."""
+        """Rescans cache list and auto-selects newly generated cache array."""
         self.scan_caches()
         if cache_path:
             target_base = os.path.basename(cache_path)
@@ -1099,7 +1137,7 @@ class InteractivePlotsWidget(QWidget):
                 if item_p == cache_path or (item_p and target_base in os.path.basename(str(item_p))):
                     self.cb_cache_file.setCurrentIndex(i)
                     break
-        self.sig_status_msg.emit("⚡ Foundation cache ready & loaded into Interactive Plots.")
+        self.sig_status_msg.emit("⚡ Cache ready & loaded into Interactive Plots.")
 
     def _on_send_to_sweeper(self):
         """Dispatches active exploration parameters to Simulation Studio Parameter Dock."""
@@ -1283,12 +1321,24 @@ class InteractivePlotsWidget(QWidget):
         self.btn_k_center.setVisible(False)
         self.btn_k_corner.setVisible(False)
 
+        # Hide conductivity controls by default (shown by conductivity_mode.setup_ui)
+        if hasattr(self, "container_conductivity"):
+            self.container_conductivity.setVisible(False)
+        if hasattr(self, "lbl_conductivity_stats"):
+            self.lbl_conductivity_stats.setVisible(False)
+
         # Update available mu values for the active mode and populate cache dropdown
         self._update_mu_filter_options()
         self._populate_cache_dropdown()
 
         self.current_mode.setup_ui()
         self._recompute_and_render()
+
+    def _on_device_changed(self, idx: int):
+        val = self.cb_device.currentData()
+        self.conductivity_device = str(val) if val is not None else "auto"
+        if self.active_mode == "conductivity":
+            self._recompute_and_render()
 
     def _on_jk_slider_changed(self, val: int):
         self.current_JK = float(val) / 10.0
