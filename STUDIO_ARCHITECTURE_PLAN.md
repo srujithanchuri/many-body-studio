@@ -1,6 +1,6 @@
 # Many-Body Studio Pro: Complete Architecture & Implementation Plan
 
-> **Document Version**: alpha-v4.0 (Milestone: Fixed Panel Dimensions, Modular 5-Mode Live Analytical Lab, High-Precision J_perp / K Susceptibility Tuning)  
+> **Document Version**: alpha-v4.0 (Milestone: Fixed Panel Dimensions, Modular 5-Mode Interactive Plots, High-Precision J_perp / K Susceptibility Tuning)  
 > **Target Project**: `C:\Users\sruji\Projects\masters_thesis_gui`  
 > **Physics Engine Source**: `C:\Users\sruji\Projects\masters_thesis`  
 > **Author**: Antigravity Assistant & Srujith Anchuri  
@@ -17,7 +17,7 @@
 
 ### The Dual-Perspective Concept:
 1. **Simulation Studio (Current Primary Focus)**: An IDE-style scientific workbench dedicated to configuring Hamiltonians, launching GPU/CPU simulations, monitoring live progress, managing batch queues, and inspecting data in a hardware-accelerated interactive canvas.
-2. **Publication Figure Studio (Staged for Future)**: A specialized layout perspective that stows away all solver knobs to compose multi-panel journal figures (`(a) DOS`, `(b) Fermi Surface`, `(c) Dispersion Path`), customize colormaps, apply LaTeX typography, and export vector PDFs for LaTeX.
+2. **Figure Composer (Staged for Future)**: A specialized layout perspective that stows away all solver knobs to compose multi-panel journal figures (`(a) DOS`, `(b) Fermi Surface`, `(c) Dispersion Path`), customize colormaps, apply LaTeX typography, and export vector PDFs for LaTeX.
 
 ---
 

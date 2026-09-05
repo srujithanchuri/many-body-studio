@@ -1425,3 +1425,8 @@ class LiveAnalyticalLabWidget(QWidget):
 
     def _render_rpa_susc(self):
         self.modes["rpa_susc"].render()
+
+
+# Alias for clean nomenclature
+InteractivePlotsWidget = LiveAnalyticalLabWidget
+

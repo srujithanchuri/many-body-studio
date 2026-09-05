@@ -6,7 +6,7 @@ Features Dual-Perspective Workspace:
    - Numerical Grid & Resolution Presets (Fast Preview N=64, Standard N=100, High-Res N=256, Custom).
    - Isolated QProcess execution on RTX 5060 with live streaming console and sub-second cancellation.
    - Hardware-accelerated CAD zoom/pan canvas (QGraphicsView).
-2. [ 🎨 Publication Figure Studio ]:
+2. [ 🎨 Figure Composer ]:
    - All physics/runner controls are cleanly stowed away.
    - Scientific multi-panel layout templates and typography styling.
 """
@@ -327,7 +327,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.tb.setMovable(False)
         self.addToolBar(self.tb)
 
-        lbl_persp = QLabel(" WORKSPACE MODE: ")
+        lbl_persp = QLabel(" WORKSPACE: ")
         lbl_persp.setStyleSheet("font-weight: 700; color: #64748b; font-size: 11px;")
         self.tb.addWidget(lbl_persp)
 
@@ -344,7 +344,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_mode_sim.clicked.connect(lambda: self.set_perspective("simulation"))
         mc_lay.addWidget(self.btn_mode_sim)
 
-        self.btn_mode_pub = QPushButton("🎨 Publication Figures")
+        self.btn_mode_pub = QPushButton("🎨 Figure Composer")
         self.btn_mode_pub.setObjectName("ModeInactive")
         self.btn_mode_pub.setCursor(Qt.PointingHandCursor)
         self.btn_mode_pub.clicked.connect(lambda: self.set_perspective("publication"))
@@ -422,16 +422,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        # 3-Pillar Workspace Switcher
+        # Central Viewport Mode Switcher
         header_bar = QHBoxLayout()
         header_bar.setContentsMargins(4, 2, 4, 2)
         header_bar.setSpacing(6)
 
-        lbl_vp = QLabel("STUDIO PERSPECTIVE:")
+        lbl_vp = QLabel("VIEWPORT:")
         lbl_vp.setStyleSheet("font-weight: 700; font-size: 11px; color: #64748b;")
         header_bar.addWidget(lbl_vp)
 
-        self.btn_canvas_figure = QPushButton("🖼️ Publication Figures")
+        self.btn_canvas_figure = QPushButton("📊 Plot Viewer")
         self.btn_canvas_figure.setCheckable(True)
         self.btn_canvas_figure.setChecked(True)
         self.btn_canvas_figure.setStyleSheet("""
@@ -444,9 +444,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
             }
         """)
         self.btn_canvas_figure.clicked.connect(lambda: self.set_canvas_mode(0))
+        self.btn_canvas_plot = self.btn_canvas_figure
         header_bar.addWidget(self.btn_canvas_figure)
 
-        self.btn_canvas_lab = QPushButton("⚡ Live Analytical Lab")
+        self.btn_canvas_lab = QPushButton("⚡ Interactive Plots")
         self.btn_canvas_lab.setCheckable(True)
         self.btn_canvas_lab.setChecked(False)
         self.btn_canvas_lab.setStyleSheet("""
@@ -459,6 +460,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             }
         """)
         self.btn_canvas_lab.clicked.connect(lambda: self.set_canvas_mode(1))
+        self.btn_canvas_interactive = self.btn_canvas_lab
         header_bar.addWidget(self.btn_canvas_lab)
 
         header_bar.addStretch()
@@ -527,16 +529,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
         fig_lay.addWidget(self.view_splitter, 1)
         self.central_view_stack.addWidget(self.figure_view_container)
 
-        # Page 1: Live Analytical Lab (Cache-driven real-time BZ probe & continuous J_K scaling)
+        # Page 1: Interactive Plots (Real-time 60 FPS BZ probe, Fermi surfaces & continuous J_K scaling)
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.analytical_lab = LiveAnalyticalLabWidget(out_dir=out_dir, parent=self)
+        self.interactive_plots = self.analytical_lab
         self.central_view_stack.addWidget(self.analytical_lab)
 
         layout.addWidget(self.central_view_stack, 1)
         self.setCentralWidget(self.central_container)
 
     def set_canvas_mode(self, mode_idx: int):
-        """Switches between Publication Figures (0) and Live Analytical Lab (1)."""
+        """Switches between Plot Viewer (0) and Interactive Plots (1)."""
         self.central_view_stack.setCurrentIndex(mode_idx)
         self.btn_canvas_figure.setChecked(mode_idx == 0)
         self.btn_canvas_lab.setChecked(mode_idx == 1)
@@ -1855,7 +1858,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
             # Render publication layout
             self._update_publication_preview()
-            self.lbl_status.setText("Mode: [Publication Figure Studio] — Compose multi-panel figures for LaTeX.")
+            self.lbl_status.setText("Mode: [Figure Composer] — Compose multi-panel figures for LaTeX.")
 
     # =========================================================================
     # PUBLICATION FIGURE DISPLAY

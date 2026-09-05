@@ -25,11 +25,12 @@
 | [`pyside6_studio/core/hardware.py`](pyside6_studio/core/hardware.py) | Hardware probe: CuPy NVIDIA GPU VRAM detection and CPU core limits. |
 | [`pyside6_studio/core/cache_manager.py`](pyside6_studio/core/cache_manager.py) | 1/8th IBZ bit-groomed $\Sigma$ cache detection, parameter hashing, and cache badges. |
 | [`pyside6_studio/core/presets.py`](pyside6_studio/core/presets.py) | Resolution presets: Draft ($64\times 64$), Standard ($100\times 100$), Publication ($256\times 256$). |
-| [`pyside6_studio/widgets/plot_canvas.py`](pyside6_studio/widgets/plot_canvas.py) | High-DPI interactive `QGraphicsView` canvas (smooth zoom, pan, coordinates, split view). |
+| [`pyside6_studio/canvas.py`](pyside6_studio/canvas.py) | High-DPI interactive `QGraphicsView` canvas (smooth zoom, pan, coordinates, split view). |
 | [`pyside6_studio/widgets/gallery_browser.py`](pyside6_studio/widgets/gallery_browser.py) | Left visual thumbnail cards & compact list gallery browser with search/filter. |
 | [`pyside6_studio/widgets/dataset_explorer.py`](pyside6_studio/widgets/dataset_explorer.py) | Left dock dataset tree scanner with metadata inspection cards and quick-load actions. |
 | [`pyside6_studio/widgets/data_plotter.py`](pyside6_studio/widgets/data_plotter.py) | Interactive curve plotting and slice visualizer dialog. |
-| [`pyside6_studio/widgets/live_analytical_lab.py`](pyside6_studio/widgets/live_analytical_lab.py) | **Pillar 1**: 60 FPS real-time $J_K$ slider coupling & plug-in analytical modes. |
+| [`pyside6_studio/widgets/live_analytical_lab.py`](pyside6_studio/widgets/live_analytical_lab.py) | **Interactive Plots**: 60 FPS real-time $J_K$ slider coupling & plug-in analytical modes. |
+| [`pyside6_studio/widgets/interactive_plots.py`](pyside6_studio/widgets/interactive_plots.py) | Module alias and exports for `InteractivePlotsWidget`. |
 | [`pyside6_studio/widgets/analytical_modes/`](pyside6_studio/widgets/analytical_modes/) | Analytical plug-ins: DOS & Fermi Surface, Dynamic $\chi(\mathbf{q},\omega)$, Static RPA $\chi(\mathbf{q})$. |
 | [`tests/`](tests/) | Headless automated test suite running with Python standard `unittest` (37 tests). |
 | [`results/`](results/) | Gitignored calculation outputs: `cache/` (.npz), `plots/` (.png/.pdf), `data/` (.npz). |
@@ -65,9 +66,11 @@ Agents modifying this codebase **must strictly preserve** these rules:
    - `⏹ Cancel / Stop` (`#BtnCancel`): **Vivid Red** (`#ef4444`) when active/running; **Disabled Grey** (`#f1f5f9` / `#1e293b`) when idle.
    - Always synchronize execution buttons via `self._update_execution_buttons(is_running=True/False)`.
 
-5. **Dual-Perspective Switching**:
-   - Controlled via `self.set_perspective("simulation" | "publication")`.
-   - Segmented mode switcher lives in `self.mode_container` (`QFrame#ModeSegmentedContainer`).
+5. **Two-Tier Navigation Architecture**:
+   - **Tier 1: Global Workspace Mode** (Top Toolbar):
+     - `WORKSPACE: [ 🔬 Simulation Studio ] [ 🎨 Figure Composer ]` (controlled via `self.set_perspective("simulation" | "publication")`).
+   - **Tier 2: Central Viewport Switcher** (Central Header):
+     - `VIEWPORT: [ 📊 Plot Viewer ] [ ⚡ Interactive Plots ]` (controlled via `self.set_canvas_mode(0 | 1)`).
 
 ---
 
@@ -76,7 +79,7 @@ Agents modifying this codebase **must strictly preserve** these rules:
 After any modification, run automated tests using the venv interpreter:
 
 ```powershell
-# Fast 3-Pillars validation test (Live Lab, Publication Studio, Caching Engine)
+# Fast 3-Pillars validation test (Interactive Plots, Figure Composer, Caching Engine)
 .venv\Scripts\python.exe tests/test_v35_three_pillars.py
 
 # Complete 37-test automated discovery suite (Headless offscreen)

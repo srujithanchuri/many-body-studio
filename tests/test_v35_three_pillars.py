@@ -289,29 +289,34 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
     # Integration Test: Mode Switcher & Two Perspectives Integration
     # -------------------------------------------------------------------------
     def test_04_workbench_perspectives_integration(self):
-        """Verifies switching between the 2 perspectives and gallery selection."""
+        """Verifies switching between the 2 central viewport modes (Plot Viewer & Interactive Plots)."""
         win = UnifiedWorkbenchWindow()
         win.gallery.set_output_dir(self.root)
         self.app.processEvents()
 
-        # Check Perspective 0 (Publication Figures)
+        # Check Viewport Mode 0 (Plot Viewer)
         win.set_canvas_mode(0)
         self.assertEqual(win.central_view_stack.currentIndex(), 0)
         self.assertTrue(win.btn_canvas_figure.isChecked())
+        self.assertTrue(win.btn_canvas_plot.isChecked())
         self.assertFalse(win.btn_canvas_lab.isChecked())
+        self.assertFalse(win.btn_canvas_interactive.isChecked())
 
-        # Check Perspective 1 (Live Analytical Lab)
+        # Check Viewport Mode 1 (Interactive Plots)
         win.set_canvas_mode(1)
         self.assertEqual(win.central_view_stack.currentIndex(), 1)
         self.assertFalse(win.btn_canvas_figure.isChecked())
+        self.assertFalse(win.btn_canvas_plot.isChecked())
         self.assertTrue(win.btn_canvas_lab.isChecked())
+        self.assertTrue(win.btn_canvas_interactive.isChecked())
 
-        # Clicking a gallery plot switches to Perspective 0 and loads the image
+        # Clicking a gallery plot switches to Viewport Mode 0 and loads the image
         win._on_gallery_plot_selected(self.plot_path_dos)
         self.app.processEvents()
         self.assertEqual(win.central_view_stack.currentIndex(), 0)
         self.assertEqual(win.current_view_plot_path, self.plot_path_dos)
         self.assertTrue(win.btn_canvas_figure.isChecked())
+        self.assertTrue(win.btn_canvas_plot.isChecked())
 
         win.close()
 

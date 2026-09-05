@@ -10,11 +10,11 @@ Modern, high-performance scientific desktop workbench for strongly correlated qu
 - **Simulation Studio**:
   - Configure Hamiltonians, launch asynchronous simulations, monitor live progress via an isolated subprocess `CalculationBridge`, and inspect raw numerical arrays in a hardware-accelerated interactive canvas.
   - **Balanced Ergonomic Layout**: Rigidly proportioned $350\text{ px}$ Parameter Inspector dock paired with a spacious $\sim 730\text{ px}$ central canvas, ensuring un-cramped toolbars and comfortable controls across all screen resolutions (down to $1366\times 768$).
-- **Visual Analysis & Publication Perspective**:
+- **Figure Composer Perspective**:
   - **Visual Gallery Browser**: Grid and compact list views, metadata badges, parameter search, and instant file-system synchronization.
-  - **Live Analytical Lab**: On-the-fly physics powered by cached foundation arrays (`.npz` in `results/cache/`), enabling continuous $J_K$, $J_\perp$, $\omega$, and momentum scrubbing at 60+ FPS with immediate mode resync.
+  - **Interactive Plots**: On-the-fly physics powered by cached foundation arrays (`.npz` in `results/cache/`), enabling continuous $J_K$, $J_\perp$, $\omega$, and momentum scrubbing at 60+ FPS with immediate mode resync.
 
-### 2. Full 5-Mode Modular Live Analytical Lab
+### 2. Full 5-Mode Modular Interactive Plots (Live Analytical Studio)
 - **Spectral Function $[A(\mathbf{k}, \omega)]$**:
   - Probes $A(\mathbf{k}, \omega)$, $\text{Re }\Sigma$, and $\text{Im }\Sigma$ at any arbitrary Brillouin Zone momentum. Defaults to the antinodal point $\mathbf{k} = (\pi, 0)$ with interactive high-symmetry and custom coordinate pickers.
 - **Fermi Surface & DOS $[A(\mathbf{k}, \omega)]$**:
