@@ -1,4 +1,4 @@
-# Many-Body Physics Studio Pro • Alpha v4
+# Many-Body Studio • Beta v1
 
 Modern, high-performance scientific desktop workbench for strongly correlated quantum heterostructures. Built with PySide6 (Qt6), isolated `QProcess` execution bridges, native multi-backend GPU/CPU physics engines, 1/8th IBZ cache optimization, Numba JIT parallel acceleration, balanced and fixed panel layouts, and an interactive dual-perspective analytical architecture.
 
@@ -15,7 +15,7 @@ Modern, high-performance scientific desktop workbench for strongly correlated qu
   - **Visual Gallery Browser**: Integrated in the left Navigator dock with grid and compact list views, metadata badges, parameter search, and instant file-system synchronization.
   - *(Note: Standalone Figure Composer workspace has been scrapped in favor of direct integrated viewports).*
 
-### 2. Full 5-Mode Modular Interactive Plots (Live Analytical Studio)
+### 2. Full 6-Mode Modular Interactive Plots (Live Analytical Studio)
 - **Spectral Function $[A(\mathbf{k}, \omega)]$**:
   - Probes $A(\mathbf{k}, \omega)$, $\text{Re }\Sigma$, and $\text{Im }\Sigma$ at any arbitrary Brillouin Zone momentum. Defaults to the antinodal point $\mathbf{k} = (\pi, 0)$ with interactive high-symmetry and custom coordinate pickers.
 - **Fermi Surface & DOS $[A(\mathbf{k}, \omega)]$**:
@@ -26,6 +26,8 @@ Modern, high-performance scientific desktop workbench for strongly correlated qu
   - Real-time 2D magnetic susceptibility intensity maps across the Brillouin Zone with live interactive $J_K$, $J_\perp \in [4.01, 12.00]$, and $K$ (+1 AFM / -1 FM) controls.
 - **Dynamic Susceptibility $[-\text{Im}\chi(\mathbf{q}, \omega)]$ along Path**:
   - Real-time frequency-momentum dynamical susceptibility colormaps computed via vectorized RPA, featuring live triplon mode tracking $\Omega(\mathbf{q}) = J_\perp \sqrt{1 + \frac{4K}{J_\perp}\gamma(\mathbf{q})}$ with continuous $J_\perp \ge 4.01$, $J_K$, and $K$ tuning.
+- **Electrical Conductivity $[\sigma(\omega)]$**:
+  - Optical and DC electrical conductivity evaluations based on current-current correlation functions.
 
 ### 3. Numba JIT Multi-Core Parallel Acceleration
 - Compiled native C-kernel with `@njit(parallel=True, fastmath=True)` utilizing OpenMP (`omp`) multi-threading across all 16 CPU cores via `prange`.

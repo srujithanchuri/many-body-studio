@@ -1,9 +1,9 @@
-# Many-Body Studio Pro: Complete Architecture & Implementation Plan
+# Many-Body Studio: Complete Architecture & Implementation Plan
 
-> **Document Version**: alpha-v4.0 (Milestone: Fixed Panel Dimensions, Modular 5-Mode Interactive Plots, High-Precision J_perp / K Susceptibility Tuning)  
+> **Document Version**: beta-v1.0 (Milestone: Fixed Panel Dimensions, Modular 6-Mode Interactive Plots, Native Window Frame, Dyson Sigma High-DPI Icon Suite, High-Precision J_perp / K Susceptibility Tuning)  
 > **Target Project**: `C:\Users\sruji\Projects\masters_thesis_gui`  
 > **Physics Engine Source**: `C:\Users\sruji\Projects\masters_thesis`  
-> **Author**: Antigravity Assistant & Srujith Anchuri  
+> **Author**: Srujith Anchuri  
 
 ---
 

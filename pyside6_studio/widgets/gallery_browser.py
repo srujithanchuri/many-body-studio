@@ -922,18 +922,6 @@ class PlotGalleryWidget(QWidget):
                     if norm not in plot_files:
                         plot_files.append(norm)
 
-        # Only check external global dirs as fallback if out_dir yielded nothing
-        if not plot_files:
-            for ext in [
-                r"C:\Users\sruji\Projects\masters_thesis\self_energy\results\plots",
-                r"C:\Users\sruji\Projects\masters_thesis\many_body_results\spectral_results\plots",
-                r"C:\Users\sruji\Projects\masters_thesis\many_body_results\susceptibility_results\plots",
-            ]:
-                if os.path.isdir(ext):
-                    for p in glob.glob(os.path.join(ext, "*.png")):
-                        norm = os.path.normpath(p)
-                        if norm not in plot_files:
-                            plot_files.append(norm)
 
         # Sort newest first
         plot_files.sort(key=lambda x: os.path.getmtime(x) if os.path.exists(x) else 0, reverse=True)
@@ -953,19 +941,6 @@ class PlotGalleryWidget(QWidget):
                     stem = os.path.splitext(os.path.basename(d))[0]
                     if stem not in self.available_data:
                         self.available_data[stem] = os.path.normpath(d)
-
-        # Fallback to external global data dirs if none found
-        if not self.available_data:
-            for ext in [
-                r"C:\Users\sruji\Projects\masters_thesis\self_energy\results\data",
-                r"C:\Users\sruji\Projects\masters_thesis\many_body_results\spectral_results\data",
-                r"C:\Users\sruji\Projects\masters_thesis\many_body_results\susceptibility_results\data",
-            ]:
-                if os.path.isdir(ext):
-                    for d in glob.glob(os.path.join(ext, "*.npz")):
-                        stem = os.path.splitext(os.path.basename(d))[0]
-                        if stem not in self.available_data:
-                            self.available_data[stem] = os.path.normpath(d)
 
         self._filter_and_render_cards()
 

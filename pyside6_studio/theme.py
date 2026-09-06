@@ -446,6 +446,66 @@ QToolButton#BtnRun::menu-arrow {
     height: 8px;
 }
 
+/* Master Toolbar Viewport Switchers & Queue (Light) */
+QLabel#ToolbarVpLabel {
+    color: #64748b;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 0 4px 0 2px;
+}
+QLabel#ParamSubtext, QLabel.ParamSubtext {
+    color: #64748b;
+    font-size: 10.5px;
+    background: transparent;
+    padding-bottom: 2px;
+}
+QPushButton#BtnVpInteractive, QPushButton#BtnVpViewer {
+    padding: 4px 12px;
+    font-weight: 600;
+    font-size: 11px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: transparent;
+    color: #334155;
+}
+QPushButton#BtnVpInteractive:hover, QPushButton#BtnVpViewer:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+QPushButton#BtnVpInteractive:checked, QPushButton#BtnVpViewer:checked {
+    background-color: #2563eb;
+    color: #ffffff;
+    border-color: #1d4ed8;
+    font-weight: 700;
+}
+QPushButton#BtnQueue {
+    background-color: #f8fafc;
+    color: #7c3aed;
+    border: 1px solid #ddd6fe;
+    border-radius: 6px;
+    font-weight: 600;
+    padding: 5px 12px;
+}
+QPushButton#BtnQueue:hover {
+    background-color: #f5f3ff;
+    border-color: #c084fc;
+    color: #6d28d9;
+}
+
+/* Interactive Mode Navigation Cards (Light) */
+QFrame#InteractiveModeCard {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+QFrame#InteractiveModeCard:hover {
+    border-color: #3b82f6;
+}
+QFrame#InteractiveModeCard[selected="true"] {
+    background-color: #eff6ff;
+    border: 1px solid #3b82f6;
+}
+
 
 QHeaderView::section {
     background: #f8fafc;
@@ -978,6 +1038,66 @@ QToolButton#BtnRun::menu-arrow {
     image: url("@ICONS_DIR@/combo_down_dark.png");
     width: 8px;
     height: 8px;
+}
+
+/* Master Toolbar Viewport Switchers & Queue (Dark) */
+QLabel#ToolbarVpLabel {
+    color: #94a3b8;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 0 4px 0 2px;
+}
+QLabel#ParamSubtext, QLabel.ParamSubtext {
+    color: #94a3b8;
+    font-size: 10.5px;
+    background: transparent;
+    padding-bottom: 2px;
+}
+QPushButton#BtnVpInteractive, QPushButton#BtnVpViewer {
+    padding: 4px 12px;
+    font-weight: 600;
+    font-size: 11px;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    background: transparent;
+    color: #94a3b8;
+}
+QPushButton#BtnVpInteractive:hover, QPushButton#BtnVpViewer:hover {
+    background: #1e293b;
+    color: #f8fafc;
+}
+QPushButton#BtnVpInteractive:checked, QPushButton#BtnVpViewer:checked {
+    background-color: #2563eb;
+    color: #ffffff;
+    border-color: #3b82f6;
+    font-weight: 700;
+}
+QPushButton#BtnQueue {
+    background-color: #1e1b4b;
+    color: #c084fc;
+    border: 1px solid #581c87;
+    border-radius: 6px;
+    font-weight: 600;
+    padding: 5px 12px;
+}
+QPushButton#BtnQueue:hover {
+    background-color: #2e1065;
+    border-color: #7c3aed;
+    color: #e9d5ff;
+}
+
+/* Interactive Mode Navigation Cards (Dark) */
+QFrame#InteractiveModeCard {
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+}
+QFrame#InteractiveModeCard:hover {
+    border-color: #3b82f6;
+}
+QFrame#InteractiveModeCard[selected="true"] {
+    background-color: #172554;
+    border: 1px solid #3b82f6;
 }
 
 

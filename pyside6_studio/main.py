@@ -1,5 +1,5 @@
-"""Many-Body Physics Studio Pro [PySide6 Launch Script]
-Run this script to launch the Dual-Perspective Studio.
+"""Many-Body Studio [Beta v1 - PySide6 Launch Script]
+Run this script to launch Many-Body Studio.
 """
 
 import sys
@@ -19,7 +19,7 @@ if CURRENT_DIR not in sys.path:
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, qInstallMessageHandler, QtMsgType
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from main_window import UnifiedWorkbenchWindow
 
 
@@ -48,10 +48,25 @@ def configure_high_dpi():
 def main():
     qInstallMessageHandler(_qt_message_filter)
     configure_high_dpi()
+
+    # Set explicit AppUserModelID so Windows taskbar displays the custom app icon
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("manybody.studio.beta.v1")
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
-    app.setApplicationName("Many-Body Physics Studio Pro • Alpha v4")
-    app.setApplicationVersion("alpha-v4.0")
+    app.setApplicationName("Many-Body Studio")
+    app.setApplicationDisplayName("Many-Body Studio")
+    app.setApplicationVersion("beta-v1.0")
     app.setQuitOnLastWindowClosed(True)
+
+    from pyside6_studio.core.icon_utils import get_app_icon
+    app_icon = get_app_icon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
+
     window = UnifiedWorkbenchWindow()
     window.showMaximized()
     exit_code = app.exec()
@@ -63,4 +78,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--params-b64" in sys.argv or "--params" in sys.argv:
+        from pyside6_studio.backend.worker_cli import main as worker_main
+        worker_main()
+        sys.exit(0)
     main()

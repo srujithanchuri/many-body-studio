@@ -1277,7 +1277,7 @@ class InteractivePlotsWidget(QWidget):
         self.cb_filter_mu.blockSignals(False)
         self._suppress_mu_filter = False
 
-    def _populate_cache_dropdown(self):
+    def _populate_cache_dropdown(self, load_cache: bool = True, render: bool = True):
         """Filters scanned caches by active mode category and mu filter text."""
         if self.active_mode in ["rpa_susc", "static_susc"]:
             target_cat = "chi0_static"
@@ -1318,7 +1318,8 @@ class InteractivePlotsWidget(QWidget):
                     break
             self.cb_cache_file.setCurrentIndex(sel_idx)
             self.cb_cache_file.blockSignals(False)
-            self._on_cache_selected()
+            if load_cache:
+                self._on_cache_selected(render=render)
         else:
             self.cb_cache_file.setEnabled(False)
             if is_filtering:
@@ -1384,41 +1385,6 @@ class InteractivePlotsWidget(QWidget):
                         "label": lbl,
                     })
 
-        # Fallback to external global dirs only if nothing found in out_dir
-        if len(self.scanned_caches) == 0:
-            ext_dirs = [
-                r"C:\Users\sruji\Projects\masters_thesis\many_body_results\susceptibility_results\data",
-                r"C:\Users\sruji\Projects\masters_thesis\many_body_results\spectral_results\data",
-                r"C:\Users\sruji\Projects\masters_thesis\self_energy\results\cache",
-                r"C:\Users\sruji\Projects\masters_thesis\self_energy\results\data",
-            ]
-            for ed in ext_dirs:
-                if not os.path.isdir(ed): continue
-                for f in sorted(os.listdir(ed)):
-                    if not f.endswith(".npz") or f in seen_files: continue
-                    full_p = os.path.join(ed, f)
-                    ftype = None
-                    if f.startswith("sigma_base"): ftype = "sigma_base"
-                    elif f.startswith("chi0_static"): ftype = "chi0_static"
-                    elif f.startswith("chi0_dynamic"): ftype = "chi0_dynamic"
-                    if ftype:
-                        seen_files.add(f)
-                        self.cached_files[f] = (ftype, full_p)
-                        lbl = format_smart_cache_label(f, ftype)
-                        meta = parse_cache_metadata(f, ftype)
-                        self.scanned_caches.append({
-                            "fname": f,
-                            "fpath": full_p,
-                            "ftype": ftype,
-                            "category": meta["category"],
-                            "mu": meta["mu"],
-                            "Jperp": meta["Jperp"],
-                            "K": meta["K"],
-                            "N": meta["N"],
-                            "eta": meta["eta"],
-                            "label": lbl,
-                        })
-
         self._last_scanned_files = seen_files.copy()
         self._update_mu_filter_options()
         self._populate_cache_dropdown()
@@ -1444,7 +1410,7 @@ class InteractivePlotsWidget(QWidget):
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_frame_on(False)
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def _open_compute_cache_dialog(self):
         """Opens the in-situ compute cache dialog for the active mode."""
@@ -1540,7 +1506,7 @@ class InteractivePlotsWidget(QWidget):
         self.sig_send_to_sweeper.emit(params)
         self.sig_status_msg.emit(f"🚀 Sent parameters (μ={params['mu']:.1f}, J_K={params['JK']:.2f}, J_⊥={params['Jperp']:.1f}) to Simulation Studio Parameter Dock.")
 
-    def _on_cache_selected(self):
+    def _on_cache_selected(self, render: bool = True):
         fpath = self.cb_cache_file.currentData()
         if not fpath or not os.path.exists(fpath):
             return
@@ -1554,7 +1520,8 @@ class InteractivePlotsWidget(QWidget):
             self._load_chi0_static(fpath)
         elif ftype == "chi0_dynamic":
             self._load_chi0_dynamic(fpath)
-        self._recompute_and_render()
+        if render:
+            self._recompute_and_render()
 
     def _load_base_sigma(self, fpath: str):
         """
@@ -1564,6 +1531,8 @@ class InteractivePlotsWidget(QWidget):
         3. Full BZ flat ('sig_re', 'sig_im')
         4. Legacy 2-loop separate ('sig1_re' + 'sig3_re', 'sig1_im' + 'sig3_im')
         """
+        if self.loaded_base_sigma and self.loaded_base_sigma.get("fpath") == fpath:
+            return
         try:
             import re
             with np.load(fpath) as d:
@@ -1622,6 +1591,8 @@ class InteractivePlotsWidget(QWidget):
                 QMessageBox.warning(self, "Cache Load Error", f"Could not load Base Sigma array:\n{e}")
 
     def _load_chi0_static(self, fpath: str):
+        if self.loaded_chi0_static and self.loaded_chi0_static.get("fpath") == fpath:
+            return
         try:
             import re
             jp_match = re.search(r"Jperp_([0-9.]+)", os.path.basename(fpath)) or re.search(r"J_perp_([0-9.]+)", os.path.basename(fpath))
@@ -1651,6 +1622,8 @@ class InteractivePlotsWidget(QWidget):
                 QMessageBox.warning(self, "Cache Load Error", f"Could not load Static Chi0 array:\n{e}")
 
     def _load_chi0_dynamic(self, fpath: str):
+        if self.loaded_chi0_dynamic and self.loaded_chi0_dynamic.get("fpath") == fpath:
+            return
         try:
             import re
             jp_match = re.search(r"Jperp_([0-9.]+)", os.path.basename(fpath)) or re.search(r"J_perp_([0-9.]+)", os.path.basename(fpath))
@@ -1709,9 +1682,9 @@ class InteractivePlotsWidget(QWidget):
         if hasattr(self, "lbl_conductivity_stats"):
             self.lbl_conductivity_stats.setVisible(False)
 
-        # Update available mu values for the active mode and populate cache dropdown
+        # Update available mu values for the active mode and populate cache dropdown without duplicate render
         self._update_mu_filter_options()
-        self._populate_cache_dropdown()
+        self._populate_cache_dropdown(load_cache=True, render=False)
 
         self.current_mode.setup_ui()
         self._recompute_and_render()

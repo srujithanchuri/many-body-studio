@@ -4,9 +4,9 @@ import os
 from dataclasses import dataclass
 
 # Application Metadata
-APP_NAME = "Many-Body Studio Pro"
-APP_VERSION = "alpha-v4.0"
-APP_RELEASE_TITLE = "Many-Body Studio Pro • Alpha v4"
+APP_NAME = "Many-Body Studio"
+APP_VERSION = "beta-v1.0"
+APP_RELEASE_TITLE = "Many-Body Studio • Beta v1"
 
 # Base repository paths
 STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

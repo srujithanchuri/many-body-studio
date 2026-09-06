@@ -1,4 +1,4 @@
-"""Many-Body Physics Studio Pro [PySide6 UI Architecture]
+"""Many-Body Studio [Beta v1 - PySide6 UI Architecture]
 Pure Frontend Architecture wired to isolated QProcess CalculationBridge.
 Features Unified Simulation Studio with Dual Analytical Viewports:
 1. [ 📊 Plot Viewer ]:
@@ -42,8 +42,12 @@ from pyside6_studio.widgets.dataset_explorer import DatasetExplorerWidget
 from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas, VectorExportDialog
 from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot_metadata
 from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
+from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget
 
-DEFAULT_RESULTS_DIR = r"C:\Users\sruji\Projects\masters_thesis_gui\results"
+if getattr(sys, 'frozen', False):
+    DEFAULT_RESULTS_DIR = os.path.join(os.path.dirname(sys.executable), "results")
+else:
+    DEFAULT_RESULTS_DIR = getattr(config, "DEFAULT_RESULTS_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results"))
 
 
 def get_available_plots(output_dir=None):
@@ -128,7 +132,7 @@ class CacheManagerDialog(QDialog):
     """Inspects and manages reusable computational foundation arrays in results/cache/."""
     def __init__(self, parent=None, out_dir=None):
         super().__init__(parent)
-        self.setWindowTitle("Smart Cache Manager • Many-Body Studio Pro")
+        self.setWindowTitle("Smart Cache Manager • Many-Body Studio Beta v1")
         self.setMinimumSize(700, 420)
         self.out_dir = out_dir
         self._init_ui()
@@ -242,7 +246,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Many-Body Studio Pro • Alpha v4")
+        self.setWindowTitle("Many-Body Studio")
+        from pyside6_studio.core.icon_utils import get_app_icon
+        app_icon = get_app_icon()
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
+
         self.resize(1440, 900)
         self.setMinimumSize(1024, 600)
 
@@ -286,12 +295,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.dock_nav.setMinimumWidth(240)
         self.dock_nav.setMaximumWidth(320)
 
-        # Ensure docks start with proper comfortable widths & dynamic bottom height
+        # Ensure docks start with proper comfortable widths & dynamic bottom height, defaulting to Interactive Plots
         self._adjust_bottom_dock_height()
         self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal)
         QTimer.singleShot(0, lambda: (
             self._adjust_bottom_dock_height(),
-            self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal)
+            self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal),
+            self.set_canvas_mode(1)
         ))
 
         # Setup Smart Cache invalidation debounced timer
@@ -305,7 +315,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.edit_out_dir.textChanged.connect(self.refresh_dataset_tree)
         self.refresh_dataset_tree()
 
-        # Initialize default state
+        # Initialize default state - default directly to Interactive Plots viewport
         self.set_active_study(self.STUDY_SE)
         self.set_perspective("simulation")
         self.set_canvas_mode(1)
@@ -318,6 +328,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self._docks_initially_sized = True
             self._adjust_bottom_dock_height()
             self.resizeDocks([self.dock_nav, self.dock_inspector], [260, 350], Qt.Horizontal)
+            self.set_canvas_mode(1)
 
     # =========================================================================
     # TOOLBAR & MODE SWITCHER
@@ -327,13 +338,48 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.tb.setMovable(False)
         self.addToolBar(self.tb)
 
-        # Simulation Studio Toolbar Actions
+        # 1. Viewport Switcher Segmented Control
+        vp_container = QWidget()
+        vp_lay = QHBoxLayout(vp_container)
+        vp_lay.setContentsMargins(0, 0, 0, 0)
+        vp_lay.setSpacing(4)
+
+        lbl_vp = QLabel("Viewport:")
+        lbl_vp.setObjectName("ToolbarVpLabel")
+        vp_lay.addWidget(lbl_vp)
+
+        self.btn_canvas_lab = QPushButton("🔬 Interactive Plots")
+        self.btn_canvas_lab.setObjectName("BtnVpInteractive")
+        self.btn_canvas_lab.setCheckable(True)
+        self.btn_canvas_lab.setChecked(True)
+        self.btn_canvas_lab.setCursor(Qt.PointingHandCursor)
+        self.btn_canvas_lab.clicked.connect(lambda: self.set_canvas_mode(1))
+        self.btn_canvas_interactive = self.btn_canvas_lab
+        vp_lay.addWidget(self.btn_canvas_lab)
+
+        self.btn_canvas_figure = QPushButton("📊 Plot Viewer")
+        self.btn_canvas_figure.setObjectName("BtnVpViewer")
+        self.btn_canvas_figure.setCheckable(True)
+        self.btn_canvas_figure.setChecked(False)
+        self.btn_canvas_figure.setCursor(Qt.PointingHandCursor)
+        self.btn_canvas_figure.clicked.connect(lambda: self.set_canvas_mode(0))
+        self.btn_canvas_plot = self.btn_canvas_figure
+        vp_lay.addWidget(self.btn_canvas_figure)
+
+        self.tb.addWidget(vp_container)
+
+        # 2. Expanding Spacer pushes execution controls directly above Simulation Setup dock
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.tb.addWidget(spacer)
+
+        # 3. Simulation Setup Execution Actions (Right side above Simulation Setup Dock)
         self.btn_run = QToolButton()
         self.btn_run.setObjectName("BtnRun")
-        self.btn_run.setText("▶ Run Calculation")
+        self.btn_run.setText("▶ Run Study")
         self.btn_run.setToolTip(f"Run {self.active_study} (Click arrow for other studies)")
         self.btn_run.setPopupMode(QToolButton.MenuButtonPopup)
-        self.btn_run.setFixedWidth(160)
+        self.btn_run.setFixedWidth(145)
         self.btn_run.clicked.connect(self.run_simulation_ui)
 
         menu_run = QMenu(self.btn_run)
@@ -346,15 +392,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.action_run = self.tb.addWidget(self.btn_run)
 
         # Dedicated Cancel / Stop button
-        self.btn_cancel = QPushButton("⏹ Cancel / Stop")
+        self.btn_cancel = QPushButton("⏹ Stop")
         self.btn_cancel.setObjectName("BtnCancel")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.setCursor(Qt.PointingHandCursor)
-        self.btn_cancel.setFixedWidth(135)
+        self.btn_cancel.setFixedWidth(90)
         self.btn_cancel.clicked.connect(self.cancel_simulation_ui)
         self.action_cancel = self.tb.addWidget(self.btn_cancel)
 
-        self.btn_queue = QPushButton("➕ Add Active to Queue")
+        self.btn_queue = QPushButton("➕ Queue")
+        self.btn_queue.setObjectName("BtnQueue")
+        self.btn_queue.setToolTip("Add current active study parameters to the batch execution queue")
+        self.btn_queue.setFixedWidth(85)
         self.btn_queue.clicked.connect(self.add_to_queue)
         self.action_queue = self.tb.addWidget(self.btn_queue)
 
@@ -383,50 +432,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         layout = QVBoxLayout(self.central_container)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
-
-        # Central Viewport Mode Switcher
-        header_bar = QHBoxLayout()
-        header_bar.setContentsMargins(4, 2, 4, 2)
-        header_bar.setSpacing(6)
-
-        lbl_vp = QLabel("VIEWPORT:")
-        lbl_vp.setStyleSheet("font-weight: 700; font-size: 11px; color: #64748b;")
-        header_bar.addWidget(lbl_vp)
-
-        self.btn_canvas_figure = QPushButton("📊 Plot Viewer")
-        self.btn_canvas_figure.setCheckable(True)
-        self.btn_canvas_figure.setChecked(False)
-        self.btn_canvas_figure.setStyleSheet("""
-            QPushButton {
-                padding: 4px 12px; font-weight: 600; font-size: 11px;
-                border: 1px solid #cbd5e1; border-radius: 4px; background: transparent;
-            }
-            QPushButton:checked {
-                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
-            }
-        """)
-        self.btn_canvas_figure.clicked.connect(lambda: self.set_canvas_mode(0))
-        self.btn_canvas_plot = self.btn_canvas_figure
-        header_bar.addWidget(self.btn_canvas_figure)
-
-        self.btn_canvas_lab = QPushButton("⚡ Interactive Plots")
-        self.btn_canvas_lab.setCheckable(True)
-        self.btn_canvas_lab.setChecked(True)
-        self.btn_canvas_lab.setStyleSheet("""
-            QPushButton {
-                padding: 4px 14px; font-weight: 600; font-size: 11px;
-                border: 1px solid #cbd5e1; border-radius: 4px; background: transparent;
-            }
-            QPushButton:checked {
-                background-color: #2563eb; color: #ffffff; border-color: #1d4ed8;
-            }
-        """)
-        self.btn_canvas_lab.clicked.connect(lambda: self.set_canvas_mode(1))
-        self.btn_canvas_interactive = self.btn_canvas_lab
-        header_bar.addWidget(self.btn_canvas_lab)
-
-        header_bar.addStretch()
-        layout.addLayout(header_bar)
 
         self.central_view_stack = QStackedWidget()
 
@@ -497,7 +502,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.analytical_lab = self.interactive_plots  # Alias for backward compatibility
         self.live_lab = self.interactive_plots        # Alias for backward compatibility
         self.interactive_plots.sig_send_to_sweeper.connect(self._on_receive_interactive_parameters)
+        self.interactive_plots.cb_experiment.currentIndexChanged.connect(self._on_interactive_experiment_changed)
         self.central_view_stack.addWidget(self.interactive_plots)
+        self.central_view_stack.setCurrentIndex(1)
 
         layout.addWidget(self.central_view_stack, 1)
         self.setCentralWidget(self.central_container)
@@ -509,6 +516,13 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_canvas_lab.setChecked(mode_idx == 1)
         if hasattr(self, "action_split") and self.action_split:
             self.action_split.setVisible(mode_idx == 0)
+        if hasattr(self, "nav_stack") and self.nav_stack.count() > 1:
+            if mode_idx == 0:
+                self.nav_stack.setCurrentIndex(0)
+                self.dock_nav.setWindowTitle("🖼️ Plot Gallery Browser")
+            else:
+                self.nav_stack.setCurrentIndex(1)
+                self.dock_nav.setWindowTitle("🔬 Interactive Modes")
 
     def copy_current_plot_to_clipboard(self):
         if hasattr(self, "current_view_plot_path") and self.current_view_plot_path and os.path.exists(self.current_view_plot_path):
@@ -543,7 +557,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 self.gallery.select_plot(plot_path)
 
     # =========================================================================
-    # LEFT DOCK: PLOT GALLERY BROWSER
+    # LEFT DOCK: PLOT GALLERY BROWSER & INTERACTIVE MODE NAV
     # =========================================================================
     def _build_navigator_dock(self):
         self.dock_nav = QDockWidget("🖼️ Plot Gallery Browser", self)
@@ -552,14 +566,36 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.nav_stack = QStackedWidget()
 
-        # Visual Plot Gallery Browser
+        # Page 0: Visual Plot Gallery Browser (for Plot Viewer)
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.gallery = PlotGalleryWidget(out_dir=out_dir, parent=self)
         self.gallery.sig_plot_selected.connect(self._on_gallery_plot_selected)
         self.nav_stack.addWidget(self.gallery)
 
+        # Page 1: Interactive Mode Navigation Cards (for Interactive Plots)
+        self.interactive_mode_nav = InteractiveModeNavWidget(parent=self)
+        self.interactive_mode_nav.sig_mode_selected.connect(self._on_interactive_mode_nav_selected)
+        self.nav_stack.addWidget(self.interactive_mode_nav)
+        self.nav_stack.setCurrentIndex(1)
+        self.dock_nav.setWindowTitle("🔬 Interactive Modes")
+
         self.dock_nav.setWidget(self.nav_stack)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.dock_nav)
+
+    def _on_interactive_mode_nav_selected(self, mode_id: str):
+        """Switches the active experiment in InteractivePlotsWidget when user clicks a left dock card."""
+        if hasattr(self, "interactive_plots") and hasattr(self.interactive_plots, "mode_order"):
+            if mode_id in self.interactive_plots.mode_order:
+                idx = self.interactive_plots.mode_order.index(mode_id)
+                if self.interactive_plots.cb_experiment.currentIndex() != idx:
+                    self.interactive_plots.cb_experiment.setCurrentIndex(idx)
+
+    def _on_interactive_experiment_changed(self, idx: int):
+        """Synchronizes the left dock card selection when the experiment dropdown changes."""
+        if hasattr(self, "interactive_mode_nav") and hasattr(self, "interactive_plots") and hasattr(self.interactive_plots, "mode_order"):
+            if 0 <= idx < len(self.interactive_plots.mode_order):
+                mode_id = self.interactive_plots.mode_order[idx]
+                self.interactive_mode_nav.set_selected_mode(mode_id)
 
     def _on_gallery_plot_selected(self, plot_path: str):
         self.current_view_plot_path = plot_path
@@ -765,18 +801,47 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.param_stack.addWidget(grp_pd)
 
         # 2d. Susceptibility parameters
-        grp_susc = ModernCard("RPA Spin Susceptibility Modes")
+        grp_susc = ModernCard("RPA Spin Susceptibility Sweep Parameters")
         grp_susc.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         gsusc = QVBoxLayout(grp_susc)
-        gsusc.setSpacing(6)
+        gsusc.setSpacing(5)
         self.chk_static = QCheckBox("Compute Static χ(q) (2D BZ Map)")
         self.chk_static.setChecked(True)
         gsusc.addWidget(self.chk_static)
         self.chk_dynamic = QCheckBox("Compute Dynamic χ(q, ω) (Path)")
         self.chk_dynamic.setChecked(True)
         gsusc.addWidget(self.chk_dynamic)
-        gsusc.addWidget(QLabel("Coupling Values:"))
+
+        gsusc.addWidget(QLabel("Sweep Target:"))
+        self.cb_susc_mode = ModernComboBox()
+        self.cb_susc_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
+        self.cb_susc_mode.currentIndexChanged.connect(self._on_susc_sweep_mode_change)
+        gsusc.addWidget(self.cb_susc_mode)
+
+        self.lbl_susc_vals = QLabel("Coupling Values Across Subplots (comma-separated):")
+        gsusc.addWidget(self.lbl_susc_vals)
         self.edit_susc_vals = QLineEdit("3.0, 6.0, 9.0")
+        gsusc.addWidget(self.edit_susc_vals)
+
+        h_susc_row = QHBoxLayout()
+        self.lbl_susc_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
+        self.lbl_susc_fixed.setStyleSheet("font-weight: 600;")
+        h_susc_row.addWidget(self.lbl_susc_fixed)
+        h_susc_row.addStretch()
+
+        self.spin_susc_fixed = QDoubleSpinBox()
+        self.spin_susc_fixed.setRange(0.0, 50.0)
+        self.spin_susc_fixed.setValue(6.0)
+        self.spin_susc_fixed.setSingleStep(0.5)
+        self.spin_susc_fixed.setFixedWidth(100)
+        h_susc_row.addWidget(self.spin_susc_fixed)
+        gsusc.addLayout(h_susc_row)
+
+        self.lbl_susc_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across subplots")
+        self.lbl_susc_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.lbl_susc_fixed_desc.setWordWrap(True)
+        gsusc.addWidget(self.lbl_susc_fixed_desc)
+
         self.param_stack.addWidget(grp_susc)
 
         # 2e. Electrical / Optical Conductivity parameters
@@ -958,7 +1023,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gm = QVBoxLayout(grp_model)
         gm.setSpacing(4)
 
-        h1 = QHBoxLayout(); h1.addWidget(QLabel("Hopping (t):")); h1.addStretch()
+        # 5a. Nearest-Neighbor Hopping (t)
+        h1 = QHBoxLayout()
+        self.lbl_t = QLabel("Hopping (t):")
+        self.lbl_t.setStyleSheet("font-weight: 600;")
+        h1.addWidget(self.lbl_t)
+        h1.addStretch()
         self.spin_t = QDoubleSpinBox()
         self.spin_t.setMinimum(0.01)
         self.spin_t.setValue(1.0)
@@ -967,7 +1037,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h1.addWidget(self.spin_t)
         gm.addLayout(h1)
 
-        h2 = QHBoxLayout(); h2.addWidget(QLabel("Next-Nearest (t'):")); h2.addStretch()
+        # 5b. Next-Nearest-Neighbor Hopping (t')
+        h2 = QHBoxLayout()
+        self.lbl_t1 = QLabel("Next-Nearest (t'):")
+        self.lbl_t1.setStyleSheet("font-weight: 600;")
+        h2.addWidget(self.lbl_t1)
+        h2.addStretch()
         self.spin_t1 = QDoubleSpinBox()
         self.spin_t1.setRange(-10.0, 10.0)
         self.spin_t1.setValue(0.0)
@@ -976,7 +1051,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h2.addWidget(self.spin_t1)
         gm.addLayout(h2)
 
-        h3 = QHBoxLayout(); h3.addWidget(QLabel("Chemical (μ):")); h3.addStretch()
+        # 5c. Chemical Potential (μ)
+        h3 = QHBoxLayout()
+        self.lbl_mu = QLabel("Chemical Potential (μ):")
+        self.lbl_mu.setStyleSheet("font-weight: 600;")
+        h3.addWidget(self.lbl_mu)
+        h3.addStretch()
         self.spin_mu = QDoubleSpinBox()
         self.spin_mu.setRange(-20.0, 20.0)
         self.spin_mu.setValue(1.0)
@@ -985,7 +1065,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h3.addWidget(self.spin_mu)
         gm.addLayout(h3)
 
-        h4 = QHBoxLayout(); h4.addWidget(QLabel("Exchange (K):")); h4.addStretch()
+        # 5d. Intralayer Exchange (K)
+        h4 = QHBoxLayout()
+        self.lbl_k = QLabel("Intralayer Exchange (K):")
+        self.lbl_k.setStyleSheet("font-weight: 600;")
+        h4.addWidget(self.lbl_k)
+        h4.addStretch()
         self.spin_k = QDoubleSpinBox()
         self.spin_k.setRange(-10.0, 10.0)
         self.spin_k.setValue(1.0)
@@ -994,6 +1079,35 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h4.addWidget(self.spin_k)
         gm.addLayout(h4)
 
+        # Scientific tooltips on labels and spinboxes
+        tip_t = (
+            "Nearest-Neighbor Hopping / Kinetic Energy (t):\n"
+            "Conduction electron hopping between adjacent square lattice sites: "
+            "ε₀(k) = -2t(cos kx + cos ky).\n"
+            "Sets the fundamental energy scale and bare conduction bandwidth W = 8t."
+        )
+        tip_t1 = (
+            "Next-Nearest-Neighbor Hopping (t'):\n"
+            "Diagonal hopping amplitude across square lattice plaquettes: -4t' cos(kx) cos(ky).\n"
+            "Breaks particle-hole symmetry and shifts the van Hove singularity away from half-filling."
+        )
+        tip_mu = (
+            "Chemical Potential (μ):\n"
+            "Controls conduction electron band filling and Fermi surface volume: ξ(k) = ε(k) - μ.\n"
+            "At t'=0, μ=0 corresponds to half-filling (n=1). Positive μ indicates electron-doping; negative μ indicates hole-doping."
+        )
+        tip_k = (
+            "Intralayer Exchange Coupling (K):\n"
+            "Direct in-plane Heisenberg spin-spin exchange in the Mott insulator layer: "
+            "H_K = K Σ_<i,j> S_i · S_j.\n"
+            "K > 0 favors antiferromagnetic (AFM) ordering; K < 0 favors ferromagnetic (FM) alignment."
+        )
+
+        self.lbl_t.setToolTip(tip_t); self.spin_t.setToolTip(tip_t)
+        self.lbl_t1.setToolTip(tip_t1); self.spin_t1.setToolTip(tip_t1)
+        self.lbl_mu.setToolTip(tip_mu); self.spin_mu.setToolTip(tip_mu)
+        self.lbl_k.setToolTip(tip_k); self.spin_k.setToolTip(tip_k)
+
         lay_sim.addWidget(grp_model)
 
         # 6. Output Directory Card
@@ -1001,7 +1115,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gout = QVBoxLayout(grp_out)
         gout.setSpacing(4)
         h_out = QHBoxLayout()
-        self.edit_out_dir = QLineEdit(r"C:\Users\sruji\Projects\masters_thesis_gui\results")
+        self.edit_out_dir = QLineEdit(DEFAULT_RESULTS_DIR)
         h_out.addWidget(self.edit_out_dir)
         b_browse = QPushButton("📁 Browse...")
         b_browse.setFixedWidth(85)
@@ -1273,6 +1387,21 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.lbl_cond_fixed_desc.setText("Constant value of J_K held fixed while sweeping J_⊥ across curves")
             self.spin_cond_fixed.setValue(3.0)
 
+    def _on_susc_sweep_mode_change(self, index):
+        """Updates fixed coupling title and default value for RPA Spin Susceptibility Sweep."""
+        if index == 0:  # Kondo Coupling (J_K)
+            self.lbl_susc_fixed.setText("Fixed Interlayer Coupling (J_⊥):")
+            self.lbl_susc_fixed_desc.setText("Constant value of J_⊥ held fixed while sweeping J_K across subplots")
+            self.spin_susc_fixed.setValue(6.0)
+            if self.edit_susc_vals.text().strip() in ["4.5, 6.0, 8.0", ""]:
+                self.edit_susc_vals.setText("3.0, 6.0, 9.0")
+        else:  # Interlayer Coupling (J_⊥)
+            self.lbl_susc_fixed.setText("Fixed Kondo Coupling (J_K):")
+            self.lbl_susc_fixed_desc.setText("Constant value of J_K held fixed while sweeping J_⊥ across subplots")
+            self.spin_susc_fixed.setValue(6.0)
+            if self.edit_susc_vals.text().strip() in ["3.0, 6.0, 9.0", ""]:
+                self.edit_susc_vals.setText("4.5, 6.0, 8.0")
+
     def _on_mom_choice_changed(self, index):
         """Shows custom momentum vector edit field only when Custom is chosen."""
         self.box_custom_k.setVisible(index == 4)
@@ -1528,6 +1657,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
                         color: #f8fafc;
                     }
                 """)
+            if hasattr(self, "lbl_hw_status"):
+                self.lbl_hw_status.setStyleSheet("""
+                    QLabel {
+                        background: #064e3b;
+                        border: 1px solid #059669;
+                        border-radius: 4px;
+                        padding: 2px 8px;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: #6ee7b7;
+                    }
+                """)
         else:
             sb.setStyleSheet("QStatusBar { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 2px 4px; }")
             if hasattr(self, "lbl_status"):
@@ -1543,6 +1684,18 @@ class UnifiedWorkbenchWindow(QMainWindow):
                         font-size: 11px;
                         font-weight: 600;
                         color: #1e293b;
+                    }
+                """)
+            if hasattr(self, "lbl_hw_status"):
+                self.lbl_hw_status.setStyleSheet("""
+                    QLabel {
+                        background: #ecfdf5;
+                        border: 1px solid #a7f3d0;
+                        border-radius: 4px;
+                        padding: 2px 8px;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: #047857;
                     }
                 """)
 
@@ -1733,10 +1886,23 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.lbl_coords = QLabel("Pointer: (kx = --, ky = --)")
 
+        # Hardware status indicator pill
+        hw_info = get_hardware_info()
+        self.lbl_hw_status = QLabel()
+        if hw_info.get("is_gpu"):
+            dev_name = hw_info.get("name", "CUDA GPU")
+            dev_clean = dev_name.replace("GeForce ", "").replace(" Laptop GPU", "")
+            self.lbl_hw_status.setText(f"● GPU: {dev_clean} Detected")
+            self.lbl_hw_status.setToolTip(f"CUDA GPU Acceleration Available: {hw_info.get('name')}\nTotal VRAM: {hw_info.get('total_vram_gb')} GB")
+        else:
+            self.lbl_hw_status.setText("● CPU Mode")
+            self.lbl_hw_status.setToolTip("No CUDA GPU detected. Computations will run on multi-threaded CPU.")
+
         self._update_statusbar_theme(self.is_dark)
 
         sb.addWidget(self.lbl_status, 1)
         sb.addPermanentWidget(self.lbl_coords)
+        sb.addPermanentWidget(self.lbl_hw_status)
 
     # =========================================================================
     # PERSPECTIVE / VIEWPORT MANAGEMENT
@@ -1753,8 +1919,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if self.action_split:
             self.action_split.setVisible(True)
         self.dock_bottom.show()
-        self.nav_stack.setCurrentIndex(0)
-        self.dock_nav.setWindowTitle("🧭 Study Navigator & Datasets")
+        if hasattr(self, "central_view_stack") and self.central_view_stack.currentIndex() == 1:
+            self.nav_stack.setCurrentIndex(1)
+            self.dock_nav.setWindowTitle("🔬 Interactive Modes")
+        else:
+            self.nav_stack.setCurrentIndex(0)
+            self.dock_nav.setWindowTitle("🖼️ Plot Gallery Browser")
         self.inspector_stack.setCurrentIndex(0)
         self.dock_inspector.setWindowTitle("⚙️ Simulation Setup")
         self.lbl_status.setText("Simulation Studio Ready.")
@@ -1937,20 +2107,25 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 QMessageBox.warning(self, "Validation Error", "Please select at least one mode: Static χ(q) or Dynamic χ(q, ω)")
                 return None, "", ""
 
+            is_jk = not ("Interlayer" in self.cb_susc_mode.currentText() or "J_⊥" in self.cb_susc_mode.currentText())
+            fixed_val = float(self.spin_susc_fixed.value())
             params = {
                 **common_params,
                 "task": "susceptibility",
                 "run_static": bool(self.chk_static.isChecked()),
                 "run_dynamic": bool(self.chk_dynamic.isChecked()),
-                "susc_sweep_mode": "JK",
+                "susc_sweep_mode": "JK" if is_jk else "J",
                 "susc_sweep_vals": sweep_vals,
-                "fixed_J": float(self.spin_se_fixed.value())
+                "fixed_J": fixed_val if is_jk else None,
+                "fixed_JK": fixed_val if not is_jk else None
             }
             modes = []
             if self.chk_static.isChecked(): modes.append("Static χ(q)")
             if self.chk_dynamic.isChecked(): modes.append("Dynamic χ(q,ω)")
             mode_str = "+".join(modes) if modes else "None"
-            summary = f"{mode_str}, vals=[{self.edit_susc_vals.text()}], N={self.spin_n.value()}"
+            sweep_tag = "J_K" if is_jk else "J_⊥"
+            fixed_tag = "J_⊥" if is_jk else "J_K"
+            summary = f"{mode_str}, {sweep_tag}=[{self.edit_susc_vals.text()}], fixed {fixed_tag}={fixed_val:.1f}, N={self.spin_n.value()}"
 
         elif self.active_study == self.STUDY_COND:
             raw_sweep = self.edit_cond_vals.text().strip()
@@ -2211,7 +2386,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.spin_se_fixed.setValue(jperp_val)
         if hasattr(self, "edit_se_vals"):
             self.edit_se_vals.setText(str(round(jk_val, 3)))
-        if hasattr(self, "edit_susc_vals"):
+        if hasattr(self, "edit_susc_vals") and hasattr(self, "spin_susc_fixed") and hasattr(self, "cb_susc_mode"):
+            is_susc_jk = not ("Interlayer" in self.cb_susc_mode.currentText() or "J_⊥" in self.cb_susc_mode.currentText())
+            if is_susc_jk:
+                self.edit_susc_vals.setText(str(round(jk_val, 3)))
+                self.spin_susc_fixed.setValue(jperp_val)
+            else:
+                self.edit_susc_vals.setText(str(round(jperp_val, 3)))
+                self.spin_susc_fixed.setValue(jk_val)
+        elif hasattr(self, "edit_susc_vals"):
             self.edit_susc_vals.setText(str(round(jk_val, 3)))
         if hasattr(self, "edit_cond_vals"):
             self.edit_cond_vals.setText(str(round(jk_val, 3)))
@@ -2223,6 +2406,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         active_mode = str(params.get("active_mode", "")).lower()
         if "conductivity" in active_mode:
             self.set_active_study(self.STUDY_COND)
+        elif "susceptibility" in active_mode or "rpa" in active_mode:
+            self.set_active_study(self.STUDY_SUSC)
 
         # Switch perspective to Simulation Studio and viewport to Plot Viewer CAD
         self.set_perspective("simulation")
@@ -2235,12 +2420,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_run.setEnabled(False)
             self.btn_run.setText("⏳ Running...")
             self.btn_cancel.setEnabled(True)
-            self.btn_cancel.setText("⏹ Cancel / Stop")
+            self.btn_cancel.setText("⏹ Stop")
         else:
             self.btn_run.setEnabled(True)
-            self.btn_run.setText("▶ Run Calculation")
+            self.btn_run.setText("▶ Run Study")
             self.btn_cancel.setEnabled(False)
-            self.btn_cancel.setText("⏹ Cancel / Stop")
+            self.btn_cancel.setText("⏹ Stop")
         if hasattr(self, "btn_dock_foundation"):
             self.btn_dock_foundation.setEnabled(not is_running)
         if hasattr(self, "btn_dock_sweep"):
@@ -2776,6 +2961,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.interactive_plots.set_theme(self.is_dark)
         elif hasattr(self, "live_lab"):
             self.live_lab.set_theme(self.is_dark)
+        if hasattr(self, "interactive_mode_nav"):
+            self.interactive_mode_nav.set_theme(self.is_dark)
         self._update_bottom_dock_theme(self.is_dark)
         self._update_statusbar_theme(self.is_dark)
         study_col = QColor("#60a5fa") if self.is_dark else QColor("#2563eb")

@@ -27,3 +27,8 @@ scratch/
 .agents/
 .vscode/
 .idea/
+
+# PyInstaller builds and dist
+build/
+dist/
+*.spec

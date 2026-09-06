@@ -14,6 +14,7 @@ from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot
 from pyside6_studio.widgets.dataset_explorer import DatasetExplorerWidget
 from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas
 from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
+from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget
 
 __all__ = [
     "InteractivePlotCanvas",
@@ -22,4 +23,5 @@ __all__ = [
     "DatasetExplorerWidget",
     "InteractiveDataCanvas",
     "InteractivePlotsWidget",
+    "InteractiveModeNavWidget",
 ]

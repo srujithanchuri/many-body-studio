@@ -84,25 +84,32 @@ class CalculationBridge(QObject):
             self._process = None
 
         self._process = QProcess(self)
-        self._process.setProgram(python_exe)
-        self._process.setArguments(["-u", worker_script, "--params-b64", b64_params])
+        if getattr(sys, 'frozen', False):
+            # Running inside standalone frozen bundle
+            self._process.setProgram(sys.executable)
+            self._process.setArguments(["--params-b64", b64_params])
+        else:
+            self._process.setProgram(python_exe)
+            self._process.setArguments(["-u", worker_script, "--params-b64", b64_params])
 
         # Configure process environment with PYTHONPATH and unbuffered IO
         env = QProcessEnvironment.systemEnvironment()
         env.insert("PYTHONUNBUFFERED", "1")
-        existing_pythonpath = env.value("PYTHONPATH", "")
-        paths_to_add = [
-            PROJECT_ROOT,
-            GUI_ROOT,
-            STUDIO_DIR,
-            os.path.join(PROJECT_ROOT, "self_energy"),
-            os.path.join(PROJECT_ROOT, "susceptibility"),
-            os.path.join(PROJECT_ROOT, "conductivity"),
-        ]
-        new_pythonpath = os.pathsep.join(paths_to_add)
-        if existing_pythonpath:
-            new_pythonpath = new_pythonpath + os.pathsep + existing_pythonpath
-        env.insert("PYTHONPATH", new_pythonpath)
+        if not getattr(sys, 'frozen', False):
+            existing_pythonpath = env.value("PYTHONPATH", "")
+            paths_to_add = [
+                PROJECT_ROOT,
+                GUI_ROOT,
+                STUDIO_DIR,
+                os.path.join(PROJECT_ROOT, "self_energy"),
+                os.path.join(PROJECT_ROOT, "susceptibility"),
+                os.path.join(PROJECT_ROOT, "conductivity"),
+            ]
+            valid_paths = [p for p in paths_to_add if os.path.isdir(p)]
+            new_pythonpath = os.pathsep.join(valid_paths)
+            if existing_pythonpath:
+                new_pythonpath = new_pythonpath + os.pathsep + existing_pythonpath
+            env.insert("PYTHONPATH", new_pythonpath)
         self._process.setProcessEnvironment(env)
 
         # Connect signals

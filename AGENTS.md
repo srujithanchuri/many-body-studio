@@ -1,5 +1,5 @@
-# AGENTS.md: Many-Body Physics Studio Pro
-
+# AGENTS.md: Many-Body Studio
+ 
 > **Universal Agent Onboarding & Architecture Blueprint**  
 > *Target Context*: Correlated electron physics in Metal-Mott Insulator Heterostructures.  
 > *Purpose*: Read this file first in any new session to obtain an instantaneous, complete mental model of the codebase, execution pipelines, data structures, and fragile invariants without scanning individual files.
@@ -25,7 +25,7 @@
 ### 2.1 Root Entry Points & Configuration
 - [`run_studio.py`](run_studio.py) / [`run_studio.bat`](run_studio.bat): Windows entry point launchers. Forces line-buffered UTF-8 console (`PYTHONIOENCODING=utf-8`) to prevent `cp1252` encoding crashes on Greek symbols ($\Sigma$, $\chi$, $\omega$, $\mu$).
 - [`AGENTS.md`](AGENTS.md): This file. Authoritative agent instructions automatically injected into agent system prompt.
-- [`README.md`](README.md): High-level overview of Alpha v4 capabilities, 6 modular interactive modes, and caching architecture.
+- [`README.md`](README.md): High-level overview of Beta v1 capabilities, 6 modular interactive modes, and caching architecture.
 - [`STUDIO_ARCHITECTURE_PLAN.md`](STUDIO_ARCHITECTURE_PLAN.md): In-depth historical engineering specification, memory budgets, and benchmark records.
 
 ### 2.2 Core GUI Architecture (`pyside6_studio/`)
