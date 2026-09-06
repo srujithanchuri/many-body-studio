@@ -180,7 +180,7 @@ class SpectralFunctionMode(BaseInteractiveMode):
         ax_s.plot(omega, sig_re_k, color="#0891b2", lw=1.8, label=r"$\operatorname{Re}\Sigma$")
         ax_s.plot(omega, sig_im_k, color="#d97706", lw=1.8, label=r"$\operatorname{Im}\Sigma$")
         ax_s.set_xlabel(r"$\omega$ [eV]", fontsize=10)
-        ax_s.set_title(r"Total Self-Energy $\operatorname{Re}\Sigma, \operatorname{Im}\Sigma$ (1-Loop + 3-Loop)", fontweight="bold", fontsize=10.5, pad=8)
+        ax_s.set_title(r"Total Self-Energy $\operatorname{Re}\Sigma, \operatorname{Im}\Sigma$", fontweight="bold", fontsize=10.5, pad=8)
         ax_s.grid(True, linestyle=":", alpha=0.35)
         ax_s.legend(frameon=True, fontsize=9)
         if self._user_ylim_s:

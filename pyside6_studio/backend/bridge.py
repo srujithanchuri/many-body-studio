@@ -91,7 +91,14 @@ class CalculationBridge(QObject):
         env = QProcessEnvironment.systemEnvironment()
         env.insert("PYTHONUNBUFFERED", "1")
         existing_pythonpath = env.value("PYTHONPATH", "")
-        paths_to_add = [PROJECT_ROOT, GUI_ROOT, STUDIO_DIR, os.path.join(PROJECT_ROOT, "self_energy"), os.path.join(PROJECT_ROOT, "susceptibility")]
+        paths_to_add = [
+            PROJECT_ROOT,
+            GUI_ROOT,
+            STUDIO_DIR,
+            os.path.join(PROJECT_ROOT, "self_energy"),
+            os.path.join(PROJECT_ROOT, "susceptibility"),
+            os.path.join(PROJECT_ROOT, "conductivity"),
+        ]
         new_pythonpath = os.pathsep.join(paths_to_add)
         if existing_pythonpath:
             new_pythonpath = new_pythonpath + os.pathsep + existing_pythonpath

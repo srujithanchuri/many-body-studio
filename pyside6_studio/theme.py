@@ -375,6 +375,14 @@ QPushButton#PrimaryBtn:disabled, QToolButton#PrimaryBtn:disabled {
     font-weight: 500;
 }
 
+QPushButton#BtnCancel {
+    background-color: #f1f5f9;
+    color: #94a3b8;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 6px 14px;
+}
 QPushButton#BtnCancel:enabled {
     background-color: #ef4444;
     color: #ffffff;
@@ -438,33 +446,6 @@ QToolButton#BtnRun::menu-arrow {
     height: 8px;
 }
 
-/* Mode Segmented Capsule */
-QFrame#ModeSegmentedContainer {
-    background: #f1f5f9;
-    border: 1px solid #cbd5e1;
-    border-radius: 7px;
-    padding: 2px;
-}
-QPushButton#ModeSimActive, QPushButton#ModeComposerActive {
-    background: #2563eb;
-    color: #ffffff;
-    font-weight: 700;
-    border-radius: 5px;
-    border: none;
-    padding: 5px 14px;
-}
-QPushButton#ModeInactive {
-    background: transparent;
-    color: #475569;
-    font-weight: 600;
-    border: none;
-    border-radius: 5px;
-    padding: 5px 14px;
-}
-QPushButton#ModeInactive:hover {
-    background: #e2e8f0;
-    color: #0f172a;
-}
 
 QHeaderView::section {
     background: #f8fafc;
@@ -928,6 +909,14 @@ QPushButton#PrimaryBtn:disabled, QToolButton#PrimaryBtn:disabled {
     font-weight: 500;
 }
 
+QPushButton#BtnCancel {
+    background-color: #1e293b;
+    color: #64748b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 6px 14px;
+}
 QPushButton#BtnCancel:enabled {
     background-color: #ef4444;
     color: #ffffff;
@@ -991,33 +980,6 @@ QToolButton#BtnRun::menu-arrow {
     height: 8px;
 }
 
-/* Mode Segmented Capsule */
-QFrame#ModeSegmentedContainer {
-    background: #0b1120;
-    border: 1px solid #334155;
-    border-radius: 7px;
-    padding: 2px;
-}
-QPushButton#ModeSimActive, QPushButton#ModeComposerActive {
-    background: #2563eb;
-    color: #ffffff;
-    font-weight: 700;
-    border-radius: 5px;
-    border: none;
-    padding: 5px 14px;
-}
-QPushButton#ModeInactive {
-    background: transparent;
-    color: #94a3b8;
-    font-weight: 600;
-    border: none;
-    border-radius: 5px;
-    padding: 5px 14px;
-}
-QPushButton#ModeInactive:hover {
-    background: #1e293b;
-    color: #f8fafc;
-}
 
 QHeaderView::section {
     background: #0f172a;

@@ -6,13 +6,14 @@ Modern, high-performance scientific desktop workbench for strongly correlated qu
 
 ## Key Features
 
-### 1. Dual-Perspective Architecture & Balanced Proportions
+### 1. Unified Simulation Studio & Dual Viewports
 - **Simulation Studio**:
   - Configure Hamiltonians, launch asynchronous simulations, monitor live progress via an isolated subprocess `CalculationBridge`, and inspect raw numerical arrays in a hardware-accelerated interactive canvas.
   - **Balanced Ergonomic Layout**: Rigidly proportioned $350\text{ px}$ Parameter Inspector dock paired with a spacious $\sim 730\text{ px}$ central canvas, ensuring un-cramped toolbars and comfortable controls across all screen resolutions (down to $1366\times 768$).
-- **Figure Composer Perspective**:
-  - **Visual Gallery Browser**: Grid and compact list views, metadata badges, parameter search, and instant file-system synchronization.
-  - **Interactive Plots**: On-the-fly physics powered by cached foundation arrays (`.npz` in `results/cache/`), enabling continuous $J_K$, $J_\perp$, $\omega$, and momentum scrubbing at 60+ FPS with immediate mode resync.
+- **Integrated Dual Viewports & Plot Gallery**:
+  - **Dual Viewports**: Switch instantaneously between CAD **Plot Viewer** (with pan/zoom, coordinate probing, and direct PNG export) and real-time **Interactive Plots**.
+  - **Visual Gallery Browser**: Integrated in the left Navigator dock with grid and compact list views, metadata badges, parameter search, and instant file-system synchronization.
+  - *(Note: Standalone Figure Composer workspace has been scrapped in favor of direct integrated viewports).*
 
 ### 2. Full 5-Mode Modular Interactive Plots (Live Analytical Studio)
 - **Spectral Function $[A(\mathbf{k}, \omega)]$**:

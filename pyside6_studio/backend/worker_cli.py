@@ -550,6 +550,84 @@ def run_susceptibility_task(params: dict, results_dir: str, out_plots_dir: str, 
     emit_completed(plot_path=primary_plot, data_path=primary_data, all_plots=all_plots)
 
 
+def run_conductivity_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str, out_cache_dir: str):
+    """Executes the Optical / DC Electrical Conductivity Sweep across J_K or J_perp."""
+    t = float(params.get("t", 1.0))
+    t1 = float(params.get("t1", 0.0))
+    mu = float(params.get("mu", 0.0))
+    K = float(params.get("K", 1.0))
+    N = int(params.get("N", 100))
+    num_omega = int(params.get("num_omega", params.get("Nw", 4801)))
+    omega_max = float(params.get("omega_max", params.get("w_max", 40.0)))
+    eta = float(params.get("eta", 0.05))
+
+    sweep_mode_raw = params.get("cond_sweep_mode", params.get("sweep_mode", "JK"))
+    is_jk_sweep = not ("Interlayer" in str(sweep_mode_raw) or "J_perp" in str(sweep_mode_raw) or "J_⊥" in str(sweep_mode_raw))
+    sweep_mode = "JK" if is_jk_sweep else "J_perp"
+
+    sweep_vals = params.get("cond_sweep_vals", params.get("sweep_values", [0.0, 3.0, 6.0, 9.0]))
+    if isinstance(sweep_vals, str):
+        sweep_vals = [float(x.strip()) for x in sweep_vals.split(",") if x.strip()]
+
+    fixed_jperp = float(params.get("fixed_jperp", 6.0))
+    fixed_jk = float(params.get("fixed_jk", 3.0))
+    w_active_max = float(params.get("w_active_max", 20.0))
+
+    raw_solver = str(params.get("solver_choice", "gpu")).lower()
+    solver_choice = "cpu" if "cpu" in raw_solver else "gpu"
+    precision = str(params.get("precision", "float32")).lower()
+    cpu_limit_str = str(params.get("cpu_limit", "80%")).rstrip("%")
+    force_recompute = bool(params.get("force_recompute", False))
+
+    try:
+        cpu_limit = float(cpu_limit_str) / 100.0
+    except Exception:
+        cpu_limit = 0.80
+
+    backend_label = "NVIDIA RTX 5060 GPU" if solver_choice == "gpu" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    sweep_label = "J_K" if is_jk_sweep else "J_⊥"
+    fixed_label = "J_⊥" if is_jk_sweep else "J_K"
+    fixed_val = fixed_jperp if is_jk_sweep else fixed_jk
+    emit_status(f"Configuring Conductivity Sweep ({sweep_label}={sweep_vals}, fixed {fixed_label}={fixed_val:.2f}) on {backend_label}...")
+
+    COND_DIR = os.path.join(PROJECT_ROOT, "conductivity")
+    if COND_DIR not in sys.path:
+        sys.path.insert(0, COND_DIR)
+
+    from conductivity.sweeper import run_sweep
+
+    def on_status(msg):
+        emit_status(msg)
+
+    omega_pos, sweep_vals_arr, sigma_curves, data_file, plot_file = run_sweep(
+        sweep_mode=sweep_mode,
+        sweep_values=sweep_vals,
+        fixed_jperp=fixed_jperp,
+        fixed_jk=fixed_jk,
+        mu=mu,
+        t=t,
+        t1=t1,
+        K=K,
+        N=N,
+        num_omega=num_omega,
+        omega_max=omega_max,
+        eta=eta,
+        solver_choice=solver_choice,
+        precision=precision,
+        w_active_max=w_active_max,
+        output_dir=results_dir,
+        status_callback=on_status,
+        force_recompute=force_recompute
+    )
+
+    plot_path = str(plot_file) if plot_file and os.path.isfile(str(plot_file)) else ""
+    data_path = str(data_file) if data_file and os.path.isfile(str(data_file)) else ""
+    all_plots = [plot_path] if plot_path else []
+
+    emit_status("Electrical Conductivity Sweep completed successfully.")
+    emit_completed(plot_path=plot_path, data_path=data_path, all_plots=all_plots)
+
+
 def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str, out_data_dir: str, out_cache_dir: str):
     """
     Direct in-situ synthesizer for intermediate foundation arrays:
@@ -575,7 +653,7 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
         omega_max = float(params.get("omega_max", params.get("w_max", 40.0 if N >= 100 else 20.0)))
         eta = float(params.get("eta", 0.05 if N >= 100 else 0.08))
 
-        emit_status(f"Computing Total Self-Energy Σ (1-Loop + 3-Loop) on {solver_choice.upper()} (N={N}, μ={mu:.1f}, J⊥={fixed_jperp:.1f})...")
+        emit_status(f"Computing Total Self-Energy Σ on {solver_choice.upper()} (N={N}, μ={mu:.1f}, J⊥={fixed_jperp:.1f})...")
         from parameters import ModelParameters
         import sweep_core
 
@@ -601,7 +679,7 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
         if not os.path.exists(target_fpath):
             target_fpath = os.path.join(out_data_dir, cache_name)
 
-        emit_status(f"✅ Total Self-Energy Σ (1-Loop + 3-Loop) computed: {cache_name}")
+        emit_status(f"✅ Total Self-Energy Σ computed: {cache_name}")
         emit_completed(plot_path="", data_path=target_fpath, all_plots=[])
 
     else:
@@ -678,6 +756,8 @@ def run_worker(params: dict):
             run_phase_diagram_task(params, results_dir, out_plots_dir, out_data_dir)
         elif "susc" in task or "rpa" in task or "chi" in task:
             run_susceptibility_task(params, results_dir, out_plots_dir, out_data_dir)
+        elif "cond" in task or "conductivity" in task or "sigma" in task:
+            run_conductivity_task(params, results_dir, out_plots_dir, out_data_dir, out_cache_dir)
         elif "function" in task or "a(k" in task or ("spec" in task and "sweep" not in task):
             run_spectral_function_task(params, results_dir, out_plots_dir, out_data_dir, out_cache_dir)
         else:

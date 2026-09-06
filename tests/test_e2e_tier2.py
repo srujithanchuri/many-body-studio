@@ -21,8 +21,10 @@ import time
 import subprocess
 from unittest import mock
 
-# Ensure headless offscreen platform
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Ensure project root in sys.path
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from tests.helpers import get_qapp, process_events, is_process_alive, SignalCollector
 

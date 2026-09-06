@@ -83,7 +83,7 @@ class BandDispersionMode(BaseInteractiveMode):
             self.lab.container_susc_params.setVisible(False)
         self.lab.lbl_map_tip.setText("💡 Tip: Band dispersion along high-symmetry path Γ(0, 0) → M(π, π) → X(π, 0) → Γ(0, 0) • Scroll to zoom, drag to pan")
         self.lab.lbl_map_tip.setVisible(True)
-        self.w_max = 8.0
+        self.w_max = 15.0
         self.lab.lbl_live_z.setVisible(False)
         self.lab.lbl_live_gamma.setVisible(False)
         self.lab.lbl_live_mass.setVisible(False)
@@ -91,9 +91,9 @@ class BandDispersionMode(BaseInteractiveMode):
     def fit_view(self):
         self._user_xlim = None
         self._user_ylim = None
-        self.w_max = 8.0
+        self.w_max = 15.0
         self.render()
-        self.lab.sig_status_msg.emit("Band dispersion view reset to full path (±8 eV).")
+        self.lab.sig_status_msg.emit("Band dispersion view reset to full path (±15 eV).")
 
     def reset_view(self):
         self.fit_view()
@@ -187,8 +187,8 @@ class BandDispersionMode(BaseInteractiveMode):
             sr_path = sig_r[:, self._path_ix, self._path_iy].astype(np.float32)
             si_path = self._sig_im_clean[:, self._path_ix, self._path_iy].astype(np.float32)
 
-        # Apply fixed frequency bounds (±8.0 eV)
-        self.w_max = 8.0
+        # Apply fixed frequency bounds (±15.0 eV)
+        self.w_max = 15.0
         w_mask = np.abs(omega) <= (self.w_max + 1e-4)
         w_eval = omega[w_mask].astype(np.float32)
         sr_eval = sr_path[w_mask]
@@ -231,7 +231,7 @@ class BandDispersionMode(BaseInteractiveMode):
             self.line_bare.set_data(np.arange(num_points), self._xi_path)
             if getattr(self, "title_artist", None) is not None:
                 self.title_artist.set_text(
-                    rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)"
+                    r"Band Dispersion $A(\mathbf{k}, \omega)$ along High-Symmetry Path"
                 )
             self.canvas.draw_idle()
             return
@@ -274,7 +274,7 @@ class BandDispersionMode(BaseInteractiveMode):
         self.ax_disp.set_ylim(self._user_ylim if self._user_ylim is not None else default_ylim)
 
         self.title_artist = self.fig.suptitle(
-            rf"Band Dispersion $A(\mathbf{{k}}, \omega)$ along Path ($J_K = {self.lab.current_JK:.2f}$)",
+            r"Band Dispersion $A(\mathbf{k}, \omega)$ along High-Symmetry Path",
             fontweight="bold", fontsize=12, y=0.96
         )
         self.ax_disp.legend(loc="upper right", fontsize=9.5, framealpha=0.85)

@@ -54,7 +54,8 @@ class TestAllFourSolversE2E(unittest.TestCase):
         env["PYTHONPATH"] = os.pathsep.join([
             PROJECT_ROOT, GUI_ROOT, STUDIO_DIR,
             os.path.join(PROJECT_ROOT, "self_energy"),
-            os.path.join(PROJECT_ROOT, "susceptibility")
+            os.path.join(PROJECT_ROOT, "susceptibility"),
+            os.path.join(PROJECT_ROOT, "conductivity")
         ])
 
         cmd = [self.python_exe, "-u", WORKER_SCRIPT, "--params-b64", b64_params]
@@ -261,6 +262,48 @@ class TestAllFourSolversE2E(unittest.TestCase):
         proc = self._run_worker_subprocess(params)
         payload = self._assert_worker_success(proc, "susceptibility_cpu")
         self.assertGreaterEqual(len(payload.get("all_plots", [])), 1)
+
+    # =========================================================================
+    # 5. ELECTRICAL CONDUCTIVITY SWEEP (GPU & CPU)
+    # =========================================================================
+    def test_09_conductivity_sweep_cpu(self):
+        """Electrical Conductivity Sweep on CPU."""
+        out_dir = os.path.join(self.test_dir, "cond_cpu")
+        params = {
+            "task": "conductivity_sweep",
+            "solver_choice": "cpu",
+            "cpu_limit": "50%",
+            "t": 1.0, "t1": 0.0, "mu": 0.0, "K": 1.0,
+            "N": 16, "num_omega": 51, "omega_max": 10.0, "eta": 0.05,
+            "cond_sweep_mode": "JK",
+            "cond_sweep_vals": [0.0, 3.0],
+            "fixed_jperp": 6.0,
+            "w_active_max": 10.0,
+            "output_dir": out_dir
+        }
+        proc = self._run_worker_subprocess(params)
+        payload = self._assert_worker_success(proc, "conductivity_sweep_cpu")
+        self.assertTrue(payload.get("plot_path", "").endswith(".png"))
+        self.assertTrue(payload.get("data_path", "").endswith(".npz"))
+
+    def test_10_conductivity_sweep_gpu(self):
+        """Electrical Conductivity Sweep on GPU."""
+        out_dir = os.path.join(self.test_dir, "cond_gpu")
+        params = {
+            "task": "conductivity_sweep",
+            "solver_choice": "gpu",
+            "t": 1.0, "t1": 0.0, "mu": 0.0, "K": 1.0,
+            "N": 16, "num_omega": 51, "omega_max": 10.0, "eta": 0.05,
+            "cond_sweep_mode": "JK",
+            "cond_sweep_vals": [0.0, 3.0],
+            "fixed_jperp": 6.0,
+            "w_active_max": 10.0,
+            "output_dir": out_dir
+        }
+        proc = self._run_worker_subprocess(params)
+        payload = self._assert_worker_success(proc, "conductivity_sweep_gpu")
+        self.assertTrue(payload.get("plot_path", "").endswith(".png"))
+        self.assertTrue(payload.get("data_path", "").endswith(".npz"))
 
 
 if __name__ == "__main__":

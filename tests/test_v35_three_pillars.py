@@ -1,7 +1,7 @@
-"""Comprehensive test suite for the 2-Perspective Visualization Architecture:
-- Perspective 1: Figure Composer & Plot Viewer (PlotGalleryWidget + Interactive Canvas)
-- Perspective 2: Interactive Plots (InteractivePlotsWidget + Cache-driven real-time physics)
-- Dual-Perspective Integration in UnifiedWorkbenchWindow
+"""Comprehensive test suite for the Dual Viewport Visualization Architecture:
+- Viewport 1: Plot Viewer (PlotGalleryWidget + Interactive Canvas)
+- Viewport 2: Interactive Plots (InteractivePlotsWidget + Cache-driven real-time physics)
+- Dual-Viewport Integration in UnifiedWorkbenchWindow
 """
 
 import os
@@ -228,8 +228,10 @@ class TestTwoPerspectivesArchitecture(unittest.TestCase):
                 sigma_idx = i
                 break
         self.assertNotEqual(sigma_idx, -1)
+        self.assertIn("K=1.0", lab.cb_cache_file.itemText(sigma_idx))
         lab.cb_cache_file.setCurrentIndex(sigma_idx)
         self.assertIsNotNone(lab.loaded_base_sigma)
+        self.assertEqual(lab.loaded_base_sigma.get("K"), 1.0)
 
         # Experiment 0: Analytical BZ k-probe
         lab.cb_experiment.setCurrentIndex(0)

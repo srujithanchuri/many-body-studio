@@ -49,12 +49,13 @@ from pyside6_studio.widgets.foundation_cache_dialog import FoundationCacheDialog
 def format_smart_cache_label(fname: str, ftype: str) -> str:
     """
     Creates concise, human-friendly, physics-rich cache labels that consume minimal space.
-    - For Sigma (self-energy): Displays mu, J_perp, and N: Σ (μ=0.0, J⊥=6.0, N=100)
+    - For Sigma (self-energy): Displays mu, J_perp, K, and N: Σ (μ=0.0, J⊥=6.0, K=1.0, N=100)
     - For Static/Dynamic Susceptibility: Displays mu and N: Static χ₀ (μ=1.0, N=100)
     """
     import re
     if ftype == "sigma_base" or fname.startswith("sigma_base"):
         jp_match = re.search(r"Jperp_([0-9.]+)", fname) or re.search(r"J_perp_([0-9.]+)", fname)
+        k_match = re.search(r"(?<![a-zA-Z])(?<![jJ]_)[kK]_([0-9.-]+)", fname) or re.search(r"(?<![a-zA-Z])(?<![jJ]_)[kK]([0-9.-]+)", fname)
         n_match = re.search(r"N_([0-9]+)", fname) or re.search(r"N([0-9]+)", fname)
         mu_match = re.search(r"mu_([0-9.-]+)", fname) or re.search(r"mu([0-9.-]+)", fname)
         parts = []
@@ -64,6 +65,9 @@ def format_smart_cache_label(fname: str, ftype: str) -> str:
         if jp_match:
             try: parts.append(f"J⊥={float(jp_match.group(1)):.1f}")
             except ValueError: parts.append(f"J⊥={jp_match.group(1)}")
+        if k_match:
+            try: parts.append(f"K={float(k_match.group(1)):.1f}")
+            except ValueError: parts.append(f"K={k_match.group(1)}")
         if n_match:
             parts.append(f"N={n_match.group(1)}")
         param_str = f" ({', '.join(parts)})" if parts else ""
@@ -102,6 +106,7 @@ def parse_cache_metadata(fname: str, ftype: str) -> dict:
     meta = {
         "mu": None,
         "Jperp": None,
+        "K": None,
         "N": None,
         "eta": None,
         "category": "sigma" if (ftype == "sigma_base" or fname.startswith("sigma_base")) else (
@@ -115,6 +120,10 @@ def parse_cache_metadata(fname: str, ftype: str) -> dict:
     jp_match = re.search(r"Jperp_([0-9.]+)", fname) or re.search(r"J_perp_([0-9.]+)", fname)
     if jp_match:
         try: meta["Jperp"] = float(jp_match.group(1))
+        except ValueError: pass
+    k_match = re.search(r"(?<![a-zA-Z])(?<![jJ]_)[kK]_([0-9.-]+)", fname) or re.search(r"(?<![a-zA-Z])(?<![jJ]_)[kK]([0-9.-]+)", fname)
+    if k_match:
+        try: meta["K"] = float(k_match.group(1))
         except ValueError: pass
     n_match = re.search(r"N_([0-9]+)", fname) or re.search(r"N([0-9]+)", fname)
     if n_match:
@@ -134,6 +143,17 @@ class ModernComboBox(QComboBox):
         self._max_hint_width = max_hint_width
         self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.setMinimumContentsLength(8)
+        if self.view():
+            self.view().setStyleSheet("""
+                QToolTip {
+                    background-color: #0f172a;
+                    color: #ffffff;
+                    border: 1px solid #334155;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                }
+            """)
 
     def minimumSizeHint(self):
         sz = super().minimumSizeHint()
@@ -154,6 +174,7 @@ class InteractivePlotsWidget(QWidget):
 
     def __init__(self, out_dir: str = DEFAULT_RESULTS_DIR, parent=None):
         super().__init__(parent)
+        self.setObjectName("InteractivePlotsWidget")
         self.out_dir = out_dir
         self.cached_files: dict = {}
         self.scanned_caches: list[dict] = []
@@ -282,7 +303,20 @@ class InteractivePlotsWidget(QWidget):
 
     def set_theme(self, is_dark: bool):
         self.is_dark = is_dark
-        self.setStyleSheet(f"background-color: {'#0b1120' if is_dark else '#f8fafc'};")
+        self.setObjectName("InteractivePlotsWidget")
+        self.setStyleSheet(f"""
+            #InteractivePlotsWidget {{
+                background-color: {'#0b1120' if is_dark else '#f8fafc'};
+            }}
+            QToolTip {{
+                background-color: #0f172a;
+                color: #ffffff;
+                border: 1px solid #334155;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+            }}
+        """)
 
         if hasattr(self, "header_frame"):
             h_bg = "#0f172a" if is_dark else "#f8fafc"
@@ -345,6 +379,14 @@ class InteractivePlotsWidget(QWidget):
                 selection-color: {cb_sel_fg};
                 border: 1px solid {cb_border};
             }}
+            QToolTip {{
+                background-color: #0f172a;
+                color: #ffffff;
+                border: 1px solid #334155;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+            }}
             QLineEdit {{
                 background: {cb_bg};
                 color: {cb_fg};
@@ -357,7 +399,7 @@ class InteractivePlotsWidget(QWidget):
         if hasattr(self, "cb_filter_mu"):
             self.cb_filter_mu.setStyleSheet(combo_base + "QComboBox { min-width: 44px; max-width: 58px; font-weight: 600; padding: 2px 14px 2px 6px; }")
         if hasattr(self, "cb_cache_file"):
-            self.cb_cache_file.setStyleSheet(combo_base + "QComboBox { min-width: 180px; max-width: 280px; font-weight: 600; }")
+            self.cb_cache_file.setStyleSheet(combo_base + "QComboBox { min-width: 180px; max-width: 330px; font-weight: 600; }")
         if hasattr(self, "cb_momentum"):
             self.cb_momentum.setStyleSheet(combo_base + "QComboBox { min-width: 110px; max-width: 155px; font-weight: 600; }")
         if hasattr(self, "cb_k"):
@@ -651,6 +693,14 @@ class InteractivePlotsWidget(QWidget):
                 selection-color: #1d4ed8;
                 border: 1px solid #cbd5e1;
             }
+            QToolTip {
+                background-color: #0f172a;
+                color: #ffffff;
+                border: 1px solid #334155;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+            }
         """
 
         self.cb_experiment = ModernComboBox(max_hint_width=155)
@@ -709,11 +759,11 @@ class InteractivePlotsWidget(QWidget):
         self.lbl_cache.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 11px;")
         r1_lay.addWidget(self.lbl_cache)
 
-        self.cb_cache_file = ModernComboBox(max_hint_width=280)
-        self.cb_cache_file.setStyleSheet(combo_style + "QComboBox { min-width: 180px; max-width: 280px; font-weight: 600; }")
-        self.cb_cache_file.setMaximumWidth(280)
+        self.cb_cache_file = ModernComboBox(max_hint_width=330)
+        self.cb_cache_file.setStyleSheet(combo_style + "QComboBox { min-width: 180px; max-width: 330px; font-weight: 600; }")
+        self.cb_cache_file.setMaximumWidth(330)
         if self.cb_cache_file.view():
-            self.cb_cache_file.view().setMinimumWidth(260)
+            self.cb_cache_file.view().setMinimumWidth(310)
         self.cb_cache_file.currentIndexChanged.connect(self._on_cache_selected)
         r1_lay.addWidget(self.cb_cache_file)
 
@@ -1328,6 +1378,7 @@ class InteractivePlotsWidget(QWidget):
                         "category": meta["category"],
                         "mu": meta["mu"],
                         "Jperp": meta["Jperp"],
+                        "K": meta["K"],
                         "N": meta["N"],
                         "eta": meta["eta"],
                         "label": lbl,
@@ -1362,6 +1413,7 @@ class InteractivePlotsWidget(QWidget):
                             "category": meta["category"],
                             "mu": meta["mu"],
                             "Jperp": meta["Jperp"],
+                            "K": meta["K"],
                             "N": meta["N"],
                             "eta": meta["eta"],
                             "label": lbl,
@@ -1415,7 +1467,8 @@ class InteractivePlotsWidget(QWidget):
             out_dir=self.out_dir,
             default_category=target_cat,
             default_mu=curr_mu,
-            default_jperp=self.current_Jperp
+            default_jperp=self.current_Jperp,
+            default_k=getattr(self, "current_K", 1.0)
         )
         self._foundation_dlg.sig_cache_generated.connect(self._on_foundation_cache_generated)
         self._foundation_dlg.show()
@@ -1435,7 +1488,8 @@ class InteractivePlotsWidget(QWidget):
             out_dir=self.out_dir,
             default_category=category,
             default_mu=curr_mu,
-            default_jperp=self.current_Jperp
+            default_jperp=self.current_Jperp,
+            default_k=getattr(self, "current_K", 1.0)
         )
         if N == 100:
             self._foundation_dlg.cb_n.setCurrentIndex(0)
@@ -1528,6 +1582,14 @@ class InteractivePlotsWidget(QWidget):
                 else:
                     Jperp = float(d.get("fixed_jperp", d.get("Jperp", d.get("J_perp", 6.0))))
 
+                k_match = re.search(r"(?<![a-zA-Z])(?<![jJ]_)[kK]_([0-9.-]+)", os.path.basename(fpath)) or re.search(r"(?<![a-zA-Z])(?<![jJ]_)[kK]([0-9.-]+)", os.path.basename(fpath))
+                if k_match:
+                    try: K_val = float(k_match.group(1))
+                    except ValueError: K_val = float(d.get("K", 1.0))
+                else:
+                    K_val = float(d.get("K", 1.0))
+                self.current_K = K_val
+
                 if is_shuffled and "sig_re_shuf" in d and "sig_im_shuf" in d:
                     orig_shape = tuple(d["shape"])
                     r_ibz = byte_unshuffle_f32(d["sig_re_shuf"], orig_shape)
@@ -1551,7 +1613,7 @@ class InteractivePlotsWidget(QWidget):
                 self.loaded_base_sigma = {
                     "fpath": fpath,
                     "N": N, "omega": omega, "t": t, "t1": t1, "mu": mu, "eta": eta,
-                    "Jperp": Jperp,
+                    "Jperp": Jperp, "K": K_val,
                     "sig_re": sig_re, "sig_im": sig_im
                 }
         except Exception as e:

@@ -1,14 +1,13 @@
 """Many-Body Physics Studio Pro [PySide6 UI Architecture]
 Pure Frontend Architecture wired to isolated QProcess CalculationBridge.
-Features Dual-Perspective Workspace:
-1. [ 🔬 Simulation Studio ]:
-   - Context-adaptive parameter inspector (t, t', mu, K, sweeps).
-   - Numerical Grid & Resolution Presets (Fast Preview N=64, Standard N=100, High-Res N=256, Custom).
-   - Isolated QProcess execution on RTX 5060 with live streaming console and sub-second cancellation.
+Features Unified Simulation Studio with Dual Analytical Viewports:
+1. [ 📊 Plot Viewer ]:
    - Hardware-accelerated CAD zoom/pan canvas (QGraphicsView).
-2. [ 🎨 Figure Composer ]:
-   - All physics/runner controls are cleanly stowed away.
-   - Scientific multi-panel layout templates and typography styling.
+   - Side-by-side comparison splitter and high-resolution export.
+2. [ ⚡ Interactive Plots ]:
+   - Real-time 60 FPS Brillouin zone probe, Fermi surface slicing, and dispersion.
+   - Dynamic parameter tuning with instant foundation caching.
+(Note: Legacy standalone Figure Composer workspace was scrapped in favor of direct analytical viewports).
 """
 
 import sys
@@ -239,6 +238,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     STUDY_SPEC = "🌊 Spectral Function A(k, ω)"
     STUDY_PD = "📈 Phase Diagram (Root Bisection)"
     STUDY_SUSC = "📊 Susceptibility Sweep (RPA)"
+    STUDY_COND = "🔌 Electrical Conductivity Sweep σ(ω)"
 
     def __init__(self):
         super().__init__()
@@ -308,7 +308,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Initialize default state
         self.set_active_study(self.STUDY_SE)
         self.set_perspective("simulation")
+        self.set_canvas_mode(1)
         self._update_cache_badge()
+        self._update_execution_buttons(is_running=False)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -325,33 +327,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.tb.setMovable(False)
         self.addToolBar(self.tb)
 
-        lbl_persp = QLabel(" WORKSPACE: ")
-        lbl_persp.setStyleSheet("font-weight: 700; color: #64748b; font-size: 11px;")
-        self.tb.addWidget(lbl_persp)
-
-        # Unified Segmented Capsule for Workspace Modes
-        self.mode_container = QFrame()
-        self.mode_container.setObjectName("ModeSegmentedContainer")
-        mc_lay = QHBoxLayout(self.mode_container)
-        mc_lay.setContentsMargins(2, 2, 2, 2)
-        mc_lay.setSpacing(2)
-
-        self.btn_mode_sim = QPushButton("🔬 Simulation Studio")
-        self.btn_mode_sim.setObjectName("ModeSimActive")
-        self.btn_mode_sim.setCursor(Qt.PointingHandCursor)
-        self.btn_mode_sim.clicked.connect(lambda: self.set_perspective("simulation"))
-        mc_lay.addWidget(self.btn_mode_sim)
-
-        self.btn_mode_composer = QPushButton("🎨 Figure Composer")
-        self.btn_mode_composer.setObjectName("ModeInactive")
-        self.btn_mode_composer.setCursor(Qt.PointingHandCursor)
-        self.btn_mode_composer.clicked.connect(lambda: self.set_perspective("composer"))
-        mc_lay.addWidget(self.btn_mode_composer)
-
-        self.tb.addWidget(self.mode_container)
-
-        self.tb.addSeparator()
-
         # Simulation Studio Toolbar Actions
         self.btn_run = QToolButton()
         self.btn_run.setObjectName("BtnRun")
@@ -366,6 +341,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         menu_run.addAction(self.STUDY_SPEC).triggered.connect(lambda: self._select_and_run(self.STUDY_SPEC))
         menu_run.addAction(self.STUDY_PD).triggered.connect(lambda: self._select_and_run(self.STUDY_PD))
         menu_run.addAction(self.STUDY_SUSC).triggered.connect(lambda: self._select_and_run(self.STUDY_SUSC))
+        menu_run.addAction(self.STUDY_COND).triggered.connect(lambda: self._select_and_run(self.STUDY_COND))
         self.btn_run.setMenu(menu_run)
         self.action_run = self.tb.addWidget(self.btn_run)
 
@@ -387,18 +363,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_split.toggled.connect(self.toggle_split_view)
         self.btn_split.setVisible(False)
         self.action_split = None
-
-        # Figure Composer Toolbar Actions (Hidden by default in Simulation Mode)
-        self.btn_export_pdf = QPushButton("📄 Save Vector PDF for LaTeX (300 DPI)")
-        self.btn_export_pdf.setObjectName("PrimaryBtn")
-        self.btn_export_pdf.clicked.connect(self.export_pdf_dialog)
-        self.action_export_pdf = self.tb.addWidget(self.btn_export_pdf)
-        self.action_export_pdf.setVisible(False)
-
-        self.btn_copy_latex = QPushButton("📋 Copy LaTeX Code")
-        self.btn_copy_latex.clicked.connect(self.copy_latex_snippet)
-        self.action_copy_latex = self.tb.addWidget(self.btn_copy_latex)
-        self.action_copy_latex.setVisible(False)
 
         self.tb.addSeparator()
 
@@ -431,7 +395,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.btn_canvas_figure = QPushButton("📊 Plot Viewer")
         self.btn_canvas_figure.setCheckable(True)
-        self.btn_canvas_figure.setChecked(True)
+        self.btn_canvas_figure.setChecked(False)
         self.btn_canvas_figure.setStyleSheet("""
             QPushButton {
                 padding: 4px 12px; font-weight: 600; font-size: 11px;
@@ -447,7 +411,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.btn_canvas_lab = QPushButton("⚡ Interactive Plots")
         self.btn_canvas_lab.setCheckable(True)
-        self.btn_canvas_lab.setChecked(False)
+        self.btn_canvas_lab.setChecked(True)
         self.btn_canvas_lab.setStyleSheet("""
             QPushButton {
                 padding: 4px 14px; font-weight: 600; font-size: 11px;
@@ -502,7 +466,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         btn_export_fig = QPushButton("Export")
         btn_export_fig.setToolTip("Export plot image to disk")
         btn_export_fig.setStyleSheet(btn_style)
-        btn_export_fig.clicked.connect(self.export_pdf_dialog)
+        btn_export_fig.clicked.connect(self.export_current_plot)
         fig_toolbar.addWidget(btn_export_fig)
 
         btn_open_fig = QPushButton("Folder")
@@ -588,56 +552,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.nav_stack = QStackedWidget()
 
-        # PAGE 0: Visual Plot Gallery Browser
+        # Visual Plot Gallery Browser
         out_dir = self.edit_out_dir.text().strip() if hasattr(self, "edit_out_dir") else DEFAULT_RESULTS_DIR
         self.gallery = PlotGalleryWidget(out_dir=out_dir, parent=self)
         self.gallery.sig_plot_selected.connect(self._on_gallery_plot_selected)
         self.nav_stack.addWidget(self.gallery)
-
-        # PAGE 1: Figure Composer Multi-Panel Layout Assigner
-        p_composer = QWidget()
-        l_composer = QVBoxLayout(p_composer)
-        l_composer.setContentsMargins(4, 4, 4, 4)
-
-        grp_panels = ModernCard("Multi-Panel Dataset Assignment")
-        gp_lay = QVBoxLayout(grp_panels)
-
-        gp_lay.addWidget(QLabel("Layout Template:"))
-        self.cb_composer_template = ModernComboBox()
-        self.cb_composer_template.addItems([
-            "3-Panel Row [DOS (a) | Fermi Surface (b) | Path (c)]",
-            "2-Panel Comparison [Static χ(q) | Dynamic χ(q, ω)]",
-            "2x2 Full Suite [DOS | FS | Path | Phase Diagram]",
-            "1x1 Single Focus Figure"
-        ])
-        self.cb_composer_template.currentIndexChanged.connect(self._update_composer_preview)
-        gp_lay.addWidget(self.cb_composer_template)
-
-        gp_lay.addWidget(QLabel("\nPanel (a) Data Source:"))
-        self.cb_panel_a = ModernComboBox()
-        self.cb_panel_a.addItems(list(self.plots.keys()))
-        gp_lay.addWidget(self.cb_panel_a)
-
-        gp_lay.addWidget(QLabel("Panel (b) Data Source:"))
-        self.cb_panel_b = ModernComboBox()
-        self.cb_panel_b.addItems(list(self.plots.keys()))
-        if len(self.plots) > 1: self.cb_panel_b.setCurrentIndex(1)
-        gp_lay.addWidget(self.cb_panel_b)
-
-        gp_lay.addWidget(QLabel("Panel (c) Data Source:"))
-        self.cb_panel_c = ModernComboBox()
-        self.cb_panel_c.addItems(list(self.plots.keys()))
-        if len(self.plots) > 2: self.cb_panel_c.setCurrentIndex(2)
-        gp_lay.addWidget(self.cb_panel_c)
-
-        btn_refresh_comp = QPushButton("🔄 Refresh Composite Preview")
-        btn_refresh_comp.setObjectName("PrimaryBtn")
-        btn_refresh_comp.clicked.connect(self._update_composer_preview)
-        gp_lay.addWidget(btn_refresh_comp)
-
-        l_composer.addWidget(grp_panels)
-        l_composer.addStretch()
-        self.nav_stack.addWidget(p_composer)
 
         self.dock_nav.setWidget(self.nav_stack)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.dock_nav)
@@ -666,10 +585,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.lbl_status.setText(f"Comparison View: Loaded {os.path.basename(path)}")
 
     # =========================================================================
-    # RIGHT DOCK: PARAMETER INSPECTOR (WITH VERTICAL SCROLL AREA)
+    # RIGHT DOCK: SIMULATION SETUP (WITH VERTICAL SCROLL AREA)
     # =========================================================================
     def _build_inspector_dock(self):
-        self.dock_inspector = QDockWidget("⚙️ Parameter Inspector", self)
+        self.dock_inspector = QDockWidget("⚙️ Simulation Setup", self)
         self.dock_inspector.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.dock_inspector.setMinimumWidth(320)
 
@@ -682,7 +601,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         self.inspector_stack = QStackedWidget()
 
-        # PAGE 1: Simulation Parameter Inspector
+        # PAGE 1: Simulation Setup
         panel_sim = QWidget()
         lay_sim = QVBoxLayout(panel_sim)
         lay_sim.setContentsMargins(4, 4, 4, 4)
@@ -693,7 +612,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         sel_lay = QVBoxLayout(grp_selector)
         self.cb_active_study = ModernComboBox()
         self.cb_active_study.setObjectName("StudyDropdown")
-        self.cb_active_study.addItems([self.STUDY_SE, self.STUDY_SPEC, self.STUDY_PD, self.STUDY_SUSC])
+        self.cb_active_study.addItems([self.STUDY_SE, self.STUDY_SPEC, self.STUDY_PD, self.STUDY_SUSC, self.STUDY_COND])
         self.cb_active_study.currentTextChanged.connect(self.set_active_study)
         sel_lay.addWidget(self.cb_active_study)
         lay_sim.addWidget(grp_selector)
@@ -858,8 +777,59 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gsusc.addWidget(self.chk_dynamic)
         gsusc.addWidget(QLabel("Coupling Values:"))
         self.edit_susc_vals = QLineEdit("3.0, 6.0, 9.0")
-        gsusc.addWidget(self.edit_susc_vals)
         self.param_stack.addWidget(grp_susc)
+
+        # 2e. Electrical / Optical Conductivity parameters
+        grp_cond = ModernCard("Electrical / Optical Conductivity Sweep σ(ω)")
+        grp_cond.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        gcond = QVBoxLayout(grp_cond)
+        gcond.setSpacing(5)
+
+        gcond.addWidget(QLabel("Sweep Target:"))
+        self.cb_cond_mode = ModernComboBox()
+        self.cb_cond_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
+        self.cb_cond_mode.currentIndexChanged.connect(self._on_cond_sweep_mode_change)
+        gcond.addWidget(self.cb_cond_mode)
+
+        gcond.addWidget(QLabel("Coupling Values Across Curves (comma-separated):"))
+        self.edit_cond_vals = QLineEdit("0.0, 3.0, 6.0, 9.0")
+        gcond.addWidget(self.edit_cond_vals)
+
+        h_cond_row = QHBoxLayout()
+        self.lbl_cond_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
+        self.lbl_cond_fixed.setStyleSheet("font-weight: 600;")
+        h_cond_row.addWidget(self.lbl_cond_fixed)
+        h_cond_row.addStretch()
+
+        self.spin_cond_fixed = QDoubleSpinBox()
+        self.spin_cond_fixed.setRange(0.0, 50.0)
+        self.spin_cond_fixed.setValue(6.0)
+        self.spin_cond_fixed.setSingleStep(0.5)
+        self.spin_cond_fixed.setFixedWidth(100)
+        h_cond_row.addWidget(self.spin_cond_fixed)
+        gcond.addLayout(h_cond_row)
+
+        self.lbl_cond_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across curves")
+        self.lbl_cond_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.lbl_cond_fixed_desc.setWordWrap(True)
+        gcond.addWidget(self.lbl_cond_fixed_desc)
+
+        h_cond_cut = QHBoxLayout()
+        lbl_wactive = QLabel("Active Cutoff ω_max (eV):")
+        lbl_wactive.setToolTip("Restricts Kubo bubble integration to active energy window for 2x calculation speedup")
+        h_cond_cut.addWidget(lbl_wactive)
+        h_cond_cut.addStretch()
+
+        self.spin_cond_wactive = QDoubleSpinBox()
+        self.spin_cond_wactive.setRange(1.0, 100.0)
+        self.spin_cond_wactive.setValue(20.0)
+        self.spin_cond_wactive.setSingleStep(5.0)
+        self.spin_cond_wactive.setFixedWidth(100)
+        self.spin_cond_wactive.setToolTip("Active frequency cutoff window in eV (default: 20.0)")
+        h_cond_cut.addWidget(self.spin_cond_wactive)
+        gcond.addLayout(h_cond_cut)
+
+        self.param_stack.addWidget(grp_cond)
 
         lay_sim.addWidget(self.param_stack)
 
@@ -983,8 +953,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         lay_sim.addWidget(grp_res)
 
-        # 5. Common Model Hamiltonian
-        grp_model = ModernCard("Common Model Hamiltonian")
+        # 5. Hamiltonian Parameters
+        grp_model = ModernCard("Hamiltonian Parameters")
         gm = QVBoxLayout(grp_model)
         gm.setSpacing(4)
 
@@ -1043,69 +1013,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         lay_sim.addStretch()
         self.inspector_stack.addWidget(panel_sim)
-
-        # PAGE 2: Figure Composer Styling & Typography
-        panel_composer = QWidget()
-        lay_composer = QVBoxLayout(panel_composer); lay_composer.setContentsMargins(4, 4, 4, 4)
-
-        grp_journal = ModernCard("Journal Dimensions && Standards")
-        gj = QVBoxLayout(grp_journal)
-        gj.addWidget(QLabel("Target Journal Standard:"))
-        self.cb_target_journal = ModernComboBox()
-        self.cb_target_journal.addItems([
-            "Physical Review B (Single Column • 86 mm)",
-            "Physical Review B (Double Column • 178 mm)",
-            "Master's Thesis Page (Full Width • 160 mm)",
-            "Keynote / Presentation Slide (16:9)"
-        ])
-        gj.addWidget(self.cb_target_journal)
-
-        gj.addWidget(QLabel("Font Family:"))
-        self.cb_font_family = ModernComboBox()
-        self.cb_font_family.addItems(["Computer Modern (LaTeX Serif)", "Times New Roman", "Helvetica / Arial", "Segoe UI"])
-        gj.addWidget(self.cb_font_family)
-
-        gj.addWidget(QLabel("Label Font Size:"))
-        self.cb_composer_font_size = ModernComboBox()
-        self.cb_composer_font_size.addItems(["9 pt (Standard Journal)", "10 pt (Thesis Standard)", "12 pt (Presentation)"])
-        gj.addWidget(self.cb_composer_font_size)
-        lay_composer.addWidget(grp_journal)
-
-        grp_style = ModernCard("Colormaps && Aesthetics")
-        gs = QVBoxLayout(grp_style)
-        gs.addWidget(QLabel("Colormap Palette:"))
-        self.cb_cmap = ModernComboBox()
-        self.cb_cmap.addItems(["Magma (Standard)", "Viridis (High Contrast)", "Plasma", "Inferno", "Physical Review Monochrome (B&W)"])
-        gs.addWidget(self.cb_cmap)
-
-        gs.addWidget(QLabel("Subpanel Tags:"))
-        self.cb_tags = ModernComboBox()
-        self.cb_tags.addItems(["(a), (b), (c) [Bold Lowercase]", "(A), (B), (C) [Uppercase]", "None"])
-        gs.addWidget(self.cb_tags)
-
-        self.chk_latex_ticks = QCheckBox("Render Axes with LaTeX Greek (π, ω, μ)")
-        self.chk_latex_ticks.setChecked(True)
-        gs.addWidget(self.chk_latex_ticks)
-        lay_composer.addWidget(grp_style)
-
-        grp_exp = ModernCard("Export && LaTeX Integration")
-        ge = QVBoxLayout(grp_exp)
-        b_pdf = QPushButton("📄 Save Vector PDF for Thesis")
-        b_pdf.setObjectName("PrimaryBtn")
-        b_pdf.clicked.connect(self.export_pdf_dialog)
-        ge.addWidget(b_pdf)
-
-        b_svg = QPushButton("📐 Save Vector SVG / EPS")
-        b_svg.clicked.connect(lambda: QMessageBox.information(self, "Export", "Saved figure as thesis_vector_figure.svg"))
-        ge.addWidget(b_svg)
-
-        b_code = QPushButton("📋 Copy LaTeX \\includegraphics Snippet")
-        b_code.clicked.connect(self.copy_latex_snippet)
-        ge.addWidget(b_code)
-        lay_composer.addWidget(grp_exp)
-
-        lay_composer.addStretch()
-        self.inspector_stack.addWidget(panel_composer)
 
         self.inspector_scroll.setWidget(self.inspector_stack)
         self.dock_inspector.setWidget(self.inspector_scroll)
@@ -1196,6 +1103,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         # Build current params dictionary
         study = self.active_study
+        is_cond = ("cond" in str(study).lower() or "conductivity" in str(study).lower())
+        fixed_jperp_val = float(self.spin_cond_fixed.value()) if (is_cond and hasattr(self, "spin_cond_fixed")) else (float(self.spin_se_fixed.value()) if hasattr(self, "spin_se_fixed") else 6.0)
+
         params = {
             "t": float(self.spin_t.value()),
             "t1": float(self.spin_t1.value()),
@@ -1207,7 +1117,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "eta": float(self.spin_eta.value()),
             "sweep_mode": self.cb_se_mode.currentText() if hasattr(self, "cb_se_mode") else "",
             "jk_values": self.edit_se_vals.text().strip() if hasattr(self, "edit_se_vals") else "",
-            "fixed_jperp": float(self.spin_se_fixed.value()) if hasattr(self, "spin_se_fixed") else 6.0,
+            "fixed_jperp": fixed_jperp_val,
+            "cond_sweep_mode": self.cb_cond_mode.currentText() if hasattr(self, "cb_cond_mode") else "",
+            "cond_sweep_vals": self.edit_cond_vals.text().strip() if hasattr(self, "edit_cond_vals") else "",
+            "w_active_max": float(self.spin_cond_wactive.value()) if hasattr(self, "spin_cond_wactive") else 5.0,
             "spec_sweep_mode": self.cb_spec_mode.currentText() if hasattr(self, "cb_spec_mode") else "",
             "spec_sweep_vals": self.edit_spec_vals.text().strip() if hasattr(self, "edit_spec_vals") else "",
             "spec_fixed_coupling": float(self.spin_spec_fixed.value()) if hasattr(self, "spin_spec_fixed") else 6.0,
@@ -1246,18 +1159,32 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _wire_cache_check_signals(self):
         """Connects all parameter inputs to debounced cache badge update."""
-        for sp in [self.spin_t, self.spin_t1, self.spin_mu, self.spin_k,
-                   self.spin_n, self.spin_nw, self.spin_wmax, self.spin_eta,
-                   self.spin_se_fixed, self.spin_spec_fixed,
-                   self.s_min, self.s_max, self.s_pts]:
+        spinboxes = [
+            self.spin_t, self.spin_t1, self.spin_mu, self.spin_k,
+            self.spin_n, self.spin_nw, self.spin_wmax, self.spin_eta,
+            self.spin_se_fixed, self.spin_spec_fixed,
+            self.s_min, self.s_max, self.s_pts
+        ]
+        if hasattr(self, "spin_cond_fixed"):
+            spinboxes.append(self.spin_cond_fixed)
+        if hasattr(self, "spin_cond_wactive"):
+            spinboxes.append(self.spin_cond_wactive)
+
+        for sp in spinboxes:
             sp.valueChanged.connect(self._schedule_cache_check)
 
-        for cb in [self.cb_preset, self.cb_se_mode, self.cb_spec_mode,
-                   self.cb_mom, self.cb_solver_choice]:
+        combos = [self.cb_preset, self.cb_se_mode, self.cb_spec_mode, self.cb_mom, self.cb_solver_choice]
+        if hasattr(self, "cb_cond_mode"):
+            combos.append(self.cb_cond_mode)
+
+        for cb in combos:
             cb.currentIndexChanged.connect(self._schedule_cache_check)
 
-        for le in [self.edit_se_vals, self.edit_spec_vals, self.edit_custom_k,
-                   self.edit_susc_vals]:
+        line_edits = [self.edit_se_vals, self.edit_spec_vals, self.edit_custom_k, self.edit_susc_vals]
+        if hasattr(self, "edit_cond_vals"):
+            line_edits.append(self.edit_cond_vals)
+
+        for le in line_edits:
             le.textChanged.connect(self._schedule_cache_check)
 
         for chk in [self.chk_static, self.chk_dynamic, self.chk_force_recompute]:
@@ -1295,16 +1222,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
                         self.cb_active_plot.setCurrentIndex(i)
                         self.cb_active_plot.blockSignals(False)
                         break
-
-        # Also update Figure Composer panel comboboxes if they exist
-        if hasattr(self, "cb_panel_a"):
-            plot_names = list(self.plots.keys())
-            for cb in [self.cb_panel_a, self.cb_panel_b, self.cb_panel_c]:
-                prev_text = cb.currentText()
-                cb.clear()
-                cb.addItems(plot_names)
-                if prev_text in plot_names:
-                    cb.setCurrentText(prev_text)
 
     def _on_solver_backend_changed(self, index):
         """Updates UI and hardware badge when toggling between GPU and CPU."""
@@ -1345,12 +1262,23 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.lbl_spec_fixed_desc.setText("Constant value held fixed while sweeping J_⊥")
             self.spin_spec_fixed.setValue(3.0)
 
+    def _on_cond_sweep_mode_change(self, index):
+        """Updates fixed coupling title and default value for Electrical Conductivity Sweep."""
+        if index == 0:  # Kondo Coupling (J_K)
+            self.lbl_cond_fixed.setText("Fixed Interlayer Coupling (J_⊥):")
+            self.lbl_cond_fixed_desc.setText("Constant value of J_⊥ held fixed while sweeping J_K across curves")
+            self.spin_cond_fixed.setValue(6.0)
+        else:  # Interlayer Coupling (J_⊥)
+            self.lbl_cond_fixed.setText("Fixed Kondo Coupling (J_K):")
+            self.lbl_cond_fixed_desc.setText("Constant value of J_K held fixed while sweeping J_⊥ across curves")
+            self.spin_cond_fixed.setValue(3.0)
+
     def _on_mom_choice_changed(self, index):
         """Shows custom momentum vector edit field only when Custom is chosen."""
         self.box_custom_k.setVisible(index == 4)
 
     # =========================================================================
-    # BOTTOM DOCK: EXECUTION QUEUE & PROCESS CONSOLE (SIMULATION ONLY)
+    # BOTTOM DOCK: EXECUTION CENTER (QUEUE & LIVE CONSOLE)
     # =========================================================================
     def _update_bottom_dock_theme(self, is_dark: bool):
         if not hasattr(self, "dock_bottom") or not hasattr(self, "bottom_tabs"):
@@ -1619,7 +1547,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 """)
 
     def _build_bottom_drawer_dock(self):
-        self.dock_bottom = QDockWidget("⚡ Calculation Engine • Batch Queue & Process Console", self)
+        self.dock_bottom = QDockWidget("⚡ Execution Center", self)
         self.dock_bottom.setAllowedAreas(Qt.BottomDockWidgetArea)
         self.dock_bottom.setMaximumHeight(450)
 
@@ -1720,7 +1648,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.table_queue.setShowGrid(True)
         self.table_queue.setAlternatingRowColors(True)
         ql.addWidget(self.table_queue)
-        self.bottom_tabs.addTab(queue_tab, "📋 Batch Execution Queue (0)")
+        self.bottom_tabs.addTab(queue_tab, "📋 Queue (0)")
 
         # Tab 2: Console
         console_tab = QWidget()
@@ -1775,7 +1703,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.txt_console.append("<span style='color: #38bdf8; font-family: Consolas, monospace; font-weight: bold;'>Windows PowerShell [Studio Calculation Engine]</span>")
         self.txt_console.append("<span style='color: #94a3b8; font-family: Consolas, monospace;'>Ready. NVIDIA RTX 5060 QProcess execution bridge initialized.</span><br>")
         cl.addWidget(self.txt_console)
-        self.bottom_tabs.addTab(console_tab, "💻 Live Solver Console")
+        self.bottom_tabs.addTab(console_tab, "💻 Live Console")
 
         self._update_bottom_dock_theme(self.is_dark)
 
@@ -1811,124 +1739,44 @@ class UnifiedWorkbenchWindow(QMainWindow):
         sb.addPermanentWidget(self.lbl_coords)
 
     # =========================================================================
-    # PERSPECTIVE SWITCHING
+    # PERSPECTIVE / VIEWPORT MANAGEMENT
     # =========================================================================
-    def set_perspective(self, mode):
-        self.current_perspective = mode
-        if mode in ("simulation", "sim"):
-            self.btn_mode_sim.setObjectName("ModeSimActive")
-            self.btn_mode_composer.setObjectName("ModeInactive")
-            self.btn_mode_sim.setStyleSheet("")
-            self.btn_mode_composer.setStyleSheet("")
-            for btn in (self.btn_mode_sim, self.btn_mode_composer):
-                btn.style().unpolish(btn)
-                btn.style().polish(btn)
+    def set_perspective(self, mode="simulation"):
+        """Ensures Simulation Studio active state.
+        (Note: Standalone Figure Composer workspace has been scrapped in favor of
+        integrated dual analytical viewports: Plot Viewer & Interactive Plots).
+        """
+        self.current_perspective = "simulation"
+        self.action_run.setVisible(True)
+        self.action_cancel.setVisible(True)
+        self.action_queue.setVisible(True)
+        if self.action_split:
+            self.action_split.setVisible(True)
+        self.dock_bottom.show()
+        self.nav_stack.setCurrentIndex(0)
+        self.dock_nav.setWindowTitle("🧭 Study Navigator & Datasets")
+        self.inspector_stack.setCurrentIndex(0)
+        self.dock_inspector.setWindowTitle("⚙️ Simulation Setup")
+        self.lbl_status.setText("Simulation Studio Ready.")
 
-            # Show simulation buttons, hide composer buttons
-            self.action_run.setVisible(True)
-            self.action_cancel.setVisible(True)
-            self.action_queue.setVisible(True)
-            if self.action_split:
-                self.action_split.setVisible(True)
-            self.action_export_pdf.setVisible(False)
-            self.action_copy_latex.setVisible(False)
+    def export_current_plot(self):
+        """Exports currently loaded plot to disk in user-specified location."""
+        if not hasattr(self, "current_view_plot_path") or not self.current_view_plot_path or not os.path.exists(self.current_view_plot_path):
+            QMessageBox.warning(self, "Export Failed", "No plot is currently displayed to export.")
+            return
 
-            # Show bottom drawer
-            self.dock_bottom.show()
-
-            # Switch docks to Simulation pages
-            self.nav_stack.setCurrentIndex(0)
-            self.dock_nav.setWindowTitle("🧭 Study Navigator & Datasets")
-
-            self.inspector_stack.setCurrentIndex(0)
-            self.dock_inspector.setWindowTitle("⚙️ Parameter Inspector")
-
-            # Load active study plot
-            self.set_active_study(self.active_study)
-            self.lbl_status.setText("Mode: [Simulation Studio] — Ready to configure parameters and run studies.")
-
-        else:
-            self.btn_mode_sim.setObjectName("ModeInactive")
-            self.btn_mode_composer.setObjectName("ModeComposerActive")
-            self.btn_mode_sim.setStyleSheet("")
-            self.btn_mode_composer.setStyleSheet("")
-            for btn in (self.btn_mode_sim, self.btn_mode_composer):
-                btn.style().unpolish(btn)
-                btn.style().polish(btn)
-
-            # Hide simulation runner buttons, show composer export buttons
-            self.action_run.setVisible(False)
-            self.action_cancel.setVisible(False)
-            self.action_queue.setVisible(False)
-            if self.action_split:
-                self.action_split.setVisible(False)
-            self.action_export_pdf.setVisible(True)
-            self.action_copy_latex.setVisible(True)
-
-            # Hide bottom drawer completely
-            self.dock_bottom.hide()
-
-            # Turn off split view
-            if self.canvas_right.isVisible():
-                self.canvas_right.setVisible(False)
-                self.btn_split.setChecked(False)
-
-            # Switch docks to Figure Composer pages
-            self.nav_stack.setCurrentIndex(1)
-            self.dock_nav.setWindowTitle("🎨 Multi-Panel Subplot Layout")
-
-            self.inspector_stack.setCurrentIndex(1)
-            self.dock_inspector.setWindowTitle("🎨 Figure Styling & Typography")
-
-            # Render composer layout
-            self._update_composer_preview()
-            self.lbl_status.setText("Mode: [Figure Composer] — Compose multi-panel figures for LaTeX.")
-
-    # =========================================================================
-    # FIGURE COMPOSER DISPLAY
-    # =========================================================================
-    def _update_composer_preview(self):
-        idx = self.cb_composer_template.currentIndex()
-        if idx == 0:
-            p = self.plots.get("sweep_FS_atJ_perp_6.0_mu_1.0.png") or (list(self.plots.values())[0] if self.plots else None)
-        elif idx == 1:
-            p = self.plots.get("sweep_JK_fixed_J_6.0_mu_1.00_dynamic.png") or (list(self.plots.values())[1] if len(self.plots) > 1 else None)
-        elif idx == 2:
-            p = self.plots.get("both_JK_fixed_Jperp6.00_k_1_0_mu1.00.png") or (list(self.plots.values())[2] if len(self.plots) > 2 else None)
-        else:
-            p = self.plots.get("phase_diagram_mu1.00_AFM.png") or (list(self.plots.values())[0] if self.plots else None)
-
-        if p:
-            self.canvas_left.load_image(p)
-            self.lbl_status.setText(f"Figure Composite: {self.cb_composer_template.currentText()}")
-
-    def export_pdf_dialog(self):
-        dest, _ = QFileDialog.getSaveFileName(self, "Export Vector PDF", "thesis_composite_figure.pdf", "PDF Documents (*.pdf)")
+        base = os.path.basename(self.current_view_plot_path)
+        dest, _ = QFileDialog.getSaveFileName(
+            self, "Export Current Plot", base, "PNG Images (*.png);;All Files (*.*)"
+        )
         if dest:
-            QMessageBox.information(
-                self, "Export Successful",
-                f"Generated Vector PDF:\n\n{dest}\n\n"
-                f"• Target Standard: {self.cb_target_journal.currentText()}\n"
-                f"• Colormap: {self.cb_cmap.currentText()}\n"
-                f"• Typography: {self.cb_font_family.currentText()} ({self.cb_composer_font_size.currentText()})\n"
-                f"• Resolution: Infinite Vector Precision (LaTeX Ready)"
-            )
-            self.lbl_status.setText(f"Exported composite PDF: {os.path.basename(dest)}")
-
-    def copy_latex_snippet(self):
-        code = r"""\begin{figure}[tbp]
-    \centering
-    \includegraphics[width=\columnwidth]{thesis_composite_figure.pdf}
-    \caption{\textbf{Quasiparticle spectral weight transfer and magnetic correlations.} 
-    (a) Momentum-integrated Density of States $A(\omega)$. 
-    (b) Fermi surface intensity map $A(\mathbf{k}, \omega=0)$ across $[-\pi, \pi]^2$. 
-    (c) Band renormalization along the high-symmetry path $\Gamma \to M \to X \to \Gamma$.}
-    \label{fig:spectral_heterostructure}
-\end{figure}"""
-        clipboard = QApplication.clipboard()
-        clipboard.setText(code)
-        QMessageBox.information(self, "LaTeX Snippet Copied", "LaTeX \\begin{figure} code copied to clipboard!\nYou can paste it directly into your .tex document.")
-        self.lbl_status.setText("LaTeX figure snippet copied to clipboard.")
+            try:
+                import shutil
+                shutil.copy2(self.current_view_plot_path, dest)
+                self.lbl_status.setText(f"Exported plot to: {os.path.basename(dest)}")
+                QMessageBox.information(self, "Export Successful", f"Plot successfully saved to:\n\n{dest}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export plot:\n{str(e)}")
 
     # =========================================================================
     # SIMULATION ACTIONS & QPROCESS BRIDGE WIRING
@@ -1940,7 +1788,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if self.cb_active_study.currentText() != study_name:
             self.cb_active_study.setCurrentText(study_name)
 
-        study_map = {self.STUDY_SE: 0, self.STUDY_SPEC: 1, self.STUDY_PD: 2, self.STUDY_SUSC: 3}
+        study_map = {self.STUDY_SE: 0, self.STUDY_SPEC: 1, self.STUDY_PD: 2, self.STUDY_SUSC: 3, self.STUDY_COND: 4}
         self.param_stack.setCurrentIndex(study_map.get(study_name, 0))
         curr = self.param_stack.currentWidget()
         if curr:
@@ -1955,7 +1803,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
             if study_name == self.STUDY_SE: p = self.plots.get("sweep_DOS_atJ_perp_6.0_mu_1.0.png")
             elif study_name == self.STUDY_SPEC: p = self.plots.get("both_JK_fixed_Jperp6.00_k_1_0_mu1.00.png")
             elif study_name == self.STUDY_PD: p = self.plots.get("phase_diagram_mu1.00_AFM.png")
-            else: p = self.plots.get("sweep_JK_fixed_J_6.0_mu_1.00_static.png")
+            elif study_name == self.STUDY_SUSC: p = self.plots.get("sweep_JK_fixed_J_6.0_mu_1.00_static.png")
+            elif study_name == self.STUDY_COND:
+                p = None
+                for fname, fpath in self.plots.items():
+                    if "conductivity" in fname.lower():
+                        p = fpath
+                        break
+            else: p = None
             if p and os.path.exists(p):
                 self.current_view_plot_path = p
                 self.canvas_left.load_image(p)
@@ -1977,7 +1832,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_nav_selected(self, item, col):
         text = item.text(0)
-        if text in (self.STUDY_SE, self.STUDY_SPEC, self.STUDY_PD, self.STUDY_SUSC):
+        if text in (self.STUDY_SE, self.STUDY_SPEC, self.STUDY_PD, self.STUDY_SUSC, self.STUDY_COND):
             self.set_active_study(text)
         elif text in self.plots:
             self.canvas_left.load_image(self.plots[text])
@@ -2096,6 +1951,33 @@ class UnifiedWorkbenchWindow(QMainWindow):
             if self.chk_dynamic.isChecked(): modes.append("Dynamic χ(q,ω)")
             mode_str = "+".join(modes) if modes else "None"
             summary = f"{mode_str}, vals=[{self.edit_susc_vals.text()}], N={self.spin_n.value()}"
+
+        elif self.active_study == self.STUDY_COND:
+            raw_sweep = self.edit_cond_vals.text().strip()
+            if not raw_sweep:
+                QMessageBox.warning(self, "Validation Error", "Conductivity coupling values cannot be empty")
+                return None, "", ""
+            try:
+                sweep_vals = [float(x.strip()) for x in raw_sweep.split(",") if x.strip()]
+                if not sweep_vals:
+                    raise ValueError("No valid numeric values in sweep list")
+            except Exception as e:
+                QMessageBox.warning(self, "Validation Error", f"Invalid sweep values: {e}")
+                return None, "", ""
+
+            is_jk = not ("Interlayer" in self.cb_cond_mode.currentText() or "J_⊥" in self.cb_cond_mode.currentText())
+            params = {
+                **common_params,
+                "task": "conductivity_sweep",
+                "cond_sweep_mode": "JK" if is_jk else "J_perp",
+                "cond_sweep_vals": sweep_vals,
+                "fixed_jperp": float(self.spin_cond_fixed.value()),
+                "fixed_jk": float(self.spin_cond_fixed.value()),
+                "w_active_max": float(self.spin_cond_wactive.value())
+            }
+            mode_tag = "J_K" if is_jk else "J_⊥"
+            fixed_tag = "J_⊥" if is_jk else "J_K"
+            summary = f"Conductivity {mode_tag} sweep [{self.edit_cond_vals.text()}], fixed {fixed_tag}={self.spin_cond_fixed.value():.1f}, μ={self.spin_mu.value():.1f}, N={self.spin_n.value()}"
         else:
             QMessageBox.warning(self, "Unknown Study", f"Unrecognized calculation study: {self.active_study}")
             return None, "", ""
@@ -2110,7 +1992,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.run_or_queue_job(params, study_name=study_name, summary=summary)
 
     def add_to_queue(self):
-        """Extracts active study parameters and appends job directly to batch execution queue without hijacking console."""
+        """Extracts active study parameters and appends job directly to execution queue without hijacking console."""
         params, study_name, summary = self._extract_active_study_params()
         if not params:
             return
@@ -2126,7 +2008,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "row_idx": row
         })
         self.lbl_status.setText(f"➕ Added {study_name} as Job #{row + 1} to batch queue.")
-        self.bottom_tabs.setCurrentIndex(0)  # Always stay on / switch to Batch Execution Queue tab
+        self.bottom_tabs.setCurrentIndex(0)  # Always stay on / switch to Queue tab
         self._adjust_bottom_dock_height()
 
     def _create_queue_row(self, study_name: str, summary: str, solver_choice: str, status: str = "⏳ Queued") -> int:
@@ -2200,7 +2082,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 cat = params.get("cache_category", "sigma_base")
                 summary = f"{cat}, μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
                 if "sigma" in cat:
-                    summary += f", J_⊥={params.get('fixed_jperp', 6.0):.2f}"
+                    summary += f", J_⊥={params.get('fixed_jperp', 6.0):.2f}, K={params.get('K', 1.0):.1f}"
             else:
                 summary = f"μ={params.get('mu', 0.0):.2f}, N={params.get('N', 100)}"
 
@@ -2218,7 +2100,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "row_idx": row
             })
             self.lbl_status.setText(f"➕ Queued {study_name} (Job #{row + 1})")
-            self.bottom_tabs.setCurrentIndex(0)  # Switch to Batch Queue tab so user sees it queued
+            self.bottom_tabs.setCurrentIndex(0)  # Switch to Queue tab so user sees it queued
             self._adjust_bottom_dock_height()
             return "queued"
 
@@ -2231,7 +2113,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         else:
             self._foundation_requested = False
 
-        self.bottom_tabs.setCurrentIndex(1)  # Switch to Live Solver Console for active run
+        self.bottom_tabs.setCurrentIndex(1)  # Switch to Live Console for active run
         self._adjust_bottom_dock_height()
 
         try:
@@ -2290,7 +2172,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
         solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
         cpu_limit = self.cb_cpu_limit.currentText().split()[0] if hasattr(self, "cb_cpu_limit") else "80%"
 
-        target_category = "sigma_base" if ("Spectral" in self.active_study or "Self" in self.active_study) else "chi0_static"
+        target_category = "sigma_base" if ("Spectral" in self.active_study or "Self" in self.active_study or "Conductivity" in self.active_study) else "chi0_static"
+        fixed_jp = float(self.spin_cond_fixed.value()) if "Conductivity" in self.active_study else float(self.spin_se_fixed.value())
 
         params = {
             "task": "foundation_cache",
@@ -2305,10 +2188,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             "num_omega": int(self.spin_nw.value()),
             "omega_max": float(self.spin_wmax.value()),
             "eta": float(self.spin_eta.value()),
-            "fixed_jperp": float(self.spin_se_fixed.value()),
-            "Jperp": float(self.spin_se_fixed.value()),
-            "output_dir": out_dir,
+            "fixed_jperp": fixed_jp,
             "force_recompute": bool(self.chk_force_recompute.isChecked()) if hasattr(self, "chk_force_recompute") else False,
+            "output_dir": out_dir,
         }
 
         self.run_or_queue_foundation_job(params)
@@ -2331,8 +2213,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.edit_se_vals.setText(str(round(jk_val, 3)))
         if hasattr(self, "edit_susc_vals"):
             self.edit_susc_vals.setText(str(round(jk_val, 3)))
+        if hasattr(self, "edit_cond_vals"):
+            self.edit_cond_vals.setText(str(round(jk_val, 3)))
+        if hasattr(self, "spin_cond_fixed"):
+            self.spin_cond_fixed.setValue(jperp_val)
         if n_val is not None and hasattr(self, "spin_n"):
             self.spin_n.setValue(int(n_val))
+
+        active_mode = str(params.get("active_mode", "")).lower()
+        if "conductivity" in active_mode:
+            self.set_active_study(self.STUDY_COND)
 
         # Switch perspective to Simulation Studio and viewport to Plot Viewer CAD
         self.set_perspective("simulation")
@@ -2418,7 +2308,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.bridge.cancel_calculation()
 
     def cancel_all_queue(self):
-        """Aborts active calculation, purges queued list, and cancels all pending jobs in the batch execution queue."""
+        """Aborts active calculation, purges queued list, and cancels all pending jobs in the execution queue."""
         self._cancelling_active_only = False
         if hasattr(self, "_foundation_requested"):
             self._foundation_requested = False
@@ -2471,7 +2361,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self._update_execution_buttons(is_running=False)
 
     def _on_queue_table_context_menu(self, pos):
-        """Context menu for right-clicking items in the batch execution queue."""
+        """Context menu for right-clicking items in the execution queue."""
         row = self.table_queue.rowAt(pos.y())
         if row < 0 or row >= self.table_queue.rowCount():
             return
@@ -2805,7 +2695,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if hasattr(self, "lbl_queue_badge"):
             self.lbl_queue_badge.setText(f"{n_rows} Job{'s' if n_rows != 1 else ''} Total")
         if hasattr(self, "bottom_tabs"):
-            self.bottom_tabs.setTabText(0, f"📋 Batch Execution Queue ({n_rows})")
+            self.bottom_tabs.setTabText(0, f"📋 Queue ({n_rows})")
 
     def start_queue(self):
         """Starts batch queue execution if idle with remaining queued jobs."""
@@ -2826,7 +2716,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         )
 
     def clear_queue(self):
-        """Clears batch execution queue. If engine is idle, clears all queued jobs; if running, preserves active job and clears completed/cancelled."""
+        """Clears execution queue. If engine is idle, clears all queued jobs; if running, preserves active job and clears completed/cancelled."""
         if not self.bridge.is_running():
             if hasattr(self, "queued_param_list"):
                 self.queued_param_list.clear()

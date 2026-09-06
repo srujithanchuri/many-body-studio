@@ -15,9 +15,10 @@
 * **Physics Engine (`masters_thesis/`)**: Remains pure scientific Python code (`self_energy`, `susceptibility`), free of GUI dependencies, runnable on headless clusters.
 * **Studio GUI (`masters_thesis_gui/`)**: Dedicated PySide6 graphical environment that communicates with the physics engine via an editable package link (`pip install -e`).
 
-### The Dual-Perspective Concept:
-1. **Simulation Studio (Current Primary Focus)**: An IDE-style scientific workbench dedicated to configuring Hamiltonians, launching GPU/CPU simulations, monitoring live progress, managing batch queues, and inspecting data in a hardware-accelerated interactive canvas.
-2. **Figure Composer (Staged for Future)**: A specialized layout perspective that stows away all solver knobs to compose multi-panel journal figures (`(a) DOS`, `(b) Fermi Surface`, `(c) Dispersion Path`), customize colormaps, apply LaTeX typography, and export vector PDFs for LaTeX.
+### The Analytical Viewport Concept:
+1. **Simulation Studio**: An IDE-style scientific workbench dedicated to configuring Hamiltonians, launching GPU/CPU simulations, monitoring live progress, managing batch queues, and inspecting data in a hardware-accelerated interactive canvas.
+2. **Dual Integrated Viewports**: Instant toggling between CAD **Plot Viewer** (zoom/pan, coordinate readout, direct PNG export) and real-time 60 FPS **Interactive Plots**.
+   - *(Note: Standalone Figure Composer workspace plan was scrapped in favor of direct integrated viewports).*
 
 ---
 
@@ -95,7 +96,7 @@ Rather than confining analysis to flat raster pictures, the Studio architecture 
 |---|---|---|
 | **2-Stage Cancellation Protocol** | **Stage 1 (Soft Interrupt)**: Sends a cancellation event flag. The solver loop breaks at the next step, cleans up, and exits.<br>**Stage 2 (Hard Terminate)**: If a heavy C-kernel is unresponsive after 2.5s, forcefully kills the worker process tree (`taskkill /F /T /PID`). | Guaranteed immediate response when the user hits "Cancel / Stop", even during heavy CUDA FFT loops. |
 | **Guaranteed GPU VRAM Flush** | Calls `cp.get_default_memory_pool().free_all_blocks()` and `cp.get_default_pinned_memory_pool().free_all_blocks()`. | Guarantees **zero VRAM leaks** on the RTX 5060 across consecutive, failed, or cancelled runs. |
-| **Live Solver Console Streaming** | Redirects solver stdout/stderr via an IPC pipe directly into the live console tab. | Real-time visibility into FFT progress, Langreth integration steps, and execution timers. |
+| **Live Console Streaming** | Redirects solver stdout/stderr via an IPC pipe directly into the live console tab. | Real-time visibility into FFT progress, Langreth integration steps, and execution timers. |
 
 ---
 
@@ -118,10 +119,9 @@ masters_thesis_gui/
 ├── pyside6_studio/
 │   ├── __init__.py
 │   ├── main.py                  # Application entry point
-│   ├── main_window.py           # Flagship studio window (Simulation Studio + Figure Composer)
+│   ├── main_window.py           # Flagship studio window (Simulation Studio with Dual Viewports)
 │   ├── theme.py                 # Slate-50 Light & Slate-900 Dark QSS
 │   ├── canvas.py                # High-performance CAD zoom/pan canvas (QGraphicsView)
-│   ├── composer.py              # Figure Composer multi-panel engine
 │   │
 │   ├── core/                    # Engine Configuration & Diagnostics
 │   │   ├── __init__.py

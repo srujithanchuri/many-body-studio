@@ -404,8 +404,48 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
     study_clean = str(study).lower()
 
-    # 1. SPECTRAL SWEEP
-    if "sweep" in study_clean or study_clean == "spectral_sweep":
+    # 1. ELECTRICAL CONDUCTIVITY SWEEP (Checked before generic 'sweep')
+    if "cond" in study_clean or "conductivity" in study_clean or "sigma" in study_clean:
+        cond_mode_raw = str(params.get("cond_sweep_mode", params.get("sweep_mode", "Kondo Coupling (J_K)")))
+        is_jk_sweep = not ("interlayer" in cond_mode_raw.lower() or "j_perp" in cond_mode_raw.lower() or "j_⊥" in cond_mode_raw.lower())
+        if is_jk_sweep:
+            fixed_jperp = float(params.get("fixed_jperp", 6.0))
+            base_file = find_cached_sigma_base(
+                cache_dir=cache_dir, fixed_jperp=fixed_jperp,
+                t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
+            )
+            if base_file:
+                meta = inspect_cache_foundation(base_file)
+                ibz_tag = " (8-bit Groomed)" if meta.get("is_bitgroomed") else (" (1/8th IBZ)" if meta.get("is_ibz") else "")
+                return {
+                    "state": "foundation",
+                    "badge_text": f"⚡ Base Σ Cached{ibz_tag} (Fast Kubo Integration)",
+                    "badge_color": "#0891b2",
+                    "details": f"Base self-energy ({os.path.basename(base_file)}) cached in results/cache/. Fast Kubo bubble integration across sweep points.",
+                    "foundation_file": base_file,
+                    "data_file": None
+                }
+
+            return {
+                "state": "cold",
+                "badge_text": "⚙️ Base Σ Missing: Convolutions Required",
+                "badge_color": "#64748b",
+                "details": f"Base self-energy for J_⊥={fixed_jperp:.2f}, μ={mu:.2f}, N={N} not found in results/cache/. Convolutions will be computed once and cached before Kubo sweep.",
+                "foundation_file": None,
+                "data_file": None
+            }
+        else:
+            return {
+                "state": "cold",
+                "badge_text": "⚙️ J_⊥ Sweep: Convolutions Per Point",
+                "badge_color": "#64748b",
+                "details": "J_⊥ sweep requires independent base self-energy computations for each J_⊥ value in results/cache/.",
+                "foundation_file": None,
+                "data_file": None
+            }
+
+    # 2. SPECTRAL SWEEP
+    elif "spectral" in study_clean or study_clean == "spectral_sweep" or ("sweep" in study_clean and "susc" not in study_clean):
         sweep_mode_raw = str(params.get("sweep_mode", "Kondo Coupling (J_K)"))
         is_jk_sweep = not ("Interlayer" in sweep_mode_raw or "J_perp" in sweep_mode_raw or "J_⊥" in sweep_mode_raw)
         fixed_jperp = float(params.get("fixed_jperp", 6.0))
@@ -584,6 +624,34 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
             "badge_text": "⚙️ No Cache: Full Computation Needed",
             "badge_color": "#64748b",
             "details": "No cache found. Bare bubble χ₀ array must be computed before RPA sweep.",
+            "foundation_file": None,
+            "data_file": None
+        }
+
+    # 5. ELECTRICAL CONDUCTIVITY SWEEP
+    elif "cond" in study_clean or "conductivity" in study_clean or "sigma" in study_clean:
+        fixed_jperp = float(params.get("fixed_jperp", 6.0))
+        base_file = find_cached_sigma_base(
+            cache_dir=cache_dir, fixed_jperp=fixed_jperp,
+            t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
+        )
+        if base_file:
+            meta = inspect_cache_foundation(base_file)
+            ibz_tag = " (8-bit Groomed)" if meta.get("is_bitgroomed") else (" (1/8th IBZ)" if meta.get("is_ibz") else "")
+            return {
+                "state": "foundation",
+                "badge_text": f"⚡ Base Σ Cached{ibz_tag} (Fast Kubo Integration)",
+                "badge_color": "#0891b2",
+                "details": "Base self-energy cached in results/cache/. Fast Kubo bubble integration across sweep points.",
+                "foundation_file": base_file,
+                "data_file": None
+            }
+
+        return {
+            "state": "cold",
+            "badge_text": "⚙️ Base Σ Missing: Convolutions Required",
+            "badge_color": "#64748b",
+            "details": "Base self-energy not found. Convolutions will be computed once and cached before Kubo sweep.",
             "foundation_file": None,
             "data_file": None
         }

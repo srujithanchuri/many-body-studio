@@ -51,14 +51,25 @@ class TestFoundationWorkflow(unittest.TestCase):
         self.assertEqual(dlg.spin_mu.value(), 1.5)
         self.assertEqual(dlg.spin_jperp.value(), 4.0)
         self.assertTrue(dlg.row_jperp.isVisible())
+        self.assertTrue(dlg.row_k.isVisible())
+        self.assertEqual(dlg.cb_k.currentData(), 1.0)
+        self.assertEqual(dlg.cb_k.itemText(0), "1 (AFM)")
+        self.assertEqual(dlg.cb_k.itemText(1), "-1 (FM)")
 
-        # Switch to Bare Static Susceptibility -> J_perp row should hide
+        # Switch to FM (-1)
+        dlg.cb_k.setCurrentIndex(1)
+        self.assertEqual(dlg.cb_k.currentData(), -1.0)
+        dlg.cb_k.setCurrentIndex(0)
+
+        # Switch to Bare Static Susceptibility -> J_perp and K rows should hide
         dlg.cb_category.setCurrentIndex(1)
         self.assertFalse(dlg.row_jperp.isVisible())
+        self.assertFalse(dlg.row_k.isVisible())
 
-        # Switch back to 3-Loop Self-Energy -> J_perp row should reappear
+        # Switch back to 3-Loop Self-Energy -> J_perp and K rows should reappear
         dlg.cb_category.setCurrentIndex(0)
         self.assertTrue(dlg.row_jperp.isVisible())
+        self.assertTrue(dlg.row_k.isVisible())
 
         # Ensure target dropdown items
         self.assertEqual(dlg.cb_category.itemText(0), "Self-Energy Σ(k, ω)")

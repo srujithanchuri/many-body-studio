@@ -26,7 +26,7 @@ class ComputeCacheDialog(QDialog):
 
     def __init__(self, parent=None, out_dir: str = DEFAULT_RESULTS_DIR,
                  default_category: str = "sigma_base", default_mu: float = 0.0,
-                 default_jperp: float = 6.0):
+                 default_jperp: float = 6.0, default_k: float = 1.0):
         super().__init__(parent)
         self.out_dir = out_dir
         self.setWindowTitle("▶ Compute Cache")
@@ -39,7 +39,7 @@ class ComputeCacheDialog(QDialog):
         self.bridge.sig_error.connect(self._on_bridge_error)
         self.bridge.sig_cancelled.connect(self._on_bridge_cancelled)
 
-        self._build_ui(default_category, default_mu, default_jperp)
+        self._build_ui(default_category, default_mu, default_jperp, default_k)
 
         # Check if engine is already busy
         main_win = self._find_main_window()
@@ -156,7 +156,7 @@ class ComputeCacheDialog(QDialog):
                 }}
             """)
 
-    def _build_ui(self, default_cat: str, default_mu: float, default_jperp: float):
+    def _build_ui(self, default_cat: str, default_mu: float, default_jperp: float, default_k: float = 1.0):
         lay = QVBoxLayout(self)
         lay.setSpacing(12)
         lay.setContentsMargins(16, 16, 16, 16)
@@ -229,6 +229,22 @@ class ComputeCacheDialog(QDialog):
         self.spin_jperp.setFixedWidth(100)
         h_jp.addWidget(self.spin_jperp)
         f_lay.addWidget(self.row_jperp)
+
+        # Intralayer Coupling K (only for self-energy)
+        self.row_k = QWidget()
+        h_k = QHBoxLayout(self.row_k)
+        h_k.setContentsMargins(0, 0, 0, 0)
+        h_k.addWidget(QLabel("Intralayer Coupling (K):"))
+        self.cb_k = QComboBox()
+        self.cb_k.addItem("1 (AFM)", 1.0)
+        self.cb_k.addItem("-1 (FM)", -1.0)
+        if default_k < 0:
+            self.cb_k.setCurrentIndex(1)
+        else:
+            self.cb_k.setCurrentIndex(0)
+        self.cb_k.setFixedWidth(100)
+        h_k.addWidget(self.cb_k)
+        f_lay.addWidget(self.row_k)
 
         # Grid Resolution N
         h_n = QHBoxLayout()
@@ -332,6 +348,8 @@ class ComputeCacheDialog(QDialog):
     def _on_category_changed(self, idx: int):
         is_sigma = (idx == 0)
         self.row_jperp.setVisible(is_sigma)
+        if hasattr(self, "row_k"):
+            self.row_k.setVisible(is_sigma)
 
     def _start_or_queue_synthesis(self):
         cat_idx = self.cb_category.currentIndex()
@@ -346,6 +364,8 @@ class ComputeCacheDialog(QDialog):
         N = 100 if n_idx == 0 else (256 if n_idx == 1 else 64)
         solver = "gpu" if self.cb_solver.currentIndex() == 0 else "cpu"
 
+        k_val = float(self.cb_k.currentData()) if hasattr(self, "cb_k") and self.cb_k.currentData() is not None else 1.0
+
         params = {
             "task": "foundation_cache",
             "cache_category": category,
@@ -355,7 +375,7 @@ class ComputeCacheDialog(QDialog):
             "N": N,
             "t": 1.0,
             "t1": 0.0,
-            "K": 1.0,
+            "K": k_val,
             "solver_choice": solver,
             "force_recompute": True,
             "output_dir": self.out_dir
@@ -365,7 +385,7 @@ class ComputeCacheDialog(QDialog):
         if main_win and hasattr(main_win, "run_or_queue_foundation_job"):
             outcome = main_win.run_or_queue_foundation_job(params)
             if outcome == "queued":
-                self.lbl_status.setText("⏳ Job added to Batch Execution Queue.")
+                self.lbl_status.setText("⏳ Job added to Queue.")
                 self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 600; color: #d97706;")
                 self.pbar.setRange(0, 100)
                 self.pbar.setValue(0)
