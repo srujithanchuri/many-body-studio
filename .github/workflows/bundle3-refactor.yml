@@ -25,87 +25,87 @@ jobs:
 
           root = Path('.')
 
-          def line_is_method(line, name):
-              return line.startswith('    def ') and line.strip().startswith(f'def {name}(')
-
-          def extract_method(text, method_name, next_name=None):
+          def method_span(text, name):
               lines = text.splitlines(True)
-              start = next(i for i, line in enumerate(lines) if line_is_method(line, method_name))
-              if next_name:
-                  end = next(i for i in range(start + 1, len(lines)) if line_is_method(lines[i], next_name))
-              else:
-                  end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith('    def ')), len(lines))
-              return lines, start, end, ''.join(lines[start+1:end])
+              tree = ast.parse(text)
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name and node.col_offset == 4:
+                      start = node.lineno - 1
+                      end = node.end_lineno
+                      return lines, start, end, ''.join(lines[start+1:end])
+              raise RuntimeError(f'method not found: {name}')
 
-          # Interactive plot controls.
+          # ---------------------------------------------------------------
+          # Interactive plot UI construction.
+          # ---------------------------------------------------------------
           ip = root / 'pyside6_studio/widgets/interactive_plots.py'
-          text = ip.read_text(encoding='utf-8')
-          lines, start, end, body = extract_method(text, '_build_ui', 'set_output_dir')
-          body_owner = re.sub(r'\bself\b', 'owner', body)
-          class_start = text.index('class ModernComboBox(')
-          class_end = text.index('\n\nclass InteractivePlotsWidget(', class_start)
-          combo_class = text[class_start:class_end]
-          helper = '''"""UI construction helpers for the Interactive Plots viewport.\n\nThe builder receives the owning InteractivePlotsWidget so its existing\nattributes, callbacks, object names and compatibility aliases are preserved.\nPhysics/state logic remains in interactive_plots.py.\n"""\n\nimport numpy as np\nfrom matplotlib.figure import Figure\nfrom matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT\n\nfrom PySide6.QtCore import Qt, QSize\nfrom PySide6.QtWidgets import (\n    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,\n    QComboBox, QSlider, QFrame, QDoubleSpinBox, QSizePolicy,\n)\n\n\n'''
-          helper += combo_class + '\n\n\ndef build_interactive_plot_ui(owner):\n'
-          helper += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
-          (root / 'pyside6_studio/widgets/interactive_plot_controls.py').write_text(helper, encoding='utf-8')
-          text2 = text[:class_start] + 'from pyside6_studio.widgets.interactive_plot_controls import ModernComboBox, build_interactive_plot_ui\n\n\n' + text[class_end+2:]
-          lines2 = text2.splitlines(True)
-          s2 = next(i for i, line in enumerate(lines2) if line_is_method(line, '_build_ui'))
-          e2 = next(i for i in range(s2 + 1, len(lines2)) if line_is_method(lines2[i], 'set_output_dir'))
-          text2 = ''.join(lines2[:s2]) + '    def _build_ui(self):\n        build_interactive_plot_ui(self)\n\n' + ''.join(lines2[e2:])
-          ip.write_text(text2, encoding='utf-8')
+          original = ip.read_text(encoding='utf-8')
+          lines, s_ui, e_ui, ui_body = method_span(original, '_build_ui')
+          lines, s_theme, e_theme, theme_body = method_span(original, 'set_theme')
+          body_owner = re.sub(r'\bself\b', 'owner', ui_body)
 
-          # Interactive plot theme.
-          text = ip.read_text(encoding='utf-8')
-          lines, s, e, body = extract_method(text, 'set_theme')
-          e = next(i for i in range(s + 1, len(lines)) if lines[i].startswith('    @property'))
-          body = ''.join(lines[s+1:e])
-          body_owner = re.sub(r'\bself\b', 'owner', body)
-          theme_helper = '''"""Presentation theme helpers for Interactive Plots.\n\nNo numerical, cache, or physics behavior belongs here.\n"""\n\n\ndef apply_interactive_plot_theme(owner, is_dark: bool):\n'''
-          theme_helper += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
-          (root / 'pyside6_studio/widgets/interactive_plot_theme.py').write_text(theme_helper, encoding='utf-8')
-          new_text = ''.join(lines[:s]) + '    def set_theme(self, is_dark: bool):\n        apply_interactive_plot_theme(self, is_dark)\n\n' + ''.join(lines[e:])
+          class_start = original.index('class ModernComboBox(')
+          class_end = original.index('\n\nclass InteractivePlotsWidget(', class_start)
+          combo_class = original[class_start:class_end]
+
+          controls = '''"""UI construction helpers for the Interactive Plots viewport.\n\nThe builder receives the owning InteractivePlotsWidget so its existing\nattributes, callbacks, object names and compatibility aliases are preserved.\nPhysics/state logic remains in interactive_plots.py.\n"""\n\nimport numpy as np\nfrom matplotlib.figure import Figure\nfrom matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT\n\nfrom PySide6.QtCore import Qt, QSize\nfrom PySide6.QtWidgets import (\n    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,\n    QComboBox, QSlider, QFrame, QDoubleSpinBox, QSizePolicy,\n)\n\n\n'''
+          controls += combo_class + '\n\n\ndef build_interactive_plot_ui(owner):\n'
+          controls += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
+          (root / 'pyside6_studio/widgets/interactive_plot_controls.py').write_text(controls, encoding='utf-8')
+
+          text = original[:class_start] + 'from pyside6_studio.widgets.interactive_plot_controls import ModernComboBox, build_interactive_plot_ui\n\n\n' + original[class_end+2:]
+          # Recompute _build_ui span after removing the top-level helper class.
+          lines2, s2, e2, _ = method_span(text, '_build_ui')
+          replacement_ui = '    def _build_ui(self):\n        build_interactive_plot_ui(self)\n'
+          text = ''.join(lines2[:s2]) + replacement_ui + ''.join(lines2[e2:])
+          # Extract set_theme from the post-UI-extraction text and replace it with a wrapper.
+          lines3, st, et, tb = method_span(text, 'set_theme')
+          tb_owner = re.sub(r'\bself\b', 'owner', tb)
+          theme = '''"""Presentation theme helpers for Interactive Plots.\n\nNo numerical, cache, or physics behavior belongs here.\n"""\n\n\ndef apply_interactive_plot_theme(owner, is_dark: bool):\n'''
+          theme += ''.join('    ' + line if line.strip() else line for line in tb_owner.splitlines(True))
+          (root / 'pyside6_studio/widgets/interactive_plot_theme.py').write_text(theme, encoding='utf-8')
+          text = ''.join(lines3[:st]) + '    def set_theme(self, is_dark: bool):\n        apply_interactive_plot_theme(self, is_dark)\n' + ''.join(lines3[et:])
           marker = 'from pyside6_studio.widgets.foundation_cache_dialog import FoundationCacheDialog\n'
-          new_text = new_text.replace(marker, marker + 'from pyside6_studio.widgets.interactive_plot_theme import apply_interactive_plot_theme\n')
-          ip.write_text(new_text, encoding='utf-8')
+          text = text.replace(marker, marker + 'from pyside6_studio.widgets.interactive_plot_theme import apply_interactive_plot_theme\n')
+          ip.write_text(text, encoding='utf-8')
 
-          # Main-window theme presentation helpers.
+          # ---------------------------------------------------------------
+          # Main-window dynamic theme presentation helpers.
+          # ---------------------------------------------------------------
           mw = root / 'pyside6_studio/main_window.py'
-          text = mw.read_text(encoding='utf-8')
-          method_names = ['_update_bottom_dock_theme', '_update_statusbar_theme', 'toggle_theme']
+          original = mw.read_text(encoding='utf-8')
+          names = ['_update_bottom_dock_theme', '_update_statusbar_theme', 'toggle_theme']
           extracted = {}
-          for name in method_names:
-              lines_now = text.splitlines(True)
-              s = next(i for i, line in enumerate(lines_now) if line_is_method(line, name))
-              e = next((i for i in range(s + 1, len(lines_now)) if line_is_method(lines_now[i], 'set_perspective') or line_is_method(lines_now[i], '_update_bottom_dock_theme') or line_is_method(lines_now[i], '_update_statusbar_theme') or line_is_method(lines_now[i], 'toggle_theme') or line_is_method(lines_now[i], 'reset_active_zoom')), len(lines_now))
-              extracted[name] = ''.join(lines_now[s+1:e])
+          spans = []
+          for name in names:
+              lines, s, e, body = method_span(original, name)
+              extracted[name] = re.sub(r'\bself\b', 'owner', body)
+              spans.append((s, e, name))
 
           main_theme = '''"""Presentation theme helpers for the main Many-Body Studio window.\n\nThe controller retains stable method names; this module owns only dynamic\nstyling/palette propagation and contains no simulation or queue logic.\n"""\n\nfrom PySide6.QtWidgets import QApplication\nfrom PySide6.QtGui import QColor\n\nfrom pyside6_studio.theme import (\n    LIGHT_THEME_QSS, DARK_THEME_QSS, create_light_palette, create_dark_palette,\n)\n\n\n'''
-          for name in method_names:
-              fn_name = {'_update_bottom_dock_theme': 'update_bottom_dock_theme', '_update_statusbar_theme': 'update_statusbar_theme', 'toggle_theme': 'toggle_main_window_theme'}[name]
-              if name == 'toggle_theme':
-                  main_theme += f'def {fn_name}(owner):\n'
-              else:
-                  main_theme += f'def {fn_name}(owner, is_dark: bool):\n'
-              body_owner = re.sub(r'\bself\b', 'owner', extracted[name])
-              main_theme += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
+          fn_names = {
+              '_update_bottom_dock_theme': 'update_bottom_dock_theme',
+              '_update_statusbar_theme': 'update_statusbar_theme',
+              'toggle_theme': 'toggle_main_window_theme',
+          }
+          for name in names:
+              sig = 'owner' if name == 'toggle_theme' else 'owner, is_dark: bool'
+              main_theme += f'def {fn_names[name]}({sig}):\n'
+              main_theme += ''.join('    ' + line if line.strip() else line for line in extracted[name].splitlines(True))
               main_theme += '\n\n'
           (root / 'pyside6_studio/main_window_theme.py').write_text(main_theme, encoding='utf-8')
 
-          # Remove extracted methods from main_window.py and replace with stable wrappers.
-          text = mw.read_text(encoding='utf-8')
-          for name in method_names:
-              lines_now = text.splitlines(True)
-              s = next(i for i, line in enumerate(lines_now) if line_is_method(line, name))
-              e = next((i for i in range(s + 1, len(lines_now)) if line_is_method(lines_now[i], 'set_perspective') or line_is_method(lines_now[i], '_update_bottom_dock_theme') or line_is_method(lines_now[i], '_update_statusbar_theme') or line_is_method(lines_now[i], 'toggle_theme') or line_is_method(lines_now[i], 'reset_active_zoom')), len(lines_now))
-              if name == '_update_bottom_dock_theme':
-                  repl = '    def _update_bottom_dock_theme(self, is_dark: bool):\n        update_bottom_dock_theme(self, is_dark)\n\n'
-              elif name == '_update_statusbar_theme':
-                  repl = '    def _update_statusbar_theme(self, is_dark: bool):\n        update_statusbar_theme(self, is_dark)\n\n'
-              else:
-                  repl = '    def toggle_theme(self):\n        toggle_main_window_theme(self)\n\n'
-              text = ''.join(lines_now[:s]) + repl + ''.join(lines_now[e:])
+          # Replace all three methods in one reverse-order pass using spans from
+          # the untouched source, so no line-number drift can corrupt extraction.
+          replacements = {
+              '_update_bottom_dock_theme': '    def _update_bottom_dock_theme(self, is_dark: bool):\n        update_bottom_dock_theme(self, is_dark)\n',
+              '_update_statusbar_theme': '    def _update_statusbar_theme(self, is_dark: bool):\n        update_statusbar_theme(self, is_dark)\n',
+              'toggle_theme': '    def toggle_theme(self):\n        toggle_main_window_theme(self)\n',
+          }
+          lines = original.splitlines(True)
+          for s, e, name in sorted(spans, reverse=True):
+              lines[s:e] = [replacements[name]]
+          text = ''.join(lines)
           marker = 'from pyside6_studio.widgets.cache_manager_dialog import CacheManagerDialog\n'
           text = text.replace(marker, marker + 'from pyside6_studio.main_window_theme import update_bottom_dock_theme, update_statusbar_theme, toggle_main_window_theme\n')
           mw.write_text(text, encoding='utf-8')
