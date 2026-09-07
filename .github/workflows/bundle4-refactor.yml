@@ -7,19 +7,22 @@ permissions:
 
 jobs:
   refactor:
-    if: github.ref == 'refs/heads/experiment-debloat' && github.event.head_commit.message != 'refactor: extract gallery cards and vector export helpers'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: experiment-debloat
           fetch-depth: 1
-      - name: Extract gallery card and vector export helpers
+      - name: Apply bundle 4 extraction
         run: |
+          if [ -f .bundle4-complete ]; then
+            echo "Bundle 4 already applied; nothing to do."
+            exit 0
+          fi
           python - <<'PY'
           from pathlib import Path
-
           root = Path('.')
+
           gallery = root / 'pyside6_studio/widgets/gallery_browser.py'
           text = gallery.read_text(encoding='utf-8')
           old_import = 'from pyside6_studio.widgets.dataset_explorer import parse_filename_parameters, SmartSearchMatcher'
@@ -31,12 +34,12 @@ jobs:
           text = text.replace('class CompactRowCard(QFrame):', 'class CompactRowCard(PlotCardInteractionMixin, QFrame):', 1)
           timestamp = '''
         # Formatted timestamp
-        try
+        try:
             mtime = os.path.getmtime(self.plot_path)
             self.time_str = datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")
         except Exception:
             self.time_str = ""
-'''.replace('try\n', 'try:\n')
+'''
           if text.count(timestamp) != 2:
               raise SystemExit(f'expected 2 timestamp blocks, found {text.count(timestamp)}')
           text = text.replace(timestamp, '\n        self.time_str = card_timestamp(self.plot_path)\n', 2)
@@ -69,7 +72,7 @@ jobs:
           text = text.replace('import datetime\n', '', 1)
           gallery.write_text(text, encoding='utf-8')
 
-          (root / 'pyside6_studio/widgets/plot_card_base.py').write_text('''"""Shared mechanics for Plot Gallery cards.\n\nKeeps thumbnail/list card behavior small while leaving each card's layout and\ntheme-specific presentation local to gallery_browser.py.\n"""\n\nimport datetime\nimport os\n\nfrom PySide6.QtCore import Qt\nfrom PySide6.QtGui import QPixmap\nfrom PySide6.QtWidgets import QApplication, QMenu\n\n\ndef card_timestamp(plot_path: str) -> str:\n    """Return the gallery timestamp for a plot, or an empty string if unavailable."""\n    try:\n        mtime = os.path.getmtime(plot_path)\n        return datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")\n    except Exception:\n        return ""\n\n\nclass PlotCardInteractionMixin:\n    """Shared click/context-menu behavior for thumbnail and compact plot cards."""\n\n    def mousePressEvent(self, event):\n        if event.button() == Qt.LeftButton:\n            self.sig_selected.emit(self.plot_path)\n        super().mousePressEvent(event)\n\n    def contextMenuEvent(self, event):\n        menu = QMenu(self)\n        a_view = menu.addAction("👁️ View Fullscreen")\n        a_copy = menu.addAction("📋 Copy Image to Clipboard")\n        menu.addSeparator()\n        a_reveal = menu.addAction("📂 Reveal in File Explorer")\n\n        chosen = menu.exec(event.globalPos())\n        if chosen == a_view:\n            self.sig_view_fullscreen.emit(self.plot_path)\n        elif chosen == a_copy:\n            pix = QPixmap(self.plot_path)\n            if not pix.isNull():\n                QApplication.clipboard().setPixmap(pix)\n        elif chosen == a_reveal:\n            os.system(f'explorer /select,"{self.plot_path}"')\n''', encoding='utf-8')
+          (root / 'pyside6_studio/widgets/plot_card_base.py').write_text('''"""Shared mechanics for Plot Gallery cards."""\n\nimport datetime\nimport os\n\nfrom PySide6.QtCore import Qt\nfrom PySide6.QtGui import QPixmap\nfrom PySide6.QtWidgets import QApplication, QMenu\n\n\ndef card_timestamp(plot_path: str) -> str:\n    try:\n        mtime = os.path.getmtime(plot_path)\n        return datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")\n    except Exception:\n        return ""\n\n\nclass PlotCardInteractionMixin:\n    """Shared click and context-menu behavior for gallery cards."""\n\n    def mousePressEvent(self, event):\n        if event.button() == Qt.LeftButton:\n            self.sig_selected.emit(self.plot_path)\n        super().mousePressEvent(event)\n\n    def contextMenuEvent(self, event):\n        menu = QMenu(self)\n        a_view = menu.addAction("👁️ View Fullscreen")\n        a_copy = menu.addAction("📋 Copy Image to Clipboard")\n        menu.addSeparator()\n        a_reveal = menu.addAction("📂 Reveal in File Explorer")\n        chosen = menu.exec(event.globalPos())\n        if chosen == a_view:\n            self.sig_view_fullscreen.emit(self.plot_path)\n        elif chosen == a_copy:\n            pix = QPixmap(self.plot_path)\n            if not pix.isNull():\n                QApplication.clipboard().setPixmap(pix)\n        elif chosen == a_reveal:\n            os.system(f'explorer /select,"{self.plot_path}"')\n''', encoding='utf-8')
 
           dp = root / 'pyside6_studio/widgets/data_plotter.py'
           dtext = dp.read_text(encoding='utf-8')
@@ -115,7 +118,8 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add pyside6_studio/widgets
+          touch .bundle4-complete
+          git add pyside6_studio/widgets .bundle4-complete
           git diff --cached --check
           git commit -m "refactor: extract gallery cards and vector export helpers"
           git push origin experiment-debloat
