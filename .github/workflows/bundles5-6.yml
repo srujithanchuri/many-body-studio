@@ -59,8 +59,9 @@ jobs:
           marker = '\n\ndef update_statusbar_theme(owner, is_dark: bool):\n'
           if marker not in t:
               raise SystemExit('Theme insertion marker not found')
-          console_fn = '''\n\ndef update_console_theme(owner, is_dark: bool):\n    """Apply the live console presentation without embedding QSS in the controller."""\n    if not hasattr(owner, "txt_console"):\n        return\n    owner.txt_console.setStyleSheet("""\n        QTextEdit {\n            background-color: #090d16;\n            color: #f8fafc;\n            font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;\n            font-size: 11px;\n            line-height: 1.4;\n            border: 1px solid #1e293b;\n            border-radius: 5px;\n            padding: 8px;\n        }\n    """)\n'''
-          t = t.replace(marker, console_fn + marker, 1)
+          if 'def update_console_theme(' not in t:
+              console_fn = '''\n\ndef update_console_theme(owner, is_dark: bool):\n    """Apply the live console presentation without embedding QSS in the controller."""\n    if not hasattr(owner, "txt_console"):\n        return\n    owner.txt_console.setStyleSheet("""\n        QTextEdit {\n            background-color: #090d16;\n            color: #f8fafc;\n            font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;\n            font-size: 11px;\n            line-height: 1.4;\n            border: 1px solid #1e293b;\n            border-radius: 5px;\n            padding: 8px;\n        }\n    """)\n'''
+              t = t.replace(marker, console_fn + marker, 1)
           theme.write_text(t, encoding='utf-8')
 
           # Bundle 6: refresh the four tracked Markdown documents only.
@@ -68,78 +69,65 @@ jobs:
           p = Path('README.md')
           r = p.read_text(encoding='utf-8')
           r = r.replace('  - *(Note: Standalone Figure Composer workspace has been scrapped in favor of direct integrated viewports).*\n', '')
-          r += '''\n---\n\n## Current Code Organization\n\nThe GUI is organized around a small application shell plus dedicated presentation modules:\n\n- `pyside6_studio/main_window.py` — application orchestration, study selection, bridge wiring, and viewport synchronization.\n- `pyside6_studio/main_window_theme.py` — main-window palette/theme propagation.\n- `pyside6_studio/core/metadata.py` — shared plot/dataset filename metadata parsing.\n- `pyside6_studio/widgets/study_forms/` — study-specific parameter form construction.\n- `pyside6_studio/widgets/job_queue.py` — queue presentation and row/status controls; execution remains in the main window and `CalculationBridge`.\n- `pyside6_studio/widgets/interactive_plot_controls.py` and `interactive_plot_theme.py` — Interactive Plots presentation helpers.\n- `pyside6_studio/widgets/interactive_modes/` — six analytical strategies; numerical kernels and physics behavior remain unchanged by the GUI debloat.\n- `pyside6_studio/widgets/gallery_browser.py` and `plot_card_base.py` — Plot Gallery Browser and shared card interaction mechanics.\n\nThe obsolete `data_plotter.py`, `InteractiveDataCanvas`, `VectorExportDialog`, and standalone Figure Composer workspace are no longer part of the active GUI.\n'''
-          p.write_text(r, encoding='utf-8')
+          if '## Current Code Organization' not in r:
+              r += '''\n---\n\n## Current Code Organization\n\nThe GUI is organized around a small application shell plus dedicated presentation modules:\n\n- `pyside6_studio/main_window.py` — application orchestration, study selection, bridge wiring, and viewport synchronization.\n- `pyside6_studio/main_window_theme.py` — main-window palette/theme propagation.\n- `pyside6_studio/core/metadata.py` — shared plot/dataset filename metadata parsing.\n- `pyside6_studio/widgets/study_forms/` — study-specific parameter form construction.\n- `pyside6_studio/widgets/job_queue.py` — queue presentation and row/status controls; execution remains in the main window and `CalculationBridge`.\n- `pyside6_studio/widgets/interactive_plot_controls.py` and `interactive_plot_theme.py` — Interactive Plots presentation helpers.\n- `pyside6_studio/widgets/interactive_modes/` — six analytical strategies; numerical kernels and physics behavior remain unchanged by the GUI debloat.\n- `pyside6_studio/widgets/gallery_browser.py` and `plot_card_base.py` — Plot Gallery Browser and shared card interaction mechanics.\n\nThe obsolete `data_plotter.py`, `InteractiveDataCanvas`, `VectorExportDialog`, and standalone Figure Composer workspace are no longer part of the active GUI.\n'''
+          p.write_text(r.rstrip() + '\n', encoding='utf-8')
 
           p = Path('docs/HOW_TO_USE.md')
           r = p.read_text(encoding='utf-8')
           r = '\n'.join(line for line in r.splitlines() if 'Figure Composer' not in line and 'InteractiveDataCanvas' not in line and 'data_plotter.py' not in line)
           r = r.replace('save as vector `.pdf`, `.svg`, or `.png`', 'save or copy the currently displayed publication PNG')
-          r += '''\n\n## Current Architecture Notes\n\nThe left Navigator switches between the **Plot Gallery Browser** and **Interactive Modes**. The Plot Gallery Browser works with rendered PNG publication figures under `results/plots/`; the Interactive Plots viewport works from numerical `.npz` datasets and reusable caches.\n\nThe queue UI is implemented by `widgets/job_queue.py`, while process execution and cancellation remain owned by `CalculationBridge` and the main-window orchestration. Study parameter forms are separated under `widgets/study_forms/`.\n\nThe legacy Data Plotter/Figure Composer path has been removed. Generated `docs/HOW_TO_USE.html` is a derived artifact and is intentionally not updated by the debloat pass.\n'''
-          p.write_text(r + '\n', encoding='utf-8')
+          if '## Current Architecture Notes' not in r:
+              r += '''\n\n## Current Architecture Notes\n\nThe left Navigator switches between the **Plot Gallery Browser** and **Interactive Modes**. The Plot Gallery Browser works with rendered PNG publication figures under `results/plots/`; the Interactive Plots viewport works from numerical `.npz` datasets and reusable caches.\n\nThe queue UI is implemented by `widgets/job_queue.py`, while process execution and cancellation remain owned by `CalculationBridge` and the main-window orchestration. Study parameter forms are separated under `widgets/study_forms/`.\n\nThe legacy Data Plotter/Figure Composer path has been removed. Generated `docs/HOW_TO_USE.html` is a derived artifact and is intentionally not updated by the debloat pass.\n'''
+          p.write_text(r.rstrip() + '\n', encoding='utf-8')
 
           p = Path('STUDIO_ARCHITECTURE_PLAN.md')
           r = p.read_text(encoding='utf-8')
           r = '\n'.join(line for line in r.splitlines() if 'Figure Composer' not in line and 'InteractiveDataCanvas' not in line and 'data_plotter.py' not in line and 'Vector Export on Demand' not in line)
           r = r.replace('**Vector Export on Demand**', '**Publication PNG Export**')
           r = r.replace('native figure elements to vector formats (**`.pdf`**, **`.svg`**, **`.eps`**)', 'the currently displayed publication PNG')
-          # Replace the obsolete directory-tree subsection with the current tree.
           start = r.find('## 3. Directory Structure of the Studio')
           end = r.find('## 4. Implementation Phasing', start)
           if start != -1 and end != -1:
               current_tree = '''## 3. Current Directory Structure of the Studio\n\n```text\npyside6_studio/\n├── main.py\n├── main_window.py\n├── main_window_theme.py\n├── theme.py\n├── canvas.py\n├── core/\n│   ├── cache_manager.py\n│   ├── config.py\n│   ├── hardware.py\n│   ├── icon_utils.py\n│   └── metadata.py\n├── backend/\n│   ├── bridge.py\n│   ├── cuda_env.py\n│   ├── vram_cleaner.py\n│   └── worker_cli.py\n└── widgets/\n    ├── cache_manager_dialog.py\n    ├── dataset_explorer.py\n    ├── foundation_cache_dialog.py\n    ├── gallery_browser.py\n    ├── interactive_mode_nav.py\n    ├── interactive_plot_controls.py\n    ├── interactive_plot_theme.py\n    ├── interactive_plots.py\n    ├── job_queue.py\n    ├── plot_card_base.py\n    ├── interactive_modes/\n    └── study_forms/\n```\n\n'''
               r = r[:start] + current_tree + r[end:]
-          r += '''\n\n## 7. Debloat Status\n\nThe GUI refactor keeps the physics-facing numerical paths, cache formats, worker JSONL protocol, study IDs, queue semantics, and tested widget contracts intact. Presentation responsibilities have been split into focused modules for cache dialogs, metadata, study forms, queue presentation, gallery card mechanics, main-window theme propagation, and Interactive Plots controls/theme. The legacy Data Plotter and Figure Composer path has been removed.\n'''
-          p.write_text(r + '\n', encoding='utf-8')
+          if '## 7. Debloat Status' not in r:
+              r += '''\n\n## 7. Debloat Status\n\nThe GUI refactor keeps the physics-facing numerical paths, cache formats, worker JSONL protocol, study IDs, queue semantics, and tested widget contracts intact. Presentation responsibilities have been split into focused modules for cache dialogs, metadata, study forms, queue presentation, gallery card mechanics, main-window theme propagation, and Interactive Plots controls/theme. The legacy Data Plotter and Figure Composer path has been removed.\n'''
+          p.write_text(r.rstrip() + '\n', encoding='utf-8')
 
           p = Path('AGENTS.md')
           r = p.read_text(encoding='utf-8')
-          # Remove known obsolete file-map lines and stale legacy claims.
           obsolete_tokens = [
-              'run_studio.py',
-              'widgets/data_plotter.py',
-              'InteractiveDataCanvas',
-              'VectorExportDialog',
-              'backend/workers.py',
-              'core/job_queue.py',
-              'widgets/parameter_cards.py',
-              'widgets/queue_table.py',
-              'widgets/console_widget.py',
-              'Figure Composer',
+              'run_studio.py', 'widgets/data_plotter.py', 'InteractiveDataCanvas',
+              'VectorExportDialog', 'backend/workers.py', 'core/job_queue.py',
+              'widgets/parameter_cards.py', 'widgets/queue_table.py',
+              'widgets/console_widget.py', 'Figure Composer',
           ]
-          lines = []
-          for line in r.splitlines():
-              if any(tok in line for tok in obsolete_tokens):
-                  continue
-              lines.append(line)
-          r = '\n'.join(lines)
+          r = '\n'.join(line for line in r.splitlines() if not any(tok in line for tok in obsolete_tokens))
           r = r.replace(
-              '- `pyside6_studio/main_window.py`: Core `QMainWindow` application shell (`UnifiedWorkbenchWindow`).\n',
-              '- `pyside6_studio/main_window.py`: Core `QMainWindow` application shell (`UnifiedWorkbenchWindow`); orchestrates studies, viewports, `CalculationBridge`, queue execution, and synchronization.\n'
+              '- `pyside6_studio/main_window.py`: Core `QMainWindow` application shell (`UnifiedWorkbenchWindow`).',
+              '- `pyside6_studio/main_window.py`: Core `QMainWindow` application shell (`UnifiedWorkbenchWindow`); orchestrates studies, viewports, `CalculationBridge`, queue execution, and synchronization.'
           )
           r = r.replace(
-              '  - Implements `CacheManagerDialog`, `ModernCard`, `ModernComboBox`, and `DynamicStackedWidget`.\n',
-              '  - Uses extracted `CacheManagerDialog`, study-form builders, `JobQueueWidget`, and theme helpers while retaining the controller/orchestration contract.\n'
+              '  - Implements `CacheManagerDialog`, `ModernCard`, `ModernComboBox`, and `DynamicStackedWidget`.',
+              '  - Uses extracted `CacheManagerDialog`, study-form builders, `JobQueueWidget`, and theme helpers while retaining the controller/orchestration contract.'
           )
-          r = r.replace(
-              '- [`pyside6_studio/theme.py`](pyside6_studio/theme.py): Centralized Fluent / Slate QSS stylesheet system.',
-              '- [`pyside6_studio/theme.py`](pyside6_studio/theme.py): Centralized Fluent / Slate QSS stylesheet system.'
-          )
-          insert_at = r.find('\n## 3. Critical Invariants & Fragile Rules')
-          status = '''\n\n## Current Refactor Layout\n\n- `core/metadata.py` owns shared filename metadata parsing for Gallery and Dataset Explorer.\n- `widgets/study_forms/` owns study-specific inspector construction.\n- `widgets/job_queue.py` owns queue presentation; execution remains in `UnifiedWorkbenchWindow` and `CalculationBridge`.\n- `main_window_theme.py` owns main-window dynamic theme propagation.\n- `widgets/interactive_plot_controls.py` and `interactive_plot_theme.py` own Interactive Plots presentation helpers.\n- `widgets/plot_card_base.py` owns shared Plot Gallery card interaction mechanics.\n- `widgets/interactive_modes/` remains the numerical strategy layer; do not rewrite its physics kernels during UI debloating.\n- The legacy Data Plotter / Figure Composer path has been removed.\n'''
-          if insert_at != -1:
-              r = r[:insert_at] + status + r[insert_at:]
-          p.write_text(r + '\n', encoding='utf-8')
+          if '## Current Refactor Layout' not in r:
+              insert_at = r.find('\n## 3. Critical Invariants & Fragile Rules')
+              status = '''\n\n## Current Refactor Layout\n\n- `core/metadata.py` owns shared filename metadata parsing for Gallery and Dataset Explorer.\n- `widgets/study_forms/` owns study-specific inspector construction.\n- `widgets/job_queue.py` owns queue presentation; execution remains in `UnifiedWorkbenchWindow` and `CalculationBridge`.\n- `main_window_theme.py` owns main-window dynamic theme propagation.\n- `widgets/interactive_plot_controls.py` and `interactive_plot_theme.py` own Interactive Plots presentation helpers.\n- `widgets/plot_card_base.py` owns shared Plot Gallery card interaction mechanics.\n- `widgets/interactive_modes/` remains the numerical strategy layer; do not rewrite its physics kernels during UI debloating.\n- The legacy Data Plotter / Figure Composer path has been removed.\n'''
+              if insert_at != -1:
+                  r = r[:insert_at] + status + r[insert_at:]
+              else:
+                  r += status
+          p.write_text(r.rstrip() + '\n', encoding='utf-8')
           PY
 
           python -m compileall -q pyside6_studio tests
           git diff --check
-          git status --short
           git add -A
           git commit -m 'refactor: complete styling and documentation debloat'
           git push origin experiment-debloat
 
-          # Remove this temporary workflow and its trigger in a separate commit.
           git rm .github/workflows/bundles5-6.yml .bundles56-trigger
           git commit -m 'chore: remove temporary bundle workflow'
           git push origin experiment-debloat
