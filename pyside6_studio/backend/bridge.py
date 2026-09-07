@@ -95,21 +95,31 @@ class CalculationBridge(QObject):
         # Configure process environment with PYTHONPATH and unbuffered IO
         env = QProcessEnvironment.systemEnvironment()
         env.insert("PYTHONUNBUFFERED", "1")
-        if not getattr(sys, 'frozen', False):
-            existing_pythonpath = env.value("PYTHONPATH", "")
+        existing_pythonpath = env.value("PYTHONPATH", "")
+        if getattr(sys, 'frozen', False):
+            app_dir = os.path.dirname(sys.executable)
+            internal_dir = os.path.join(app_dir, "_internal")
+            paths_to_add = [
+                app_dir,
+                internal_dir,
+                os.path.join(internal_dir, "self_energy"),
+                os.path.join(internal_dir, "solvers"),
+                os.path.join(internal_dir, "susceptibility"),
+                os.path.join(internal_dir, "pyside6_studio"),
+            ]
+        else:
             paths_to_add = [
                 PROJECT_ROOT,
                 GUI_ROOT,
                 STUDIO_DIR,
                 os.path.join(PROJECT_ROOT, "self_energy"),
                 os.path.join(PROJECT_ROOT, "susceptibility"),
-                os.path.join(PROJECT_ROOT, "conductivity"),
             ]
-            valid_paths = [p for p in paths_to_add if os.path.isdir(p)]
-            new_pythonpath = os.pathsep.join(valid_paths)
-            if existing_pythonpath:
-                new_pythonpath = new_pythonpath + os.pathsep + existing_pythonpath
-            env.insert("PYTHONPATH", new_pythonpath)
+        valid_paths = [p for p in paths_to_add if os.path.isdir(p)]
+        new_pythonpath = os.pathsep.join(valid_paths)
+        if existing_pythonpath:
+            new_pythonpath = new_pythonpath + os.pathsep + existing_pythonpath
+        env.insert("PYTHONPATH", new_pythonpath)
         self._process.setProcessEnvironment(env)
 
         # Connect signals

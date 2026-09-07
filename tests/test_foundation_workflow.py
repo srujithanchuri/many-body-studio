@@ -200,20 +200,25 @@ class TestFoundationWorkflow(unittest.TestCase):
         job3 = {"task": "susceptibility", "study": "RPA Susceptibility", "mu": 1.0, "N": 64, "solver_choice": "cpu", "output_dir": self.root}
         job4 = {"task": "phase_diagram", "study": "Phase Diagram", "mu": 1.0, "N": 64, "solver_choice": "cpu", "output_dir": self.root}
 
-        # Step 1: Submit Job 1 while engine is idle -> starts immediately and switches to Console tab (index 1)
+        # Step 1: Submit Job 1 while engine is idle -> starts immediately as standalone run without adding to queue list!
         res1 = window.run_or_queue_job(job1, study_name="Spectral Sweep", summary="Sweep 1")
         self.assertEqual(res1, "running")
-        self.assertEqual(window.table_queue.rowCount(), 1)
-        self.assertEqual(window.active_queue_row, 0)
-        self.assertIn("Running", window.table_queue.item(0, 5).text())
+        self.assertEqual(window.table_queue.rowCount(), 0)
+        self.assertEqual(window.active_queue_row, -1)
         self.assertEqual(window.bottom_tabs.currentIndex(), 1)  # Live Console
         self.assertEqual(len(started_jobs), 1)
 
-        # Step 2: Add Job 2 via add_to_queue style dispatch -> stays on / switches to Queue tab (index 0)
+        # Step 2: Add Job 2 while Job 1 is running -> promotes active Job 1 to row 0 (Running...) and adds Job 2 to row 1 (Queued)!
         res2 = window.run_or_queue_foundation_job(job2)
+        self.assertEqual(res2, "queued")
+        self.assertEqual(window.table_queue.rowCount(), 2)
+        self.assertEqual(window.active_queue_row, 0)
+        self.assertIn("Running", window.table_queue.item(0, 5).text())
+        self.assertIn("Queued", window.table_queue.item(1, 5).text())
+
+        # Step 2b: Add Job 3 and Job 4 -> appends to rows 2 and 3
         res3 = window.run_or_queue_job(job3, study_name="RPA Susceptibility", summary="Susc 3")
         res4 = window.run_or_queue_job(job4, study_name="Phase Diagram", summary="PD 4")
-        self.assertEqual(res2, "queued")
         self.assertEqual(res3, "queued")
         self.assertEqual(res4, "queued")
         self.assertEqual(window.table_queue.rowCount(), 4)
@@ -265,6 +270,42 @@ class TestFoundationWorkflow(unittest.TestCase):
         self.assertEqual(window.table_queue.rowCount(), 0)
 
         window.bridge._running = False
+        window.close()
+
+    def test_standalone_idle_run_clean_lifecycle(self):
+        """Verify that a fresh calculation launched when idle runs cleanly without cluttering the batch queue table."""
+        window = UnifiedWorkbenchWindow()
+        window.edit_out_dir.setText(self.root)
+
+        # Mock start_calculation
+        def mock_start(params):
+            window.bridge._running = True
+        window.bridge.start_calculation = mock_start
+
+        job = {"task": "self_energy", "study": "Spectral Sweep", "mu": 0.0, "N": 64, "solver_choice": "cpu", "output_dir": self.root}
+
+        # 1. Start job when idle -> runs immediately, 0 rows in queue table
+        res = window.run_or_queue_job(job, study_name="Spectral Sweep", summary="Standalone Run")
+        self.assertEqual(res, "running")
+        self.assertEqual(window.table_queue.rowCount(), 0)
+        self.assertEqual(window.active_queue_row, -1)
+        self.assertIsNotNone(window._active_job_info)
+
+        # 2. Progress updates occur -> status bar updates, table remains untouched
+        window._on_calc_progress(45, "Computing 1-Loop Convolutions")
+        self.assertEqual(window._last_progress_pct, 45)
+        self.assertEqual(window.table_queue.rowCount(), 0)
+
+        # 3. Calculation completes -> finishes cleanly, table still has 0 rows
+        window.bridge._running = False
+        fake_payload = {"plot_path": "", "data_path": "", "all_plots": []}
+        window._on_calc_completed(fake_payload)
+
+        self.assertEqual(window.table_queue.rowCount(), 0)
+        self.assertEqual(window.active_queue_row, -1)
+        self.assertIsNone(window._active_job_info)
+        self.assertFalse(window.bridge.is_running())
+
         window.close()
 
 

@@ -28,24 +28,36 @@ if hasattr(sys.stderr, 'reconfigure'):
 import warnings
 warnings.filterwarnings("ignore", message="CUDA path could not be detected.*", category=UserWarning)
 
-# Ensure project roots are on sys.path
-PROJECT_ROOT = r"C:\Users\sruji\Projects\masters_thesis"
-GUI_ROOT = r"C:\Users\sruji\Projects\masters_thesis_gui"
-STUDIO_DIR = os.path.join(GUI_ROOT, "pyside6_studio")
+# Ensure project roots and physics solver packages are on sys.path
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+    INTERNAL_DIR = os.path.join(APP_DIR, "_internal")
+    PROJECT_ROOT = APP_DIR
+    GUI_ROOT = APP_DIR
+    STUDIO_DIR = os.path.join(INTERNAL_DIR, "pyside6_studio")
+    paths_to_check = [
+        APP_DIR,
+        INTERNAL_DIR,
+        os.path.join(INTERNAL_DIR, "self_energy"),
+        os.path.join(INTERNAL_DIR, "solvers"),
+        os.path.join(INTERNAL_DIR, "susceptibility"),
+        os.path.join(INTERNAL_DIR, "pyside6_studio"),
+    ]
+else:
+    PROJECT_ROOT = os.environ.get("PHYSICS_REPO_ROOT", r"C:\Users\sruji\Projects\masters_thesis")
+    GUI_ROOT = os.environ.get("GUI_ROOT", r"C:\Users\sruji\Projects\masters_thesis_gui")
+    STUDIO_DIR = os.path.join(GUI_ROOT, "pyside6_studio")
+    paths_to_check = [
+        PROJECT_ROOT,
+        GUI_ROOT,
+        STUDIO_DIR,
+        os.path.join(PROJECT_ROOT, "self_energy"),
+        os.path.join(PROJECT_ROOT, "susceptibility"),
+    ]
 
-for p in [PROJECT_ROOT, GUI_ROOT, STUDIO_DIR]:
+for p in reversed(paths_to_check):
     if os.path.isdir(p) and p not in sys.path:
         sys.path.insert(0, p)
-
-try:
-    import self_energy
-    SE_DIR = os.path.dirname(os.path.abspath(self_energy.__file__))
-    if SE_DIR not in sys.path:
-        sys.path.insert(0, SE_DIR)
-except Exception:
-    SE_DIR = os.path.join(PROJECT_ROOT, "self_energy")
-    if SE_DIR not in sys.path:
-        sys.path.insert(0, SE_DIR)
 
 from pyside6_studio.backend.vram_cleaner import flush_gpu_vram
 from pyside6_studio.backend.cuda_env import init_cuda_environment
@@ -104,11 +116,18 @@ def run_spectral_sweep_task(params: dict, results_dir: str, out_plots_dir: str, 
     except Exception:
         cpu_limit = 0.80
 
-    backend_label = "NVIDIA RTX 5060 GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    backend_label = "CUDA GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
     emit_status(f"Configuring parameters on {backend_label}: t={t}, mu={mu}, K={K}, N={N}×{N}, Nw={num_omega}")
 
-    from parameters import ModelParameters
-    import sweep_core
+    try:
+        from self_energy.parameters import ModelParameters
+    except (ImportError, ModuleNotFoundError):
+        from parameters import ModelParameters
+
+    try:
+        import self_energy.sweep_core as sweep_core
+    except (ImportError, ModuleNotFoundError):
+        import sweep_core
 
     emit_status(f"Building Hamiltonian & numerical grids on {backend_label}...")
     p = ModelParameters(
@@ -212,7 +231,10 @@ def run_spectral_function_task(params: dict, results_dir: str, out_plots_dir: st
     iy = int(round((ky_val / (2.0 * np.pi)) * N)) % N
     ext_P = (ix, iy)
 
-    from parameters import ModelParameters
+    try:
+        from self_energy.parameters import ModelParameters
+    except (ImportError, ModuleNotFoundError):
+        from parameters import ModelParameters
     import importlib
 
     raw_solver = params.get("solver_choice", "gpu").lower()
@@ -400,7 +422,7 @@ def run_phase_diagram_task(params: dict, results_dir: str, out_plots_dir: str, o
     except Exception:
         cpu_limit = 0.80
 
-    backend_label = "NVIDIA RTX 5060 GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    backend_label = "CUDA GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
     emit_status(f"Configuring Phase Diagram on {backend_label}: μ={mu}, t={t}, K={K}, N={N}×{N}, JK=[{jk_min:.1f} .. {jk_max:.1f}] ({jk_pts} pts)")
 
     SUSC_DIR = os.path.join(PROJECT_ROOT, "susceptibility")
@@ -481,7 +503,7 @@ def run_susceptibility_task(params: dict, results_dir: str, out_plots_dir: str, 
     except Exception:
         cpu_limit = 0.80
 
-    backend_label = "NVIDIA RTX 5060 GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    backend_label = "CUDA GPU (64-bit)" if solver_choice == "gpu64" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
     modes_str = []
     if run_static: modes_str.append("Static χ(q)")
     if run_dynamic: modes_str.append("Dynamic χ(q,ω)")
@@ -584,7 +606,7 @@ def run_conductivity_task(params: dict, results_dir: str, out_plots_dir: str, ou
     except Exception:
         cpu_limit = 0.80
 
-    backend_label = "NVIDIA RTX 5060 GPU" if solver_choice == "gpu" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
+    backend_label = "CUDA GPU" if solver_choice == "gpu" else f"Multi-Core CPU ({int(cpu_limit*100)}% cores)"
     sweep_label = "J_K" if is_jk_sweep else "J_⊥"
     fixed_label = "J_⊥" if is_jk_sweep else "J_K"
     fixed_val = fixed_jperp if is_jk_sweep else fixed_jk
@@ -654,8 +676,15 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
         eta = float(params.get("eta", 0.05 if N >= 100 else 0.08))
 
         emit_status(f"Computing Total Self-Energy Σ on {solver_choice.upper()} (N={N}, μ={mu:.1f}, J⊥={fixed_jperp:.1f})...")
-        from parameters import ModelParameters
-        import sweep_core
+        try:
+            from self_energy.parameters import ModelParameters
+        except (ImportError, ModuleNotFoundError):
+            from parameters import ModelParameters
+
+        try:
+            import self_energy.sweep_core as sweep_core
+        except (ImportError, ModuleNotFoundError):
+            import sweep_core
 
         p = ModelParameters(
             t=t, t1=t1, mu=mu, K=K,
@@ -742,14 +771,14 @@ def run_foundation_cache_task(params: dict, results_dir: str, out_plots_dir: str
 
 def run_worker(params: dict):
     """Dispatches requested calculation task."""
-    task = params.get("task", "spectral_sweep").lower()
-    emit_progress(5, f"Initializing worker for task: {task}...")
-
-    # Normalize to self-contained results directory layout
-    base_out_dir = params.get("output_dir", os.path.join(GUI_ROOT, "results"))
-    results_dir, out_plots_dir, out_data_dir, out_cache_dir = normalize_results_dir(base_out_dir)
-
     try:
+        task = params.get("task", "spectral_sweep").lower()
+        emit_progress(5, f"Initializing worker for task: {task}...")
+
+        # Normalize to self-contained results directory layout
+        base_out_dir = params.get("output_dir") or params.get("results_dir") or os.path.join(GUI_ROOT, "results")
+        results_dir, out_plots_dir, out_data_dir, out_cache_dir = normalize_results_dir(base_out_dir)
+
         if "foundation" in task or "direct_cache" in task or ("cache" in task and "sweep" not in task):
             run_foundation_cache_task(params, results_dir, out_plots_dir, out_data_dir, out_cache_dir)
         elif "phase" in task or "diagram" in task or "bisection" in task:
@@ -765,8 +794,13 @@ def run_worker(params: dict):
 
     except Exception as e:
         import traceback
-        traceback.print_exc(file=sys.stderr)
-        print(f"[WORKER ERROR] Solver execution failed: {e}", file=sys.stderr, flush=True)
+        err_tb = traceback.format_exc()
+        print(f"[STDERR] {err_tb}", flush=True)
+        print(f"[WORKER ERROR] Solver execution failed: {e}", flush=True)
+        try:
+            print(f"[WORKER ERROR] Solver execution failed: {e}", file=sys.stderr, flush=True)
+        except Exception:
+            pass
         raise e
     finally:
         flush_gpu_vram()
@@ -807,7 +841,9 @@ def main():
 
     try:
         run_worker(params)
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[STDERR] Fatal worker exception: {traceback.format_exc()}", flush=True)
         sys.exit(1)
 
 

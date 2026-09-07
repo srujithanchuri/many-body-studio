@@ -383,9 +383,20 @@ class ComputeCacheDialog(QDialog):
 
         main_win = self._find_main_window()
         if main_win and hasattr(main_win, "run_or_queue_foundation_job"):
+            if hasattr(main_win, "bridge") and not getattr(self, "_connected_to_main_bridge", False):
+                try:
+                    main_win.bridge.sig_status.connect(self._on_bridge_status)
+                    main_win.bridge.sig_progress.connect(self._on_bridge_progress)
+                    main_win.bridge.sig_completed.connect(self._on_bridge_completed)
+                    main_win.bridge.sig_error.connect(self._on_bridge_error)
+                    main_win.bridge.sig_cancelled.connect(self._on_bridge_cancelled)
+                    self._connected_to_main_bridge = True
+                except Exception:
+                    pass
+
             outcome = main_win.run_or_queue_foundation_job(params)
             if outcome == "queued":
-                self.lbl_status.setText("⏳ Job added to Queue.")
+                self.lbl_status.setText("⏳ Job added to Queue behind active calculation.")
                 self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 600; color: #d97706;")
                 self.pbar.setRange(0, 100)
                 self.pbar.setValue(0)
@@ -404,6 +415,15 @@ class ComputeCacheDialog(QDialog):
 
     def _on_bridge_status(self, msg: str):
         self.lbl_status.setText(msg)
+
+    def _on_bridge_progress(self, pct: int, msg: str = ""):
+        if pct > 0:
+            self.pbar.setRange(0, 100)
+            self.pbar.setValue(pct)
+        else:
+            self.pbar.setRange(0, 0)
+        if msg:
+            self.lbl_status.setText(msg)
 
     def _on_bridge_completed(self, payload: dict):
         self.pbar.setRange(0, 100)
@@ -432,7 +452,17 @@ class ComputeCacheDialog(QDialog):
         self.reject()
 
     def closeEvent(self, event):
-        # Dialog close does NOT kill running calculations on the main engine
+        main_win = self._find_main_window()
+        if main_win and hasattr(main_win, "bridge") and getattr(self, "_connected_to_main_bridge", False):
+            try:
+                main_win.bridge.sig_status.disconnect(self._on_bridge_status)
+                main_win.bridge.sig_progress.disconnect(self._on_bridge_progress)
+                main_win.bridge.sig_completed.disconnect(self._on_bridge_completed)
+                main_win.bridge.sig_error.disconnect(self._on_bridge_error)
+                main_win.bridge.sig_cancelled.disconnect(self._on_bridge_cancelled)
+            except Exception:
+                pass
+            self._connected_to_main_bridge = False
         event.accept()
 
 

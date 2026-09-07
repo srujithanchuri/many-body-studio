@@ -284,6 +284,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         # Simulation Queue and Batch Execution
         self.queued_param_list = []
         self.active_queue_row = -1
+        self._active_job_info = None
+        self._last_progress_pct = 0
+        self._last_progress_step = ""
 
         self._build_toolbar()
         self._build_central_workspace()
@@ -658,10 +661,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         gc = QVBoxLayout(grp_cache)
         gc.setSpacing(6)
 
-        self.lbl_cache_badge = QLabel("⚡ Checking Cache...")
+        self.lbl_cache_badge = QLabel("Checking Cache...")
         self.lbl_cache_badge.setStyleSheet(
             "padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 11px; "
-            "background-color: rgba(8, 145, 178, 0.12); color: #0891b2; border: 1px solid rgba(8, 145, 178, 0.3);"
+            "background-color: rgba(100, 116, 139, 0.12); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.35);"
         )
         self.lbl_cache_badge.setWordWrap(True)
         gc.addWidget(self.lbl_cache_badge)
@@ -906,10 +909,20 @@ class UnifiedWorkbenchWindow(QMainWindow):
         h_solv = QHBoxLayout()
         h_solv.addWidget(QLabel("Solver Backend:"))
         self.cb_solver_choice = ModernComboBox()
-        self.cb_solver_choice.addItems([
-            "CUDA GPU (NVIDIA RTX 5060 64-bit)",
-            "CPU 64-bit (NumPy / SciPy)"
-        ])
+        hw_info = get_hardware_info()
+        if hw_info.get("is_gpu"):
+            dev_name = hw_info.get("name", "NVIDIA GPU")
+            self.cb_solver_choice.addItems([
+                f"CUDA GPU ({dev_name})",
+                "CPU 64-bit (NumPy / SciPy)"
+            ])
+            self.cb_solver_choice.setCurrentIndex(0)
+        else:
+            self.cb_solver_choice.addItems([
+                "CPU 64-bit (NumPy / SciPy)",
+                "CUDA GPU (Unavailable - No GPU / CuPy)"
+            ])
+            self.cb_solver_choice.setCurrentIndex(0)
         self.cb_solver_choice.currentIndexChanged.connect(self._on_solver_backend_changed)
         h_solv.addWidget(self.cb_solver_choice)
         gsolv.addLayout(h_solv)
@@ -927,13 +940,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.box_cpu_limit.setVisible(False)
 
         # Live Hardware Status Pill inside Solver Card
-        self.lbl_hw_badge = QLabel("⚡ GPU Active: NVIDIA GeForce RTX 5060 Laptop GPU (64-bit CuPy)")
-        self.lbl_hw_badge.setStyleSheet(
-            "color: #15803d; font-weight: 600; font-size: 11px; padding: 6px 8px; "
-            "background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 5px;"
-        )
+        self.lbl_hw_badge = QLabel()
         self.lbl_hw_badge.setWordWrap(True)
         gsolv.addWidget(self.lbl_hw_badge)
+        self._on_solver_backend_changed(self.cb_solver_choice.currentIndex())
         lay_sim.addWidget(grp_solver)
 
         # 4. Numerical Grid & Resolution Presets
@@ -1207,10 +1217,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.btn_cache_mgr.setToolTip(f"{stats['total_files']} foundation files ({stats['total_bytes']} bytes) in results/cache/")
 
         if hasattr(self, "chk_force_recompute") and self.chk_force_recompute.isChecked():
-            self.lbl_cache_badge.setText("⚡ Force Recompute Active: Bypassing Cache (Will Take Longer)")
+            self.lbl_cache_badge.setText("Force Recompute (Ignoring Cache)")
             self.lbl_cache_badge.setStyleSheet(
                 "padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 11px; "
-                "background-color: rgba(234, 88, 12, 0.15); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.4);"
+                "background-color: rgba(217, 119, 6, 0.12); color: #d97706; border: 1px solid rgba(217, 119, 6, 0.35);"
             )
             self.lbl_cache_badge.setToolTip("Force Recompute is active. All reusable foundations in results/cache/ will be ignored and computed from scratch, which will take longer.")
             return
@@ -1251,18 +1261,21 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         res = check_cache_status(study, params, out_dir)
         text = res["badge_text"]
-        color = res["badge_color"]
         details = res["details"]
+        state = res.get("state", "cold")
 
-        if res["state"] == "full":
+        if state == "cached":
+            color = "#16a34a"
             bg_col = "rgba(22, 163, 74, 0.12)"
-            border_col = "rgba(22, 163, 74, 0.3)"
-        elif res["state"] == "foundation":
-            bg_col = "rgba(8, 145, 178, 0.12)"
-            border_col = "rgba(8, 145, 178, 0.3)"
+            border_col = "rgba(22, 163, 74, 0.35)"
+        elif state == "partial":
+            color = "#d97706"
+            bg_col = "rgba(217, 119, 6, 0.12)"
+            border_col = "rgba(217, 119, 6, 0.35)"
         else:
+            color = "#64748b"
             bg_col = "rgba(100, 116, 139, 0.12)"
-            border_col = "rgba(100, 116, 139, 0.3)"
+            border_col = "rgba(100, 116, 139, 0.35)"
 
         self.lbl_cache_badge.setText(text)
         self.lbl_cache_badge.setStyleSheet(
@@ -1337,16 +1350,27 @@ class UnifiedWorkbenchWindow(QMainWindow):
                         self.cb_active_plot.blockSignals(False)
                         break
 
+    def _get_active_solver_choice(self) -> str:
+        """Returns 'gpu' if CUDA GPU is actively selected and available, else 'cpu'."""
+        if not hasattr(self, "cb_solver_choice"):
+            return "cpu"
+        txt = self.cb_solver_choice.currentText()
+        if "CUDA GPU" in txt and "Unavailable" not in txt:
+            return "gpu"
+        return "cpu"
+
     def _on_solver_backend_changed(self, index):
         """Updates UI and hardware badge when toggling between GPU and CPU."""
-        if index == 0:  # GPU
+        if self._get_active_solver_choice() == "gpu":
             self.box_cpu_limit.setVisible(False)
-            self.lbl_hw_badge.setText("⚡ GPU Active: NVIDIA GeForce RTX 5060 Laptop GPU (64-bit CuPy)")
+            hw = get_hardware_info()
+            dev_name = hw.get("name", "NVIDIA GPU")
+            self.lbl_hw_badge.setText(f"⚡ GPU Active: {dev_name} (64-bit CuPy)")
             self.lbl_hw_badge.setStyleSheet(
                 "color: #15803d; font-weight: 600; font-size: 11px; padding: 6px 8px; "
                 "background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 5px;"
             )
-        else:  # CPU
+        else:
             self.box_cpu_limit.setVisible(True)
             self.lbl_hw_badge.setText("🖥️ CPU Active: Multi-Core CPU Engine (NumPy / SciPy Multithreaded)")
             self.lbl_hw_badge.setStyleSheet(
@@ -1631,6 +1655,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
             getattr(self, "btn_pause", None),
             getattr(self, "btn_add_to_queue", None),
             getattr(self, "btn_clear", None),
+            getattr(self, "btn_clear_pending", None),
             getattr(self, "btn_autoscroll", None),
             getattr(self, "btn_copy_console", None),
             getattr(self, "btn_clear_console", None),
@@ -1755,6 +1780,11 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.btn_clear.clicked.connect(self.clear_queue)
         row.addWidget(self.btn_clear)
 
+        self.btn_clear_pending = QPushButton("🗑 Clear Pending")
+        self.btn_clear_pending.setToolTip("Remove all unstarted and queued entries waiting in batch queue")
+        self.btn_clear_pending.clicked.connect(self.clear_pending_queue)
+        row.addWidget(self.btn_clear_pending)
+
         self.btn_cancel_all = QPushButton("⏹ Cancel All")
         self.btn_cancel_all.setObjectName("BtnCancelAll")
         self.btn_cancel_all.setToolTip("Immediately stop active calculation and cancel all queued jobs")
@@ -1788,6 +1818,17 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.table_queue.setHorizontalHeaderLabels(["#", "Study", "Parameters Snapshot", "Solver", "Progress", "Status"])
         self.table_queue.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table_queue.customContextMenuRequested.connect(self._on_queue_table_context_menu)
+
+        # Delete / Backspace key support for removing selected rows
+        orig_queue_table_key_press = self.table_queue.keyPressEvent
+        def _on_queue_table_key_press(event):
+            if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+                selected_rows = sorted(set(idx.row() for idx in self.table_queue.selectedIndexes()), reverse=True)
+                for r in selected_rows:
+                    self._remove_queued_row(r)
+            else:
+                orig_queue_table_key_press(event)
+        self.table_queue.keyPressEvent = _on_queue_table_key_press
         qh = self.table_queue.horizontalHeader()
         qh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         qh.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -1854,7 +1895,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             }
         """)
         self.txt_console.append("<span style='color: #38bdf8; font-family: Consolas, monospace; font-weight: bold;'>Windows PowerShell [Studio Calculation Engine]</span>")
-        self.txt_console.append("<span style='color: #94a3b8; font-family: Consolas, monospace;'>Ready. NVIDIA RTX 5060 QProcess execution bridge initialized.</span><br>")
+        hw = get_hardware_info()
+        hw_label = hw["name"] if hw.get("is_gpu") else "Multi-Core CPU"
+        self.txt_console.append(f"<span style='color: #94a3b8; font-family: Consolas, monospace;'>Ready. {hw_label} QProcess execution bridge initialized.</span><br>")
         cl.addWidget(self.txt_console)
         self.bottom_tabs.addTab(console_tab, "💻 Live Console")
 
@@ -1876,7 +1919,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _clear_console(self):
         self.txt_console.clear()
         self.txt_console.append("<span style='color: #38bdf8; font-family: Consolas, monospace; font-weight: bold;'>Windows PowerShell [Studio Calculation Engine]</span>")
-        self.txt_console.append("<span style='color: #94a3b8; font-family: Consolas, monospace;'>Ready. NVIDIA RTX 5060 QProcess execution bridge initialized.</span><br>")
+        hw = get_hardware_info()
+        hw_label = hw["name"] if hw.get("is_gpu") else "Multi-Core CPU"
+        self.txt_console.append(f"<span style='color: #94a3b8; font-family: Consolas, monospace;'>Ready. {hw_label} QProcess execution bridge initialized.</span><br>")
 
     def _build_statusbar(self):
         sb = self.statusBar()
@@ -2014,7 +2059,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if not out_dir:
             out_dir = os.path.join(GUI_ROOT, "results")
 
-        solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
+        solver_choice = self._get_active_solver_choice()
         cpu_limit = self.cb_cpu_limit.currentText().split()[0]
 
         common_params = {
@@ -2172,6 +2217,12 @@ class UnifiedWorkbenchWindow(QMainWindow):
         if not params:
             return
 
+        if hasattr(self, "bridge") and self.bridge.is_running():
+            # Engine is busy: Use run_or_queue_job to promote active job to row 0 and add this job to row 1+
+            self.run_or_queue_job(params, study_name=study_name, summary=summary)
+            return
+
+        # Engine is idle: User specifically requested adding to queue without running immediately
         solver_choice = params.get("solver_choice", "gpu")
         row = self._create_queue_row(study_name, summary, solver_choice, status="⏳ Queued")
         if not hasattr(self, "queued_param_list"):
@@ -2207,7 +2258,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
         item_snap.setForeground(QColor("#94a3b8") if self.is_dark else QColor("#475569"))
         self.table_queue.setItem(row, 2, item_snap)
 
-        solver_str = "NVIDIA RTX 5060 (GPU)" if solver_choice == "gpu" else "CPU (Multi-Core)"
+        hw = get_hardware_info()
+        gpu_name = hw.get("name", "CUDA GPU")
+        solver_str = f"{gpu_name} (GPU)" if solver_choice == "gpu" else "CPU (Multi-Core)"
         item_solver = QTableWidgetItem(solver_str)
         item_solver.setTextAlignment(Qt.AlignCenter)
         self.table_queue.setItem(row, 3, item_solver)
@@ -2244,7 +2297,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         return row
 
     def run_or_queue_job(self, params: dict, study_name: str = None, summary: str = None) -> str:
-        """Central serialization gateway: starts execution immediately if idle, or enqueues if busy."""
+        """Central serialization gateway: starts execution immediately if idle without queue clutter, or enqueues and promotes if busy."""
         if not study_name:
             if params.get("task") in ("foundation_cache", "compute_cache"):
                 cat = params.get("cache_category", "sigma_base")
@@ -2264,7 +2317,29 @@ class UnifiedWorkbenchWindow(QMainWindow):
         solver_choice = params.get("solver_choice", "gpu")
 
         if hasattr(self, "bridge") and self.bridge.is_running():
-            # Engine is busy: Append to queue and display in queue table
+            # Engine is busy:
+            # If the currently active running job has not been added to table_queue, promote it as Row 0 (Position #1)
+            if getattr(self, "active_queue_row", -1) == -1 and getattr(self, "_active_job_info", None):
+                row0 = self._create_queue_row(
+                    self._active_job_info.get("study", "Calculation"),
+                    self._active_job_info.get("summary", ""),
+                    self._active_job_info.get("solver_choice", "gpu"),
+                    status="🔄 Running..."
+                )
+                self.active_queue_row = row0
+                prog0 = self.table_queue.cellWidget(row0, 4)
+                if prog0:
+                    pct = getattr(self, "_last_progress_pct", 0)
+                    if pct > 0:
+                        prog0.setRange(0, 100)
+                        prog0.setValue(pct)
+                    else:
+                        prog0.setRange(0, 0)
+                step0 = getattr(self, "_last_progress_step", "")
+                if step0 and step0 != "Starting...":
+                    self.table_queue.setItem(row0, 5, QTableWidgetItem(f"🔄 {step0}"))
+
+            # Now append this new job as the next row (Position #2, Position #3, etc.)
             row = self._create_queue_row(study_name, summary, solver_choice, status="⏳ Queued")
             if not hasattr(self, "queued_param_list"):
                 self.queued_param_list = []
@@ -2275,13 +2350,24 @@ class UnifiedWorkbenchWindow(QMainWindow):
                 "row_idx": row
             })
             self.lbl_status.setText(f"➕ Queued {study_name} (Job #{row + 1})")
-            self.bottom_tabs.setCurrentIndex(0)  # Switch to Queue tab so user sees it queued
+            self.bottom_tabs.setCurrentIndex(0)  # Switch to Queue tab so user sees both running & queued!
             self._adjust_bottom_dock_height()
             return "queued"
 
-        # Engine is idle: Add active running row and launch calculation immediately
-        row = self._create_queue_row(study_name, summary, solver_choice, status="🔄 Running...")
-        self.active_queue_row = row
+        # Engine is idle: Fresh standalone run WITHOUT adding to queue list!
+        # Clear past completed/cancelled rows so queue starts clean
+        if hasattr(self, "queued_param_list"):
+            self.queued_param_list.clear()
+        self.table_queue.setRowCount(0)
+        self.active_queue_row = -1
+        self._active_job_info = {
+            "params": params,
+            "study": study_name,
+            "summary": summary,
+            "solver_choice": solver_choice
+        }
+        self._last_progress_pct = 0
+        self._last_progress_step = "Starting..."
 
         if params.get("task") in ("foundation_cache", "compute_cache"):
             self._foundation_requested = True
@@ -2297,9 +2383,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
             return "running"
         except RuntimeError as e:
             self._foundation_requested = False
+            self._active_job_info = None
             self._update_execution_buttons(is_running=False)
-            if self.active_queue_row < self.table_queue.rowCount():
-                self.table_queue.setItem(self.active_queue_row, 5, QTableWidgetItem("❌ Error"))
             QMessageBox.warning(self, "Execution Warning", str(e))
             return "error"
 
@@ -2317,7 +2402,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_precompute_bubble(self):
         """Precomputes and caches the bare bubble chi0 on the selected backend."""
         out_dir = self.edit_out_dir.text().strip() or os.path.join(GUI_ROOT, "results")
-        solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
+        solver_choice = self._get_active_solver_choice()
         cpu_limit = self.cb_cpu_limit.currentText().split()[0]
         params = {
             "task": "susceptibility",
@@ -2344,7 +2429,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def run_foundation_cache_ui(self):
         """Directly synthesizes base self-energy or bare susceptibility foundation caches and auto-switches to Interactive Plots."""
         out_dir = self.edit_out_dir.text().strip() or os.path.join(GUI_ROOT, "results")
-        solver_choice = "gpu" if self.cb_solver_choice.currentIndex() == 0 else "cpu"
+        solver_choice = self._get_active_solver_choice()
         cpu_limit = self.cb_cpu_limit.currentText().split()[0] if hasattr(self, "cb_cpu_limit") else "80%"
 
         target_category = "sigma_base" if ("Spectral" in self.active_study or "Self" in self.active_study or "Conductivity" in self.active_study) else "chi0_static"
@@ -2548,23 +2633,25 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_queue_table_context_menu(self, pos):
         """Context menu for right-clicking items in the execution queue."""
         row = self.table_queue.rowAt(pos.y())
-        if row < 0 or row >= self.table_queue.rowCount():
-            return
-        st_item = self.table_queue.item(row, 5)
-        st_text = st_item.text() if st_item else ""
-
         menu = QMenu(self)
-        if any(k in st_text for k in ["Running", "Solving", "🔄"]):
-            act_cancel = menu.addAction("⏹ Cancel Active Calculation")
-            act_cancel.triggered.connect(self.cancel_simulation_ui)
-        elif any(k in st_text for k in ["Queued", "Pending", "⏳"]):
-            act_remove = menu.addAction("🗑 Remove from Queue")
-            act_remove.triggered.connect(lambda: self._remove_queued_row(row))
-        else:
-            act_remove = menu.addAction("🗑 Remove Entry")
-            act_remove.triggered.connect(lambda: self._remove_queued_row(row))
 
-        menu.addSeparator()
+        if 0 <= row < self.table_queue.rowCount():
+            st_item = self.table_queue.item(row, 5)
+            st_text = st_item.text() if st_item else ""
+
+            if any(k in st_text for k in ["Running", "Solving", "🔄"]):
+                act_cancel = menu.addAction("⏹ Cancel Active Calculation")
+                act_cancel.triggered.connect(self.cancel_simulation_ui)
+            elif any(k in st_text for k in ["Queued", "Pending", "⏳"]):
+                act_remove = menu.addAction("🗑 Remove from Queue")
+                act_remove.triggered.connect(lambda: self._remove_queued_row(row))
+            else:
+                act_remove = menu.addAction("🗑 Remove Entry")
+                act_remove.triggered.connect(lambda: self._remove_queued_row(row))
+            menu.addSeparator()
+
+        act_clear_pending = menu.addAction("🗑 Clear All Pending")
+        act_clear_pending.triggered.connect(self.clear_pending_queue)
         act_clear_fin = menu.addAction("🗑 Clear All Finished / Cancelled")
         act_clear_fin.triggered.connect(self.clear_queue)
         act_cancel_all = menu.addAction("⏹ Cancel All Calculations")
@@ -2600,7 +2687,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
     def _on_calc_started(self):
         self._update_execution_buttons(is_running=True)
-        backend_name = "NVIDIA RTX 5060 GPU" if getattr(self, "cb_solver_choice", None) and self.cb_solver_choice.currentIndex() == 0 else "Host CPU"
+        hw = get_hardware_info()
+        dev_name = hw.get("name", "CUDA GPU")
+        backend_name = dev_name if self._get_active_solver_choice() == "gpu" else "Host CPU"
         self.lbl_status.setText(f"⏳ Running: Initializing {backend_name} solver for {self.active_study}...")
         if hasattr(self, "lbl_console_engine_status"):
             self.lbl_console_engine_status.setText("🔵 Engine Active [Running...]")
@@ -2654,11 +2743,14 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_calc_status(self, message: str):
         """Displays accurate, informative physics execution stage without fake percentages."""
         if message:
+            self._last_progress_step = message
             self.lbl_status.setText(f"⏳ Running: {message}")
 
     def _on_calc_progress(self, percent: int, step: str):
         """Updates status cleanly and updates real progress in the active queue table row."""
+        self._last_progress_pct = percent
         if step:
+            self._last_progress_step = step
             self.lbl_status.setText(f"⏳ Running: {step}")
         if hasattr(self, "active_queue_row") and 0 <= self.active_queue_row < self.table_queue.rowCount():
             prog = self.table_queue.cellWidget(self.active_queue_row, 4)
@@ -2703,6 +2795,10 @@ class UnifiedWorkbenchWindow(QMainWindow):
             item_done.setTextAlignment(Qt.AlignCenter)
             item_done.setForeground(QColor("#16a34a"))
             self.table_queue.setItem(self.active_queue_row, 5, item_done)
+
+        self._active_job_info = None
+        self._last_progress_pct = 0
+        self._last_progress_step = ""
 
         all_plots = payload.get("all_plots", [])
         primary_plot = payload.get("plot_path", "")
@@ -2759,6 +2855,8 @@ class UnifiedWorkbenchWindow(QMainWindow):
 
         if not getattr(self, "queued_param_list", None) or len(self.queued_param_list) == 0:
             self._update_execution_buttons(is_running=False)
+            self.active_queue_row = -1
+            self._active_job_info = None
             return False
 
         next_job = self.queued_param_list.pop(0)
@@ -2782,6 +2880,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
             prog = self.table_queue.cellWidget(row_idx, 4)
             if prog:
                 prog.setRange(0, 0)
+
+        self._active_job_info = {
+            "params": next_params,
+            "study": next_study,
+            "summary": next_job.get("summary", ""),
+            "solver_choice": next_params.get("solver_choice", "gpu")
+        }
+        self._last_progress_pct = 0
+        self._last_progress_step = "Starting..."
 
         if next_params.get("task") == "foundation_cache":
             self._foundation_requested = True
@@ -2817,6 +2924,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
             item_err.setTextAlignment(Qt.AlignCenter)
             item_err.setForeground(QColor("#dc2626"))
             self.table_queue.setItem(self.active_queue_row, 5, item_err)
+        self._active_job_info = None
+        self._last_progress_pct = 0
+        self._last_progress_step = ""
         self.txt_console.append(
             f"<div style='color: #ff6b68; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ❌ [ERROR] {error_msg}"
@@ -2830,6 +2940,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _on_calc_cancelled(self):
         self._update_execution_buttons(is_running=False)
         self.lbl_status.setText("⏹ Stopped: Calculation cancelled • GPU VRAM released.")
+        self._active_job_info = None
+        self._last_progress_pct = 0
+        self._last_progress_step = ""
         self.txt_console.append(
             f"<div style='color: #ffff00; font-family: Consolas, monospace; font-weight: bold; margin: 4px 0;'>"
             f"[{time.strftime('%H:%M:%S')}] ✅ [STOPPED] Process terminated cleanly. VRAM cache flushed to 0 MB."
@@ -2872,13 +2985,16 @@ class UnifiedWorkbenchWindow(QMainWindow):
         base_h = 165
         row_h = 30
         max_allowed = min(420, int(self.height() * 0.50))
-        desired_h = min(max_allowed, base_h + n_rows * row_h)
+        desired_h = min(max_allowed, base_h + max(1, n_rows) * row_h)
         self.dock_bottom.setMaximumHeight(max_allowed + 30)
         self.resizeDocks([self.dock_bottom], [desired_h], Qt.Vertical)
 
         # Update dynamic badges and tab label
         if hasattr(self, "lbl_queue_badge"):
-            self.lbl_queue_badge.setText(f"{n_rows} Job{'s' if n_rows != 1 else ''} Total")
+            if n_rows == 0:
+                self.lbl_queue_badge.setText("0 Jobs Queued")
+            else:
+                self.lbl_queue_badge.setText(f"{n_rows} Job{'s' if n_rows != 1 else ''} Total")
         if hasattr(self, "bottom_tabs"):
             self.bottom_tabs.setTabText(0, f"📋 Queue ({n_rows})")
 
@@ -2901,25 +3017,21 @@ class UnifiedWorkbenchWindow(QMainWindow):
         )
 
     def clear_queue(self):
-        """Clears execution queue. If engine is idle, clears all queued jobs; if running, preserves active job and clears completed/cancelled."""
-        if not self.bridge.is_running():
-            if hasattr(self, "queued_param_list"):
-                self.queued_param_list.clear()
-            self.table_queue.setRowCount(0)
-            self.active_queue_row = -1
-            self._adjust_bottom_dock_height()
-            self.lbl_status.setText("Batch queue cleared.")
-            return
-
-        # Engine is running or queued items exist: remove only finished/cancelled rows
+        """Removes all finished (Completed, Failed, Cancelled, Error) entries from the queue."""
         r = 0
+        removed = 0
         while r < self.table_queue.rowCount():
             st_item = self.table_queue.item(r, 5)
             st_text = st_item.text() if st_item else ""
             if any(done_tag in st_text for done_tag in ["Completed", "Failed", "Cancelled", "Error", "⏹", "✅", "❌"]):
                 self.table_queue.removeRow(r)
+                removed += 1
                 if hasattr(self, "active_queue_row") and self.active_queue_row > r:
                     self.active_queue_row -= 1
+                if hasattr(self, "queued_param_list"):
+                    for j in self.queued_param_list:
+                        if j.get("row_idx", 0) > r:
+                            j["row_idx"] -= 1
             else:
                 r += 1
 
@@ -2928,7 +3040,41 @@ class UnifiedWorkbenchWindow(QMainWindow):
             self.table_queue.setItem(idx, 0, QTableWidgetItem(str(idx + 1)))
 
         self._adjust_bottom_dock_height()
-        self.lbl_status.setText("Cleared finished jobs from batch queue.")
+        if removed > 0:
+            self.lbl_status.setText(f"Cleared {removed} finished job(s) from batch queue.")
+        else:
+            self.lbl_status.setText("No finished jobs to clear from batch queue.")
+
+    def clear_pending_queue(self):
+        """Clears all unstarted/queued jobs from the batch queue. Preserves active running job and finished records."""
+        if hasattr(self, "queued_param_list"):
+            self.queued_param_list.clear()
+
+        r = 0
+        removed = 0
+        while r < self.table_queue.rowCount():
+            st_item = self.table_queue.item(r, 5)
+            st_text = st_item.text() if st_item else ""
+            if any(run_tag in st_text for run_tag in ["Running", "Solving", "🔄"]):
+                r += 1
+            elif any(done_tag in st_text for done_tag in ["Completed", "Failed", "Cancelled", "Error", "⏹", "✅", "❌"]):
+                r += 1
+            else:
+                # Queued, Pending, ⏳, Staged
+                self.table_queue.removeRow(r)
+                removed += 1
+                if hasattr(self, "active_queue_row") and self.active_queue_row > r:
+                    self.active_queue_row -= 1
+
+        # Re-number the row index column
+        for idx in range(self.table_queue.rowCount()):
+            self.table_queue.setItem(idx, 0, QTableWidgetItem(str(idx + 1)))
+
+        self._adjust_bottom_dock_height()
+        if removed > 0:
+            self.lbl_status.setText(f"Cleared {removed} pending job(s) from batch queue.")
+        else:
+            self.lbl_status.setText("No pending jobs to clear from batch queue.")
 
     def toggle_split_view(self, checked):
         self.canvas_right.setVisible(checked)

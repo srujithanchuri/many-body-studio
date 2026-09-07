@@ -9,13 +9,27 @@ import warnings
 # Suppress harmless CuPy CUDA_PATH UserWarning when running on NVIDIA driver
 warnings.filterwarnings("ignore", message=".*CUDA path could not be detected.*", category=UserWarning)
 
-# Ensure pyside6_studio and its parent directory are on path
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-GUI_ROOT = os.path.dirname(CURRENT_DIR)
-if GUI_ROOT not in sys.path:
-    sys.path.insert(0, GUI_ROOT)
-if CURRENT_DIR not in sys.path:
-    sys.path.insert(0, CURRENT_DIR)
+# Ensure pyside6_studio and its parent directory or bundled libraries are on path
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+    INTERNAL_DIR = os.path.join(APP_DIR, "_internal")
+    for p in [
+        APP_DIR,
+        INTERNAL_DIR,
+        os.path.join(INTERNAL_DIR, "self_energy"),
+        os.path.join(INTERNAL_DIR, "solvers"),
+        os.path.join(INTERNAL_DIR, "susceptibility"),
+        os.path.join(INTERNAL_DIR, "pyside6_studio"),
+    ]:
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.insert(0, p)
+else:
+    CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+    GUI_ROOT = os.path.dirname(CURRENT_DIR)
+    if GUI_ROOT not in sys.path:
+        sys.path.insert(0, GUI_ROOT)
+    if CURRENT_DIR not in sys.path:
+        sys.path.insert(0, CURRENT_DIR)
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, qInstallMessageHandler, QtMsgType
@@ -79,7 +93,12 @@ def main():
 
 if __name__ == "__main__":
     if "--params-b64" in sys.argv or "--params" in sys.argv:
-        from pyside6_studio.backend.worker_cli import main as worker_main
-        worker_main()
+        try:
+            from pyside6_studio.backend.worker_cli import main as worker_main
+            worker_main()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
         sys.exit(0)
     main()

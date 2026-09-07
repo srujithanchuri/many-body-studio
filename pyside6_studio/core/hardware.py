@@ -41,21 +41,6 @@ def get_hardware_info():
     except Exception:
         pass
 
-    # Fallback attempt via PyTorch if available in environment
-    try:
-        import torch
-        if torch.cuda.is_available():
-            name = torch.cuda.get_device_name(0)
-            total_mem = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-            info["backend"] = "cuda"
-            info["name"] = name
-            info["total_vram_gb"] = round(total_mem, 1)
-            info["badge_text"] = f"⚡ GPU Active: {name} ({round(total_mem, 1)} GB VRAM)"
-            info["is_gpu"] = True
-            return info
-    except Exception:
-        pass
-
     # Fallback to CPU core count
     try:
         import multiprocessing

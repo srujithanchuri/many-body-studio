@@ -34,10 +34,33 @@ def main():
 
     # 2. Clean previous builds
     print('[2/5] Cleaning previous build artifacts...')
-    if build_dir.exists():
-        shutil.rmtree(build_dir, ignore_errors=True)
-    if dist_dir.exists():
-        shutil.rmtree(dist_dir, ignore_errors=True)
+    def _safe_remove_dir(p):
+        if not p.exists():
+            return
+        import stat
+        for root, dirs, files in os.walk(p, topdown=False):
+            for f in files:
+                fp = os.path.join(root, f)
+                try:
+                    os.chmod(fp, stat.S_IWRITE)
+                    os.remove(fp)
+                except Exception:
+                    pass
+            for d in dirs:
+                dp = os.path.join(root, d)
+                try:
+                    os.chmod(dp, stat.S_IWRITE)
+                    os.rmdir(dp)
+                except Exception:
+                    pass
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            os.rmdir(p)
+        except Exception:
+            pass
+
+    _safe_remove_dir(build_dir)
+    _safe_remove_dir(dist_dir)
 
     # 3. Assemble PyInstaller command
     print('[3/5] Compiling CPU-only standalone package...')
@@ -69,17 +92,29 @@ def main():
         '--collect-data', 'matplotlib',
         '--paths', str(project_root),
         '--paths', str(project_root / 'self_energy'),
+        '--paths', str(project_root / 'self_energy' / 'solvers'),
         '--paths', str(project_root / 'susceptibility'),
-        '--paths', str(project_root / 'conductivity'),
         '--paths', str(gui_root / 'pyside6_studio'),
         '--hidden-import', 'self_energy',
         '--hidden-import', 'self_energy.parameters',
         '--hidden-import', 'self_energy.full_bz_solver',
         '--hidden-import', 'self_energy.sweep_core',
+        '--hidden-import', 'self_energy.solvers',
+        '--hidden-import', 'self_energy.solvers.cpu',
+        '--hidden-import', 'self_energy.solvers.cpu.one_loop',
+        '--hidden-import', 'self_energy.solvers.cpu.three_loop',
+        '--hidden-import', 'solvers',
+        '--hidden-import', 'solvers.cpu',
+        '--hidden-import', 'solvers.cpu.one_loop',
+        '--hidden-import', 'solvers.cpu.three_loop',
+        '--hidden-import', 'parameters',
         '--hidden-import', 'susceptibility',
         '--hidden-import', 'susceptibility.precompute_chi0',
         '--hidden-import', 'susceptibility.sweeper',
         '--hidden-import', 'susceptibility.phase_diagram',
+        '--hidden-import', 'susceptibility.solvers',
+        '--hidden-import', 'susceptibility.solvers.cpu',
+        '--hidden-import', 'susceptibility.solvers.cpu.ltm_solver',
         '--hidden-import', 'conductivity',
         '--hidden-import', 'pyside6_studio.core.icon_utils',
         '--hidden-import', 'pyside6_studio.backend.worker_cli',
@@ -118,6 +153,16 @@ def main():
         if internal_dir.exists():
             shutil.copytree(resources_dir, internal_dir / 'resources', dirs_exist_ok=True)
             shutil.copytree(resources_dir, internal_dir / 'pyside6_studio' / 'resources', dirs_exist_ok=True)
+            # Copy physics backend modules directly into _internal
+            print('      Copying physics backend modules (self_energy, solvers, susceptibility, conductivity)...')
+            ignore_pat = shutil.ignore_patterns('.venv', '.git', '.idea', '__pycache__', 'results', '*.pyc')
+            shutil.copytree(project_root / 'self_energy', internal_dir / 'self_energy', dirs_exist_ok=True, ignore=ignore_pat)
+            shutil.copytree(project_root / 'self_energy' / 'solvers', internal_dir / 'solvers', dirs_exist_ok=True, ignore=ignore_pat)
+            if (project_root / 'self_energy' / 'parameters.py').exists():
+                shutil.copy2(project_root / 'self_energy' / 'parameters.py', internal_dir / 'parameters.py')
+            shutil.copytree(project_root / 'susceptibility', internal_dir / 'susceptibility', dirs_exist_ok=True, ignore=ignore_pat)
+            shutil.copytree(project_root / 'conductivity', internal_dir / 'conductivity', dirs_exist_ok=True, ignore=ignore_pat)
+            shutil.copytree(gui_root / 'pyside6_studio', internal_dir / 'pyside6_studio', dirs_exist_ok=True, ignore=ignore_pat)
 
     # 5. Write README
     print('[5/5] Generating distribution README...')

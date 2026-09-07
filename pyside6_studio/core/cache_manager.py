@@ -16,6 +16,7 @@ Handles:
 """
 
 import os
+import sys
 import glob
 import shutil
 import numpy as np
@@ -23,9 +24,14 @@ from pathlib import Path
 from typing import Tuple, Dict, Any, Optional, List
 
 # Default GUI repository root
-STUDIO_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
-STUDIO_DIR = os.path.dirname(STUDIO_CORE_DIR)
-GUI_ROOT = os.path.dirname(STUDIO_DIR)
+if getattr(sys, 'frozen', False):
+    GUI_ROOT = os.path.dirname(sys.executable)
+    STUDIO_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+    STUDIO_DIR = os.path.dirname(STUDIO_CORE_DIR)
+else:
+    STUDIO_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+    STUDIO_DIR = os.path.dirname(STUDIO_CORE_DIR)
+    GUI_ROOT = os.path.dirname(STUDIO_DIR)
 DEFAULT_RESULTS_DIR = os.path.join(GUI_ROOT, "results")
 
 
@@ -371,24 +377,38 @@ def find_cached_chi0(
 
 
 # ==============================================================================
+def _parse_sweep_values(val_raw, default_vals: List[float]) -> List[float]:
+    """Safely extracts a list of float sweep values from list, tuple, or comma-separated string."""
+    if isinstance(val_raw, (list, tuple)):
+        return [float(x) for x in val_raw if str(x).strip()]
+    if isinstance(val_raw, str):
+        try:
+            vals = [float(x.strip()) for x in val_raw.split(",") if x.strip()]
+            if vals:
+                return vals
+        except Exception:
+            pass
+    return default_vals
+
+
+# ==============================================================================
 # UI LIVE STATUS INSPECTOR
 # ==============================================================================
 
 def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) -> dict:
     """
-    Inspects disk to determine the computation state for the active parameters:
-      - 'full': 100% computed, finished observable ready in data/.
-      - 'foundation': Reusable foundation (Base Sigma or chi_0) ready in cache/; compute will be fast.
-      - 'cold': Cold compute needed.
-    
+    Inspects disk to determine whether required physics foundations (Base Sigma or chi_0) are cached:
+      - 'cached': Required foundation cached in results/cache/ (Green).
+      - 'partial': Some J_perp points or one susceptibility channel cached (Amber).
+      - 'cold': Missing from cache; computation from scratch needed (Slate Grey).
+
     Returns:
       {
-         "state": "full" | "foundation" | "cold",
+         "state": "cached" | "partial" | "cold",
          "badge_text": str,
-         "badge_color": "#16a34a" | "#0891b2" | "#64748b",
+         "badge_color": "#16a34a" | "#d97706" | "#64748b",
          "details": str,
-         "foundation_file": Optional[str],
-         "data_file": Optional[str]
+         "foundation_file": Optional[str]
       }
     """
     results_dir, plots_dir, data_dir, cache_dir = normalize_results_dir(out_dir)
@@ -404,7 +424,7 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
 
     study_clean = str(study).lower()
 
-    # 1. ELECTRICAL CONDUCTIVITY SWEEP (Checked before generic 'sweep')
+    # 1. ELECTRICAL CONDUCTIVITY SWEEP
     if "cond" in study_clean or "conductivity" in study_clean or "sigma" in study_clean:
         cond_mode_raw = str(params.get("cond_sweep_mode", params.get("sweep_mode", "Kondo Coupling (J_K)")))
         is_jk_sweep = not ("interlayer" in cond_mode_raw.lower() or "j_perp" in cond_mode_raw.lower() or "j_⊥" in cond_mode_raw.lower())
@@ -416,98 +436,134 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
             )
             if base_file:
                 meta = inspect_cache_foundation(base_file)
-                ibz_tag = " (8-bit Groomed)" if meta.get("is_bitgroomed") else (" (1/8th IBZ)" if meta.get("is_ibz") else "")
+                fmt_desc = meta.get("format", "1/8th IBZ")
                 return {
-                    "state": "foundation",
-                    "badge_text": f"⚡ Base Σ Cached{ibz_tag} (Fast Kubo Integration)",
-                    "badge_color": "#0891b2",
-                    "details": f"Base self-energy ({os.path.basename(base_file)}) cached in results/cache/. Fast Kubo bubble integration across sweep points.",
-                    "foundation_file": base_file,
-                    "data_file": None
+                    "state": "cached",
+                    "badge_text": "Base Self-Energy (Σ) Cached",
+                    "badge_color": "#16a34a",
+                    "details": f"Base self-energy ({fmt_desc}) found in results/cache/. Fast Kubo bubble integration across J_K sweep points.",
+                    "foundation_file": base_file
                 }
 
             return {
                 "state": "cold",
-                "badge_text": "⚙️ Base Σ Missing: Convolutions Required",
+                "badge_text": "Base Self-Energy (Σ) Not Cached",
                 "badge_color": "#64748b",
                 "details": f"Base self-energy for J_⊥={fixed_jperp:.2f}, μ={mu:.2f}, N={N} not found in results/cache/. Convolutions will be computed once and cached before Kubo sweep.",
-                "foundation_file": None,
-                "data_file": None
+                "foundation_file": None
             }
         else:
-            return {
-                "state": "cold",
-                "badge_text": "⚙️ J_⊥ Sweep: Convolutions Per Point",
-                "badge_color": "#64748b",
-                "details": "J_⊥ sweep requires independent base self-energy computations for each J_⊥ value in results/cache/.",
-                "foundation_file": None,
-                "data_file": None
-            }
+            # J_perp sweep: check each J_perp point
+            sweep_raw = params.get("cond_sweep_vals", params.get("sweep_vals", [2.0, 4.0, 6.0, 8.0]))
+            jperp_vals = _parse_sweep_values(sweep_raw, [2.0, 4.0, 6.0, 8.0])
+            total_pts = len(jperp_vals)
+            cached_pts = []
+            missing_pts = []
+            for jp in jperp_vals:
+                bf = find_cached_sigma_base(
+                    cache_dir=cache_dir, fixed_jperp=jp,
+                    t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
+                )
+                if bf:
+                    cached_pts.append(jp)
+                else:
+                    missing_pts.append(jp)
+
+            if len(cached_pts) == total_pts and total_pts > 0:
+                return {
+                    "state": "cached",
+                    "badge_text": "Base Self-Energy (Σ) Cached",
+                    "badge_color": "#16a34a",
+                    "details": f"All {total_pts}/{total_pts} J_⊥ base self-energy points found in results/cache/. Convolutions skipped.",
+                    "foundation_file": None
+                }
+            elif len(cached_pts) > 0:
+                return {
+                    "state": "partial",
+                    "badge_text": f"Partial Self-Energy (Σ) Cached ({len(cached_pts)} of {total_pts} Points)",
+                    "badge_color": "#d97706",
+                    "details": f"Found {len(cached_pts)} of {total_pts} J_⊥ base points in results/cache/ (Cached: {cached_pts}). Missing points ({missing_pts}) will be computed.",
+                    "foundation_file": None
+                }
+            else:
+                return {
+                    "state": "cold",
+                    "badge_text": "Base Self-Energy (Σ) Not Cached",
+                    "badge_color": "#64748b",
+                    "details": f"No base self-energy found for requested J_⊥ points. All {total_pts} points will be computed and cached.",
+                    "foundation_file": None
+                }
 
     # 2. SPECTRAL SWEEP
-    elif "spectral" in study_clean or study_clean == "spectral_sweep" or ("sweep" in study_clean and "susc" not in study_clean):
+    elif ("spectral" in study_clean or study_clean == "spectral_sweep" or "sweep" in study_clean) and "function" not in study_clean and "susc" not in study_clean:
         sweep_mode_raw = str(params.get("sweep_mode", "Kondo Coupling (J_K)"))
-        is_jk_sweep = not ("Interlayer" in sweep_mode_raw or "J_perp" in sweep_mode_raw or "J_⊥" in sweep_mode_raw)
-        fixed_jperp = float(params.get("fixed_jperp", 6.0))
-        sweep_vals = params.get("jk_values", [3.0, 6.0, 9.0])
-        if isinstance(sweep_vals, str):
-            try:
-                sweep_vals = [float(x.strip()) for x in sweep_vals.split(",") if x.strip()]
-            except Exception:
-                sweep_vals = [3.0, 6.0, 9.0]
-
-        # Check full finished observable
-        obs_name = get_spectral_sweep_filename(
-            mode="JK" if is_jk_sweep else "Jperp",
-            sweep_vals=sweep_vals,
-            fixed_val=fixed_jperp,
-            t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, eta=eta
-        )
-        obs_path = os.path.join(data_dir, obs_name)
-        if os.path.isfile(obs_path) and os.path.getsize(obs_path) > 0:
-            return {
-                "state": "full",
-                "badge_text": "⚡ 100% Cached (Instant Load)",
-                "badge_color": "#16a34a",
-                "details": f"Observable dataset {obs_name} already available in data/",
-                "foundation_file": None,
-                "data_file": obs_path
-            }
-
-        # Check foundation (Base Sigma) for J_K sweep
+        is_jk_sweep = not ("interlayer" in sweep_mode_raw.lower() or "j_perp" in sweep_mode_raw.lower() or "j_⊥" in sweep_mode_raw.lower())
         if is_jk_sweep:
+            fixed_jperp = float(params.get("fixed_jperp", 6.0))
             base_file = find_cached_sigma_base(
                 cache_dir=cache_dir, fixed_jperp=fixed_jperp,
                 t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
             )
             if base_file:
                 meta = inspect_cache_foundation(base_file)
-                if meta.get("is_bitgroomed"):
-                    ibz_tag = " (8-bit Groomed)"
-                elif meta.get("is_ibz"):
-                    ibz_tag = " (1/8th IBZ)"
-                else:
-                    ibz_tag = ""
                 fmt_desc = meta.get("format", "Foundation")
                 return {
-                    "state": "foundation",
-                    "badge_text": f"⚡ Base Σ Cached{ibz_tag} (Fast J_K Scaling)",
-                    "badge_color": "#0891b2",
-                    "details": f"Base self-energy ({fmt_desc}) in results/cache/. Fast analytical J_K² scaling on Full BZ.",
-                    "foundation_file": base_file,
-                    "data_file": None
+                    "state": "cached",
+                    "badge_text": "Base Self-Energy (Σ) Cached",
+                    "badge_color": "#16a34a",
+                    "details": f"Base self-energy ({fmt_desc}) found in results/cache/. Fast analytical J_K² scaling on Full BZ.",
+                    "foundation_file": base_file
+                }
+            return {
+                "state": "cold",
+                "badge_text": "Base Self-Energy (Σ) Not Cached",
+                "badge_color": "#64748b",
+                "details": f"No base self-energy found in results/cache/ for J_⊥={fixed_jperp:.2f}, μ={mu:.2f}, N={N}. Full 1-loop & 3-loop convolutions will be computed.",
+                "foundation_file": None
+            }
+        else:
+            # J_perp sweep
+            sweep_raw = params.get("jk_values", [2.0, 4.0, 6.0, 8.0])
+            jperp_vals = _parse_sweep_values(sweep_raw, [2.0, 4.0, 6.0, 8.0])
+            total_pts = len(jperp_vals)
+            cached_pts = []
+            missing_pts = []
+            for jp in jperp_vals:
+                bf = find_cached_sigma_base(
+                    cache_dir=cache_dir, fixed_jperp=jp,
+                    t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
+                )
+                if bf:
+                    cached_pts.append(jp)
+                else:
+                    missing_pts.append(jp)
+
+            if len(cached_pts) == total_pts and total_pts > 0:
+                return {
+                    "state": "cached",
+                    "badge_text": "Base Self-Energy (Σ) Cached",
+                    "badge_color": "#16a34a",
+                    "details": f"All {total_pts}/{total_pts} J_⊥ base self-energy points found in results/cache/. Convolutions skipped.",
+                    "foundation_file": None
+                }
+            elif len(cached_pts) > 0:
+                return {
+                    "state": "partial",
+                    "badge_text": f"Partial Self-Energy (Σ) Cached ({len(cached_pts)} of {total_pts} Points)",
+                    "badge_color": "#d97706",
+                    "details": f"Found {len(cached_pts)} of {total_pts} J_⊥ points in results/cache/ (Cached: {cached_pts}). Missing points ({missing_pts}) will be computed.",
+                    "foundation_file": None
+                }
+            else:
+                return {
+                    "state": "cold",
+                    "badge_text": "Base Self-Energy (Σ) Not Cached",
+                    "badge_color": "#64748b",
+                    "details": f"No base self-energy found for requested J_⊥ points. All {total_pts} points will be computed and cached.",
+                    "foundation_file": None
                 }
 
-        return {
-            "state": "cold",
-            "badge_text": "⚙️ No Cache: Full Computation Needed",
-            "badge_color": "#64748b",
-            "details": "No cache found. Full 1-loop & 3-loop convolutions will be computed.",
-            "foundation_file": None,
-            "data_file": None
-        }
-
-    # 2. QUASIPARTICLE SPECTRAL FUNCTION
+    # 3. QUASIPARTICLE SPECTRAL FUNCTION
     elif "function" in study_clean or "spec" in study_clean:
         mom_str = params.get("spec_momentum", "Antinodal k_F (π, 0)")
         if "Antinodal" in mom_str: mult_x, mult_y = 1.0, 0.0
@@ -520,149 +576,186 @@ def check_cache_status(study: str, params: dict, out_dir: Optional[str] = None) 
         iy = int(round((mult_y * np.pi / (2.0 * np.pi)) * N)) % N
         fixed_coupling = float(params.get("spec_fixed_coupling", 6.0))
         spec_mode = params.get("spec_sweep_mode", "JK")
-        is_jk = "JK" in spec_mode or "Kondo" in spec_mode
+        is_jk = not ("interlayer" in str(spec_mode).lower() or "j_perp" in str(spec_mode).lower() or "j_⊥" in str(spec_mode).lower())
 
         if is_jk:
-            base_file = find_cached_sigma_base(
+            base_point = find_cached_sigma_base(
                 cache_dir=cache_dir, fixed_jperp=fixed_coupling,
                 t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta,
                 ext_P=(ix, iy)
             )
+            base_full = find_cached_sigma_base(
+                cache_dir=cache_dir, fixed_jperp=fixed_coupling,
+                t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
+            )
+            base_file = base_point or base_full
             if base_file:
                 return {
-                    "state": "foundation",
-                    "badge_text": "⚡ Point Σ Cached (Instant Scaling)",
-                    "badge_color": "#0891b2",
-                    "details": f"Single-point self-energy at P=({ix},{iy}) cached in results/cache/.",
-                    "foundation_file": base_file,
-                    "data_file": None
+                    "state": "cached",
+                    "badge_text": "Point Self-Energy (Σ) Cached",
+                    "badge_color": "#16a34a",
+                    "details": f"Self-energy foundation for k-point P=({ix},{iy}) found in results/cache/ ({os.path.basename(base_file)}). Instant scaling.",
+                    "foundation_file": base_file
                 }
 
-        return {
-            "state": "cold",
-            "badge_text": "⚙️ No Cache: Full Computation Needed",
-            "badge_color": "#64748b",
-            "details": f"No cache found. Computing single-point Dyson convolution at P=({ix},{iy}).",
-            "foundation_file": None,
-            "data_file": None
-        }
-
-    # 3. PHASE DIAGRAM
-    elif "phase" in study_clean or "diagram" in study_clean:
-        k_tag = "AFM" if K > 0 else "FM"
-        pd_name = f"phase_diagram_mu{mu:.2f}_{k_tag}.npz"
-        pd_path = os.path.join(data_dir, pd_name)
-        if os.path.isfile(pd_path) and os.path.getsize(pd_path) > 0:
             return {
-                "state": "full",
-                "badge_text": "⚡ 100% Cached (Instant Load)",
-                "badge_color": "#16a34a",
-                "details": f"Phase diagram dataset {pd_name} already in data/",
-                "foundation_file": None,
-                "data_file": pd_path
+                "state": "cold",
+                "badge_text": "Point Self-Energy (Σ) Not Cached",
+                "badge_color": "#64748b",
+                "details": f"No self-energy found for k-point P=({ix},{iy}) in results/cache/. Dyson convolution will be computed from scratch.",
+                "foundation_file": None
             }
+        else:
+            sweep_raw = params.get("spec_sweep_vals", [2.0, 4.0, 6.0, 8.0])
+            jperp_vals = _parse_sweep_values(sweep_raw, [2.0, 4.0, 6.0, 8.0])
+            total_pts = len(jperp_vals)
+            cached_pts = []
+            for jp in jperp_vals:
+                bf = find_cached_sigma_base(
+                    cache_dir=cache_dir, fixed_jperp=jp,
+                    t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta,
+                    ext_P=(ix, iy)
+                ) or find_cached_sigma_base(
+                    cache_dir=cache_dir, fixed_jperp=jp,
+                    t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
+                )
+                if bf:
+                    cached_pts.append(jp)
 
+            if len(cached_pts) == total_pts and total_pts > 0:
+                return {
+                    "state": "cached",
+                    "badge_text": "Point Self-Energy (Σ) Cached",
+                    "badge_color": "#16a34a",
+                    "details": f"All {total_pts}/{total_pts} J_⊥ points cached for k-point P=({ix},{iy}).",
+                    "foundation_file": None
+                }
+            elif len(cached_pts) > 0:
+                return {
+                    "state": "partial",
+                    "badge_text": f"Partial Self-Energy (Σ) Cached ({len(cached_pts)} of {total_pts} Points)",
+                    "badge_color": "#d97706",
+                    "details": f"Found {len(cached_pts)} of {total_pts} J_⊥ points for k-point P=({ix},{iy}).",
+                    "foundation_file": None
+                }
+            else:
+                return {
+                    "state": "cold",
+                    "badge_text": "Point Self-Energy (Σ) Not Cached",
+                    "badge_color": "#64748b",
+                    "details": f"No cached points found for k-point P=({ix},{iy}). Convolutions will be computed.",
+                    "foundation_file": None
+                }
+
+    # 4. PHASE DIAGRAM
+    elif "phase" in study_clean or "diagram" in study_clean:
         chi0_file = find_cached_chi0(cache_dir, data_dir, dynamic=False, N=N, mu=mu, t=t, t1=t1)
         if chi0_file:
             return {
-                "state": "foundation",
-                "badge_text": "⚡ Bare χ₀ Cached (Fast Bisection)",
-                "badge_color": "#0891b2",
-                "details": f"Bare static bubble found at {os.path.basename(chi0_file)}. Bisection only.",
-                "foundation_file": chi0_file,
-                "data_file": None
+                "state": "cached",
+                "badge_text": "Bare Susceptibility (χ₀) Cached",
+                "badge_color": "#16a34a",
+                "details": f"Static bare bubble χ₀(q) found in results/cache/ ({os.path.basename(chi0_file)}). Fast root bisection only.",
+                "foundation_file": chi0_file
             }
 
         return {
             "state": "cold",
-            "badge_text": "⚙️ No Cache: Full Computation Needed",
+            "badge_text": "Bare Susceptibility (χ₀) Not Cached",
             "badge_color": "#64748b",
-            "details": f"No cache found. Bare static bubble χ₀(q) will be computed on {N}×{N} grid, then cached.",
-            "foundation_file": None,
-            "data_file": None
+            "details": f"Bare static bubble χ₀(q) for μ={mu:.2f}, N={N} not found in results/cache/. Will be computed on {N}×{N} grid, then cached.",
+            "foundation_file": None
         }
 
-    # 4. SUSCEPTIBILITY
+    # 5. SUSCEPTIBILITY
     elif "susc" in study_clean or "rpa" in study_clean:
         run_static = bool(params.get("run_static", True))
         run_dynamic = bool(params.get("run_dynamic", True))
-        fixed_J = float(params.get("fixed_J", 6.0))
-        fixed_str = f"fixed_J_{fixed_J}"
-        fname_base = f"sweep_JK_{fixed_str}_mu_{mu:.2f}"
-        static_data = os.path.join(data_dir, f"{fname_base}_static.npz")
-        dynamic_data = os.path.join(data_dir, f"{fname_base}_dynamic.npz")
 
-        has_static = (not run_static) or (os.path.isfile(static_data) and os.path.getsize(static_data) > 0)
-        has_dynamic = (not run_dynamic) or (os.path.isfile(dynamic_data) and os.path.getsize(dynamic_data) > 0)
-
-        if has_static and has_dynamic:
+        if not run_static and not run_dynamic:
             return {
-                "state": "full",
-                "badge_text": "⚡ 100% Cached (Instant Load)",
-                "badge_color": "#16a34a",
-                "details": "Finished RPA observable datasets available in data/",
-                "foundation_file": None,
-                "data_file": static_data if os.path.isfile(static_data) else dynamic_data
+                "state": "cold",
+                "badge_text": "No Susceptibility Channel Selected",
+                "badge_color": "#64748b",
+                "details": "Both static and dynamic susceptibility options are unchecked. Select at least one channel.",
+                "foundation_file": None
             }
 
-        # Check foundations
         has_c_stat = find_cached_chi0(cache_dir, data_dir, dynamic=False, N=N, mu=mu, t=t, t1=t1) is not None
         has_c_dyn = find_cached_chi0(cache_dir, data_dir, dynamic=True, N=N, mu=mu, t=t, t1=t1, num_omega=num_omega, eta=eta) is not None
 
-        if (run_static and has_c_stat) or (run_dynamic and has_c_dyn):
+        if run_static and run_dynamic:
+            if has_c_stat and has_c_dyn:
+                return {
+                    "state": "cached",
+                    "badge_text": "Bare Susceptibility (χ₀) Cached",
+                    "badge_color": "#16a34a",
+                    "details": "Both static χ₀(q) and dynamic χ₀(q, ω) found in results/cache/. Fast RPA algebraic inversion.",
+                    "foundation_file": None
+                }
+            elif has_c_stat:
+                return {
+                    "state": "partial",
+                    "badge_text": "Partial χ₀ Cached (Static Only)",
+                    "badge_color": "#d97706",
+                    "details": "Static χ₀(q) is cached in results/cache/. Dynamic χ₀(q, ω) is missing and will be computed from scratch.",
+                    "foundation_file": None
+                }
+            elif has_c_dyn:
+                return {
+                    "state": "partial",
+                    "badge_text": "Partial χ₀ Cached (Dynamic Only)",
+                    "badge_color": "#d97706",
+                    "details": "Dynamic χ₀(q, ω) is cached in results/cache/. Static χ₀(q) is missing and will be computed from scratch.",
+                    "foundation_file": None
+                }
+            else:
+                return {
+                    "state": "cold",
+                    "badge_text": "Bare Susceptibility (χ₀) Not Cached",
+                    "badge_color": "#64748b",
+                    "details": "Neither static nor dynamic χ₀ found in results/cache/. Both bubble arrays will be computed.",
+                    "foundation_file": None
+                }
+        elif run_static:
+            if has_c_stat:
+                return {
+                    "state": "cached",
+                    "badge_text": "Bare Susceptibility (χ₀) Cached",
+                    "badge_color": "#16a34a",
+                    "details": "Static χ₀(q) bubble found in results/cache/. Fast RPA static sweep only.",
+                    "foundation_file": None
+                }
             return {
-                "state": "foundation",
-                "badge_text": "⚡ Bare χ₀ Cached (Fast RPA Sweep)",
-                "badge_color": "#0891b2",
-                "details": "Bare bubble foundation found in results/cache/. Fast RPA algebraic inversion only.",
-                "foundation_file": has_c_stat or has_c_dyn,
-                "data_file": None
+                "state": "cold",
+                "badge_text": "Bare Susceptibility (χ₀) Not Cached",
+                "badge_color": "#64748b",
+                "details": "Static χ₀(q) bubble not found in results/cache/. Will be computed before RPA static sweep.",
+                "foundation_file": None
             }
-
-        return {
-            "state": "cold",
-            "badge_text": "⚙️ No Cache: Full Computation Needed",
-            "badge_color": "#64748b",
-            "details": "No cache found. Bare bubble χ₀ array must be computed before RPA sweep.",
-            "foundation_file": None,
-            "data_file": None
-        }
-
-    # 5. ELECTRICAL CONDUCTIVITY SWEEP
-    elif "cond" in study_clean or "conductivity" in study_clean or "sigma" in study_clean:
-        fixed_jperp = float(params.get("fixed_jperp", 6.0))
-        base_file = find_cached_sigma_base(
-            cache_dir=cache_dir, fixed_jperp=fixed_jperp,
-            t=t, t1=t1, mu=mu, K=K, N=N, num_omega=num_omega, omega_max=omega_max, eta=eta
-        )
-        if base_file:
-            meta = inspect_cache_foundation(base_file)
-            ibz_tag = " (8-bit Groomed)" if meta.get("is_bitgroomed") else (" (1/8th IBZ)" if meta.get("is_ibz") else "")
+        else:  # run_dynamic only
+            if has_c_dyn:
+                return {
+                    "state": "cached",
+                    "badge_text": "Bare Susceptibility (χ₀) Cached",
+                    "badge_color": "#16a34a",
+                    "details": "Dynamic χ₀(q, ω) bubble found in results/cache/. Fast RPA dynamic sweep only.",
+                    "foundation_file": None
+                }
             return {
-                "state": "foundation",
-                "badge_text": f"⚡ Base Σ Cached{ibz_tag} (Fast Kubo Integration)",
-                "badge_color": "#0891b2",
-                "details": "Base self-energy cached in results/cache/. Fast Kubo bubble integration across sweep points.",
-                "foundation_file": base_file,
-                "data_file": None
+                "state": "cold",
+                "badge_text": "Bare Susceptibility (χ₀) Not Cached",
+                "badge_color": "#64748b",
+                "details": "Dynamic χ₀(q, ω) bubble not found in results/cache/. Will be computed before RPA dynamic sweep.",
+                "foundation_file": None
             }
-
-        return {
-            "state": "cold",
-            "badge_text": "⚙️ Base Σ Missing: Convolutions Required",
-            "badge_color": "#64748b",
-            "details": "Base self-energy not found. Convolutions will be computed once and cached before Kubo sweep.",
-            "foundation_file": None,
-            "data_file": None
-        }
 
     return {
         "state": "cold",
-        "badge_text": "⚙️ No Cache: Full Computation Needed",
+        "badge_text": "Base Self-Energy (Σ) Not Cached",
         "badge_color": "#64748b",
-        "details": "No cache found. Full computation required.",
-        "foundation_file": None,
-        "data_file": None
+        "details": "No cached data found in results/cache/. Convolutions will be computed from scratch.",
+        "foundation_file": None
     }
 
 
