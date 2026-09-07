@@ -44,6 +44,11 @@ from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
 from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget
 from pyside6_studio.core.metadata import parse_plot_metadata
 from pyside6_studio.widgets.cache_manager_dialog import CacheManagerDialog
+from pyside6_studio.widgets.study_forms.spectral import build_spectral_form
+from pyside6_studio.widgets.study_forms.self_energy import build_spectral_function_form
+from pyside6_studio.widgets.study_forms.phase_diagram import build_phase_diagram_form
+from pyside6_studio.widgets.study_forms.susceptibility import build_susceptibility_form
+from pyside6_studio.widgets.study_forms.conductivity import build_conductivity_form
 
 if getattr(sys, 'frozen', False):
     DEFAULT_RESULTS_DIR = os.path.join(os.path.dirname(sys.executable), "results")
@@ -582,216 +587,15 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.param_stack = DynamicStackedWidget()
         self.param_stack.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
-        # 2a. Spectral Sweep parameters
-        grp_se = ModernCard("Spectral Sweep (DOS / FS / Path) Parameters")
-        grp_se.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        gse = QVBoxLayout(grp_se)
-        gse.setSpacing(5)
-        gse.addWidget(QLabel("Sweep Target:"))
-        self.cb_se_mode = ModernComboBox()
-        self.cb_se_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
-        self.cb_se_mode.currentIndexChanged.connect(self._on_se_sweep_mode_change)
-        gse.addWidget(self.cb_se_mode)
+        self.param_stack.addWidget(build_spectral_form(self))
 
-        gse.addWidget(QLabel("Coupling Values Across Subplots (comma-separated):"))
-        self.edit_se_vals = QLineEdit("3.0, 6.0, 9.0")
-        gse.addWidget(self.edit_se_vals)
+        self.param_stack.addWidget(build_spectral_function_form(self))
 
-        h_se_row = QHBoxLayout()
-        self.lbl_se_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
-        self.lbl_se_fixed.setStyleSheet("font-weight: 600;")
-        h_se_row.addWidget(self.lbl_se_fixed)
-        h_se_row.addStretch()
+        self.param_stack.addWidget(build_phase_diagram_form(self))
 
-        self.spin_se_fixed = QDoubleSpinBox()
-        self.spin_se_fixed.setRange(0.0, 50.0)
-        self.spin_se_fixed.setValue(6.0)
-        self.spin_se_fixed.setSingleStep(0.5)
-        self.spin_se_fixed.setFixedWidth(100)
-        h_se_row.addWidget(self.spin_se_fixed)
-        gse.addLayout(h_se_row)
+        self.param_stack.addWidget(build_susceptibility_form(self))
 
-        self.lbl_se_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across columns")
-        self.lbl_se_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
-        self.lbl_se_fixed_desc.setWordWrap(True)
-        gse.addWidget(self.lbl_se_fixed_desc)
-        self.param_stack.addWidget(grp_se)
-
-        # 2b. Spectral Function A(k, omega) parameters
-        grp_spec = ModernCard("Quasiparticle Spectral Function A(k, ω) && Self-Energy")
-        grp_spec.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        gsp = QVBoxLayout(grp_spec)
-        gsp.setSpacing(5)
-
-        gsp.addWidget(QLabel("Sweep Target:"))
-        self.cb_spec_mode = ModernComboBox()
-        self.cb_spec_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
-        self.cb_spec_mode.currentIndexChanged.connect(self._on_spec_sweep_mode_change)
-        gsp.addWidget(self.cb_spec_mode)
-
-        gsp.addWidget(QLabel("Coupling Values (comma-separated):"))
-        self.edit_spec_vals = QLineEdit("3.0, 6.0, 9.0")
-        gsp.addWidget(self.edit_spec_vals)
-
-        h_spec_row = QHBoxLayout()
-        self.lbl_spec_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
-        self.lbl_spec_fixed.setStyleSheet("font-weight: 600;")
-        h_spec_row.addWidget(self.lbl_spec_fixed)
-        h_spec_row.addStretch()
-
-        self.spin_spec_fixed = QDoubleSpinBox()
-        self.spin_spec_fixed.setRange(0.0, 50.0)
-        self.spin_spec_fixed.setValue(6.0)
-        self.spin_spec_fixed.setSingleStep(0.5)
-        self.spin_spec_fixed.setFixedWidth(100)
-        h_spec_row.addWidget(self.spin_spec_fixed)
-        gsp.addLayout(h_spec_row)
-
-        self.lbl_spec_fixed_desc = QLabel("Constant value held fixed while sweeping coupling")
-        self.lbl_spec_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
-        self.lbl_spec_fixed_desc.setWordWrap(True)
-        gsp.addWidget(self.lbl_spec_fixed_desc)
-
-        gsp.addWidget(QLabel("Target Momentum (k):"))
-        self.cb_mom = ModernComboBox()
-        self.cb_mom.addItems([
-            "Antinodal k_F (π, 0)",
-            "Nodal k_F (π/2, π/2)",
-            "Zone Center Γ (0, 0)",
-            "Zone Corner M (π, π)",
-            "Custom (kx, ky)..."
-        ])
-        self.cb_mom.currentIndexChanged.connect(self._on_mom_choice_changed)
-        gsp.addWidget(self.cb_mom)
-
-        # Custom k container (only visible when "Custom (kx, ky)..." is selected)
-        self.box_custom_k = QWidget()
-        lay_ck = QVBoxLayout(self.box_custom_k)
-        lay_ck.setContentsMargins(0, 2, 0, 2)
-        lay_ck.addWidget(QLabel("Custom Momentum (kx, ky) in units of π:"))
-        self.edit_custom_k = QLineEdit("1.0, 0.0")
-        lay_ck.addWidget(self.edit_custom_k)
-        gsp.addWidget(self.box_custom_k)
-        self.box_custom_k.setVisible(False)
-
-        gsp.addWidget(QLabel("Observables Layout:"))
-        self.cb_layout = ModernComboBox()
-        self.cb_layout.addItems([
-            "Both (Re Σ, A, Im Σ) [3 Panels]",
-            "Self-Energy Only (Re Σ & Im Σ) [2 Panels]",
-            "Spectral Function Only A(k, ω) [1 Panel]"
-        ])
-        gsp.addWidget(self.cb_layout)
-        self.param_stack.addWidget(grp_spec)
-
-        # 2c. Phase Diagram parameters
-        grp_pd = ModernCard("Phase Boundary Bisection Search")
-        grp_pd.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        gpd = QVBoxLayout(grp_pd)
-        gpd.setSpacing(5)
-        h_min = QHBoxLayout(); h_min.addWidget(QLabel("J_K min:")); h_min.addStretch(); self.s_min = QDoubleSpinBox(); self.s_min.setValue(0.0); self.s_min.setFixedWidth(100); h_min.addWidget(self.s_min); gpd.addLayout(h_min)
-        h_max = QHBoxLayout(); h_max.addWidget(QLabel("J_K max:")); h_max.addStretch(); self.s_max = QDoubleSpinBox(); self.s_max.setValue(12.0); self.s_max.setFixedWidth(100); h_max.addWidget(self.s_max); gpd.addLayout(h_max)
-        h_pts = QHBoxLayout(); h_pts.addWidget(QLabel("Points:")); h_pts.addStretch(); self.s_pts = QSpinBox(); self.s_pts.setValue(200); self.s_pts.setFixedWidth(100); h_pts.addWidget(self.s_pts); gpd.addLayout(h_pts)
-        btn_pre = QPushButton("⚡ Precompute Bare χ₀ (Bubble)")
-        btn_pre.clicked.connect(self._on_precompute_bubble)
-        gpd.addWidget(btn_pre)
-        self.param_stack.addWidget(grp_pd)
-
-        # 2d. Susceptibility parameters
-        grp_susc = ModernCard("RPA Spin Susceptibility Sweep Parameters")
-        grp_susc.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        gsusc = QVBoxLayout(grp_susc)
-        gsusc.setSpacing(5)
-        self.chk_static = QCheckBox("Compute Static χ(q) (2D BZ Map)")
-        self.chk_static.setChecked(True)
-        gsusc.addWidget(self.chk_static)
-        self.chk_dynamic = QCheckBox("Compute Dynamic χ(q, ω) (Path)")
-        self.chk_dynamic.setChecked(True)
-        gsusc.addWidget(self.chk_dynamic)
-
-        gsusc.addWidget(QLabel("Sweep Target:"))
-        self.cb_susc_mode = ModernComboBox()
-        self.cb_susc_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
-        self.cb_susc_mode.currentIndexChanged.connect(self._on_susc_sweep_mode_change)
-        gsusc.addWidget(self.cb_susc_mode)
-
-        self.lbl_susc_vals = QLabel("Coupling Values Across Subplots (comma-separated):")
-        gsusc.addWidget(self.lbl_susc_vals)
-        self.edit_susc_vals = QLineEdit("3.0, 6.0, 9.0")
-        gsusc.addWidget(self.edit_susc_vals)
-
-        h_susc_row = QHBoxLayout()
-        self.lbl_susc_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
-        self.lbl_susc_fixed.setStyleSheet("font-weight: 600;")
-        h_susc_row.addWidget(self.lbl_susc_fixed)
-        h_susc_row.addStretch()
-
-        self.spin_susc_fixed = QDoubleSpinBox()
-        self.spin_susc_fixed.setRange(0.0, 50.0)
-        self.spin_susc_fixed.setValue(6.0)
-        self.spin_susc_fixed.setSingleStep(0.5)
-        self.spin_susc_fixed.setFixedWidth(100)
-        h_susc_row.addWidget(self.spin_susc_fixed)
-        gsusc.addLayout(h_susc_row)
-
-        self.lbl_susc_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across subplots")
-        self.lbl_susc_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
-        self.lbl_susc_fixed_desc.setWordWrap(True)
-        gsusc.addWidget(self.lbl_susc_fixed_desc)
-
-        self.param_stack.addWidget(grp_susc)
-
-        # 2e. Electrical / Optical Conductivity parameters
-        grp_cond = ModernCard("Electrical / Optical Conductivity Sweep σ(ω)")
-        grp_cond.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        gcond = QVBoxLayout(grp_cond)
-        gcond.setSpacing(5)
-
-        gcond.addWidget(QLabel("Sweep Target:"))
-        self.cb_cond_mode = ModernComboBox()
-        self.cb_cond_mode.addItems(["Kondo Coupling (J_K)", "Interlayer Coupling (J_⊥)"])
-        self.cb_cond_mode.currentIndexChanged.connect(self._on_cond_sweep_mode_change)
-        gcond.addWidget(self.cb_cond_mode)
-
-        gcond.addWidget(QLabel("Coupling Values Across Curves (comma-separated):"))
-        self.edit_cond_vals = QLineEdit("0.0, 3.0, 6.0, 9.0")
-        gcond.addWidget(self.edit_cond_vals)
-
-        h_cond_row = QHBoxLayout()
-        self.lbl_cond_fixed = QLabel("Fixed Interlayer Coupling (J_⊥):")
-        self.lbl_cond_fixed.setStyleSheet("font-weight: 600;")
-        h_cond_row.addWidget(self.lbl_cond_fixed)
-        h_cond_row.addStretch()
-
-        self.spin_cond_fixed = QDoubleSpinBox()
-        self.spin_cond_fixed.setRange(0.0, 50.0)
-        self.spin_cond_fixed.setValue(6.0)
-        self.spin_cond_fixed.setSingleStep(0.5)
-        self.spin_cond_fixed.setFixedWidth(100)
-        h_cond_row.addWidget(self.spin_cond_fixed)
-        gcond.addLayout(h_cond_row)
-
-        self.lbl_cond_fixed_desc = QLabel("Constant value of J_⊥ held fixed while sweeping J_K across curves")
-        self.lbl_cond_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
-        self.lbl_cond_fixed_desc.setWordWrap(True)
-        gcond.addWidget(self.lbl_cond_fixed_desc)
-
-        h_cond_cut = QHBoxLayout()
-        lbl_wactive = QLabel("Active Cutoff ω_max (eV):")
-        lbl_wactive.setToolTip("Restricts Kubo bubble integration to active energy window for 2x calculation speedup")
-        h_cond_cut.addWidget(lbl_wactive)
-        h_cond_cut.addStretch()
-
-        self.spin_cond_wactive = QDoubleSpinBox()
-        self.spin_cond_wactive.setRange(1.0, 100.0)
-        self.spin_cond_wactive.setValue(20.0)
-        self.spin_cond_wactive.setSingleStep(5.0)
-        self.spin_cond_wactive.setFixedWidth(100)
-        self.spin_cond_wactive.setToolTip("Active frequency cutoff window in eV (default: 20.0)")
-        h_cond_cut.addWidget(self.spin_cond_wactive)
-        gcond.addLayout(h_cond_cut)
-
-        self.param_stack.addWidget(grp_cond)
+        self.param_stack.addWidget(build_conductivity_form(self))
 
         lay_sim.addWidget(self.param_stack)
 
