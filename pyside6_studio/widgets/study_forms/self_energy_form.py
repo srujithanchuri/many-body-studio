@@ -1,7 +1,7 @@
 """Study parameter form builder."""
 
 def build_spectral_function_form(window):
-    from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QSpinBox, QPushButton, QCheckBox, QSizePolicy
+    from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QSpinBox, QPushButton, QCheckBox, QSizePolicy
     from .form_helpers import study_widget_types
     ModernCard, ModernComboBox = study_widget_types()
     self = window
