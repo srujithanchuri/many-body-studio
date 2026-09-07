@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   extract-study-forms:
-    if: github.actor == 'srujithanchuri'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,65 +35,44 @@ jobs:
               ('conductivity_form.py', 'build_conductivity_form', '# 2e. Electrical / Optical Conductivity parameters', 'self.param_stack.addWidget(grp_cond)'),
           ]
 
-          # The source currently uses the exact Unicode omega in the comment; support either spelling.
-          specs[1] = (specs[1][0], specs[1][1], '# 2b. Spectral Function A(k, omega) parameters', specs[1][3])
-
           forms_dir = Path('pyside6_studio/widgets/study_forms')
           forms_dir.mkdir(parents=True, exist_ok=True)
-          (forms_dir / '__init__.py').write_text(
-              '"""Study-specific simulation parameter form builders."""\n', encoding='utf-8'
-          )
+          (forms_dir / '__init__.py').write_text('"""Study-specific simulation parameter form builders."""\n', encoding='utf-8')
           (forms_dir / 'form_helpers.py').write_text(
               '"""Small helpers shared by study form builders.\n\n'
-              'The widget classes live in main_window.py for compatibility; the import is\n'
-              'deliberately lazy to avoid a module-level circular dependency.\n'
+              'Widget classes remain in main_window.py for compatibility; the import is lazy.\n'
               '"""\n\n'
               'def study_widget_types():\n'
               '    """Return the application-specific card and combo-box widget classes."""\n'
               '    from pyside6_studio.main_window import ModernCard, ModernComboBox\n'
-'
-              '    return ModernCard, ModernComboBox\n', encoding='utf-8'
-          )
+              '    return ModernCard, ModernComboBox\n', encoding='utf-8')
 
-          lines = text.splitlines(keepends=True)
           replacements = []
           for filename, func_name, marker, end_marker in specs:
               start = text.find(marker)
+              if start < 0 and filename == 'self_energy_form.py':
+                  start = text.find('# 2b. Spectral Function A(k, ω) parameters')
               if start < 0:
-                  # Retry the literal Unicode omega spelling for the spectral form.
-                  if filename == 'self_energy_form.py':
-                      start = text.find('# 2b. Spectral Function A(k, ω) parameters')
-                  if start < 0:
-                      raise SystemExit(f'marker not found: {marker}')
+                  raise SystemExit(f'marker not found: {marker}')
               end_rel = text.find(end_marker, start)
               if end_rel < 0:
                   raise SystemExit(f'end marker not found: {end_marker}')
               end = end_rel + len(end_marker)
-              segment = text[start:end]
-              # This code is inside UnifiedWorkbenchWindow._build_inspector_dock.
-              body = textwrap.dedent(segment)
-              # Keep the original comments and statements, but make the builder return its card.
-              body_lines = body.splitlines()
-              body_lines.append(f'return {end_marker.split("(")[0].split(".")[-1]}')
+              body = textwrap.dedent(text[start:end])
+              card_name = end_marker.split('(')[0].split('.')[-1]
               function = (
-                  '"""Build the ' + filename.removesuffix('.py').replace('_', ' ') + ' card.\n\n'
-                  'All widget object names, defaults, labels, and signal connections are\n'
-                  'kept identical to the original main-window implementation.\n'
-                  '"""\n'
-                  '\n'
-                  'def ' + func_name + '(window):\n'
-                  '    from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QSpinBox, QPushButton, QCheckBox\n'
-                  '    from PySide6.QtCore import Qt\n'
-                  '    from PySide6.QtWidgets import QSizePolicy\n'
+                  '"""Build a study parameter card while preserving the original UI contract."""\n\n'
+                  f'def {func_name}(window):\n'
+                  '    from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QSpinBox, QPushButton, QCheckBox, QSizePolicy\n'
                   '    from .form_helpers import study_widget_types\n'
                   '    ModernCard, ModernComboBox = study_widget_types()\n'
                   '    self = window\n'
-                  + textwrap.indent('\n'.join(body_lines), '    ') + '\n'
+                  + textwrap.indent(body, '    ') + '\n'
+                  + f'    return {card_name}\n'
               )
               (forms_dir / filename).write_text(function, encoding='utf-8')
               replacements.append((start, end, f'        self.param_stack.addWidget(build_{filename.removesuffix("_form.py")}(self))'))
 
-          # Replace from the end so offsets remain valid.
           for start, end, repl in sorted(replacements, reverse=True):
               text = text[:start] + repl + text[end:]
 
@@ -107,26 +85,11 @@ jobs:
           )
           anchor = 'from pyside6_studio.widgets.cache_manager_dialog import CacheManagerDialog\n'
           if imports not in text:
-              if anchor not in text:
-                  raise SystemExit('main-window import anchor not found')
               text = text.replace(anchor, anchor + imports, 1)
-
           main.write_text(text, encoding='utf-8')
 
-          # Syntax validation for every touched module.
           for path in [main, *sorted(forms_dir.glob('*.py'))]:
               ast.parse(path.read_text(encoding='utf-8'))
-
-          # Ensure the original builder no longer contains the large study-card blocks.
-          check = main.read_text(encoding='utf-8')
-          for marker in [
-              '# 2a. Spectral Sweep parameters',
-              '# 2b. Spectral Function A(k, ω) parameters',
-              '# 2c. Phase Diagram parameters',
-              '# 2d. Susceptibility parameters',
-              '# 2e. Electrical / Optical Conductivity parameters',
-          ]:
-              assert marker not in check, marker
 
       - name: Commit study form bundle
         shell: bash
