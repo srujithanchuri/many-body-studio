@@ -34,7 +34,7 @@ jobs:
               if next_name:
                   end = next(i for i in range(start + 1, len(lines)) if line_is_method(lines[i], next_name))
               else:
-                  end = next((i for i in range(start + 1, len(lines)) if line.startswith('    def ')), len(lines))
+                  end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith('    def ')), len(lines))
               return lines, start, end, ''.join(lines[start+1:end])
 
           # Interactive plot controls.
@@ -59,7 +59,6 @@ jobs:
           # Interactive plot theme.
           text = ip.read_text(encoding='utf-8')
           lines, s, e, body = extract_method(text, 'set_theme')
-          # set_theme is followed by @property in this controller.
           e = next(i for i in range(s + 1, len(lines)) if lines[i].startswith('    @property'))
           body = ''.join(lines[s+1:e])
           body_owner = re.sub(r'\bself\b', 'owner', body)
@@ -74,7 +73,6 @@ jobs:
           # Main-window theme presentation helpers.
           mw = root / 'pyside6_studio/main_window.py'
           text = mw.read_text(encoding='utf-8')
-          lines = text.splitlines(True)
           method_names = ['_update_bottom_dock_theme', '_update_statusbar_theme', 'toggle_theme']
           extracted = {}
           for name in method_names:
@@ -83,13 +81,15 @@ jobs:
               e = next((i for i in range(s + 1, len(lines_now)) if line_is_method(lines_now[i], 'set_perspective') or line_is_method(lines_now[i], '_update_bottom_dock_theme') or line_is_method(lines_now[i], '_update_statusbar_theme') or line_is_method(lines_now[i], 'toggle_theme') or line_is_method(lines_now[i], 'reset_active_zoom')), len(lines_now))
               extracted[name] = ''.join(lines_now[s+1:e])
 
-          # Build a focused helper module. Extracted methods retain their exact
-          # behavior, with only self -> owner and the public wrapper indirection changed.
           main_theme = '''"""Presentation theme helpers for the main Many-Body Studio window.\n\nThe controller retains stable method names; this module owns only dynamic\nstyling/palette propagation and contains no simulation or queue logic.\n"""\n\nfrom PySide6.QtWidgets import QApplication\nfrom PySide6.QtGui import QColor\n\nfrom pyside6_studio.theme import (\n    LIGHT_THEME_QSS, DARK_THEME_QSS, create_light_palette, create_dark_palette,\n)\n\n\n'''
           for name in method_names:
               fn_name = {'_update_bottom_dock_theme': 'update_bottom_dock_theme', '_update_statusbar_theme': 'update_statusbar_theme', 'toggle_theme': 'toggle_main_window_theme'}[name]
-              main_theme += f'def {fn_name}(owner, ' + ('is_dark: bool' if name != 'toggle_theme' else '') + '):\n'
-              main_theme += ''.join('    ' + line if line.strip() else line for line in extracted[name].splitlines(True))
+              if name == 'toggle_theme':
+                  main_theme += f'def {fn_name}(owner):\n'
+              else:
+                  main_theme += f'def {fn_name}(owner, is_dark: bool):\n'
+              body_owner = re.sub(r'\bself\b', 'owner', extracted[name])
+              main_theme += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
               main_theme += '\n\n'
           (root / 'pyside6_studio/main_window_theme.py').write_text(main_theme, encoding='utf-8')
 
