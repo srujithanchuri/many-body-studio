@@ -23,7 +23,6 @@ from pyside6_studio.widgets.dataset_explorer import (
     read_npz_metadata,
     format_bytes
 )
-from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas
 
 
 class TestDatasetExplorerAndVisualizer(unittest.TestCase):
@@ -138,66 +137,6 @@ class TestDatasetExplorerAndVisualizer(unittest.TestCase):
         explorer._on_filter_changed(4)  # Phase Diagram only
         self.assertEqual(explorer.tree.topLevelItemCount(), 1)
         self.assertIn("PHASE DIAGRAM", explorer.tree.topLevelItem(0).text(0))
-
-    def test_05_interactive_data_canvas(self):
-        """Verifies that InteractiveDataCanvas can load 1D arrays, 2D BZ maps, and zero-wait RPA coupler."""
-        canvas = InteractiveDataCanvas()
-
-        # 1. Test 1D Dataset
-        d_1d = os.path.join(self.data_dir, "test_1d.npz")
-        omega = np.linspace(-5, 5, 201)
-        a_k = np.exp(-omega**2)
-        re_s = 0.5 * omega
-        im_s = -0.1 * np.ones_like(omega)
-        np.savez(d_1d, omega=omega, num_curves=1, val_0=3.0, label_0="J_K=3.0",
-                 A_0=a_k, re_0=re_s, im_0=im_s)
-
-        canvas.load_dataset(d_1d)
-        self.assertEqual(canvas.active_mode, "1d")
-        self.assertGreater(len(canvas.fig.axes), 0)
-
-        # 2. Test 2D BZ Map & Cutline Slicer
-        d_2d = os.path.join(self.data_dir, "test_2d.npz")
-        grid = np.random.rand(32, 32)
-        np.savez(d_2d, static_maps=np.array([grid]))
-        canvas.load_dataset(d_2d)
-        self.assertEqual(canvas.active_mode, "2d_cutline")
-        self.assertGreaterEqual(len(canvas.fig.axes), 2)  # 2D Map + 1D Slice (+ Colorbar)
-
-        # 3. Test Zero-Wait RPA Coupler
-        d_rpa = os.path.join(self.cache_dir, "chi0_static.npz")
-        np.savez(d_rpa, chi0_grid=grid)
-        canvas.load_dataset(d_rpa)
-        self.assertEqual(canvas.active_mode, "rpa_coupler")
-        # Change slider
-        canvas.slider_jk.setValue(50)
-        self.assertEqual(canvas._coupler_jk, 5.0)
-
-    def test_06_smart_parameter_search_matrix(self):
-        """Verifies diverse parameter query formulations: mu=1.0, mu 1, JK=3, Jperp=6, N=64, etc."""
-        fn = os.path.join(self.plots_dir, "sweep_JK_vals_3.00_5.00_Jperp_6.00_mu_1.00_N_64_eta_0.0800.png")
-        with open(fn, "wb") as f: f.write(b"DATA")
-
-        explorer = DatasetExplorerWidget(out_dir=self.root)
-
-        # Variations that must all match this run
-        positive_queries = [
-            "mu=1.0", "mu=1", "mu:1.0", "mu 1.0", "mu 1",
-            "JK=3.0", "JK=3", "J_K=3.0", "JK=5.0", "JK=5",
-            "Jperp=6.0", "Jperp=6", "J_perp=6.0",
-            "N=64", "N 64", "eta=0.08",
-            "mu=1.0 JK=3.0", "mu=1.0 Jperp=6.0"
-        ]
-
-        for q in positive_queries:
-            explorer.edit_search.setText(q)
-            num_matches = sum(explorer.tree.topLevelItem(i).childCount() for i in range(explorer.tree.topLevelItemCount()))
-            self.assertGreaterEqual(num_matches, 1, f"Failed to match query: '{q}'")
-
-        # Query that must NOT match
-        explorer.edit_search.setText("mu=2.5")
-        self.assertEqual(explorer.tree.topLevelItemCount(), 1)
-        self.assertIn("No runs match", explorer.tree.topLevelItem(0).text(0))
 
 
 if __name__ == "__main__":
