@@ -18,7 +18,6 @@
 ### The Analytical Viewport Concept:
 1. **Simulation Studio**: An IDE-style scientific workbench dedicated to configuring Hamiltonians, launching GPU/CPU simulations, monitoring live progress, managing batch queues, and inspecting data in a hardware-accelerated interactive canvas.
 2. **Dual Integrated Viewports**: Instant toggling between CAD **Plot Viewer** (zoom/pan, coordinate readout, direct PNG export) and real-time 60 FPS **Interactive Plots**.
-   - *(Note: Standalone Figure Composer workspace plan was scrapped in favor of direct integrated viewports).*
 
 ---
 
@@ -75,7 +74,6 @@ Rather than confining analysis to flat raster pictures, the Studio architecture 
 | **Interactive Crosshairs & Peak Readout** | Binds mouse cursor hover events over the 1D & 2D spectral arrays ($A(\mathbf{k}, \omega)$, $\operatorname{Im}\Sigma(\mathbf{k}, \omega)$, $\chi(\mathbf{q}, \omega)$). Real-time interpolation displays the exact numerical frequency $\omega$, quasiparticle energy shifts $\operatorname{Re}\Sigma$, scattering rates, and peak heights directly in the viewport readout HUD. | Quantitative extraction of quasiparticle lifetimes and peak positions on the fly without manual raw data exports. |
 | **Interactive Brillouin Zone Cutlines** | An interactive vector line tool drawn across the 2D Static Susceptibility $\chi(\mathbf{q})$ Brillouin zone map. Slicing through the underlying 2D array dynamically extracts and plots the 1D intensity profile $\chi(q)$ along that custom trajectory in a companion sub-view in real time. | Real-time exploration of incommensurate nesting peaks and directional anisotropy along arbitrary BZ paths. |
 | **Instant Parametric Sliders (Zero-Wait Physics)** | Because the bare bubble $\chi_0(\mathbf{q}, \omega)$ is computationally intensive but completely independent of $J_K$ and $J_\perp$, it is cached in RAM/disk. Dragging real-time interactive sliders for $J_K$ evaluates the scalar RPA inversion formula $\chi = \chi_0 / [1 - \Gamma \chi_0]$ instantaneously at **60 FPS** without recomputing the bubble. | Zero-wait physical exploration of magnetic phase boundaries and peak divergences in real time. |
-| **Vector Export on Demand** | One-click export of native figure elements to vector formats (**`.pdf`**, **`.svg`**, **`.eps`**) with embedded LaTeX fonts and scalable vector line art directly from the underlying data. | Thesis-ready vector graphics that scale infinitely in LaTeX documents without bitmap rasterization artifacts. |
 
 ---
 
@@ -112,41 +110,40 @@ Rather than confining analysis to flat raster pictures, the Studio architecture 
 
 ---
 
-## 3. Directory Structure of the Studio
+## 3. Current Directory Structure of the Studio
 
+```text
+pyside6_studio/
+├── main.py
+├── main_window.py
+├── main_window_theme.py
+├── theme.py
+├── canvas.py
+├── core/
+│   ├── cache_manager.py
+│   ├── config.py
+│   ├── hardware.py
+│   ├── icon_utils.py
+│   └── metadata.py
+├── backend/
+│   ├── bridge.py
+│   ├── cuda_env.py
+│   ├── vram_cleaner.py
+│   └── worker_cli.py
+└── widgets/
+    ├── cache_manager_dialog.py
+    ├── dataset_explorer.py
+    ├── foundation_cache_dialog.py
+    ├── gallery_browser.py
+    ├── interactive_mode_nav.py
+    ├── interactive_plot_controls.py
+    ├── interactive_plot_theme.py
+    ├── interactive_plots.py
+    ├── job_queue.py
+    ├── plot_card_base.py
+    ├── interactive_modes/
+    └── study_forms/
 ```
-masters_thesis_gui/
-├── pyside6_studio/
-│   ├── __init__.py
-│   ├── main.py                  # Application entry point
-│   ├── main_window.py           # Flagship studio window (Simulation Studio with Dual Viewports)
-│   ├── theme.py                 # Slate-50 Light & Slate-900 Dark QSS
-│   ├── canvas.py                # High-performance CAD zoom/pan canvas (QGraphicsView)
-│   │
-│   ├── core/                    # Engine Configuration & Diagnostics
-│   │   ├── __init__.py
-│   │   ├── config.py            # Paths, resolution presets, defaults
-│   │   ├── hardware.py          # CUDA RTX 5060 detection & VRAM monitoring
-│   │   ├── cache_manager.py     # SHA-256 parameter hashing & .npz scanner
-│   │   └── job_queue.py         # Thread-safe FIFO batch queue manager
-│   │
-│   ├── backend/                 # Process Isolation & IPC Bridge
-│   │   ├── __init__.py
-│   │   ├── vram_cleaner.py      # Bulletproof CuPy memory pool flushing
-│   │   ├── workers.py           # Subprocess worker wrapper for self_energy & susceptibility
-│   │   └── bridge.py            # Qt supervisor thread & signal dispatcher
-│   │
-│   └── widgets/                 # Refined Interactive Controls
-│       ├── __init__.py
-│       ├── parameter_cards.py   # Context-adaptive parameter inspector cards
-│       ├── queue_table.py       # In-cell animated progress & status badges
-│       └── console_widget.py    # Syntax-highlighted live solver log output
-│
-├── STUDIO_ARCHITECTURE_PLAN.md  # This comprehensive architecture document
-└── run_studio.bat               # 1-Click launcher
-```
-
----
 
 ## 4. Implementation Phasing (Vertical Slice Approach)
 
@@ -177,7 +174,6 @@ masters_thesis_gui/
 1. **Interactive Crosshairs & Peak Readout**: Real-time HUD displaying numerical $\omega, A(\mathbf{k}, \omega), \operatorname{Re}\Sigma, \operatorname{Im}\Sigma, \chi(\mathbf{q}, \omega)$ on cursor hover.
 2. **Interactive Brillouin Zone Cutlines**: Free-hand or guided vector slice tool on 2D Static $\chi(\mathbf{q})$ maps extracting real-time 1D intensity cuts.
 3. **Instant Parametric Sliders (Zero-Wait Physics)**: GPU/RAM-cached bubble $\chi_0$ enables continuous 60 FPS slider manipulation of $J_K / J_\perp$ with instant RPA inversion.
-4. **Vector Export on Demand**: Direct export of figures to `.pdf`, `.svg`, and `.eps` with embedded LaTeX typography for thesis manuscripts.
 
 ---
 
@@ -191,3 +187,7 @@ masters_thesis_gui/
 | **Plot Auto-Load** | Complete calculation | Newly generated `.png` renders on `InteractivePlotCanvas` with CAD zoom enabled. |
 | **2-Stage Cancellation** | Click "Cancel" mid-FFT loop | Worker halts within 1s; CuPy pools freed; status bar updates to *"Job Cancelled"*. |
 | **GPU VRAM Cleanup** | Measure VRAM before and after run | Memory delta is 0 MB (all CuPy blocks returned to OS/pool). |
+
+## 7. Debloat Status
+
+The GUI refactor keeps the physics-facing numerical paths, cache formats, worker JSONL protocol, study IDs, queue semantics, and tested widget contracts intact. Presentation responsibilities have been split into focused modules for cache dialogs, metadata, study forms, queue presentation, gallery card mechanics, main-window theme propagation, and Interactive Plots controls/theme. The legacy Data Plotter and Figure Composer path has been removed.

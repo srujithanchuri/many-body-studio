@@ -11,7 +11,6 @@ A visual, 2–5 minute practical guide to navigating **Many-Body Studio Pro**. R
 ## Workspace Architecture Overview
 * **Global Workspace**:
   * `[ 🔬 Simulation Studio ]`: Full numerical physics modeling, batch queueing, and dataset generation.
-  * *(Note: Standalone Figure Composer workspace plan was scrapped in favor of direct integrated viewports).*
 * **Central Viewports** (Center Header Bar):
   * `[ 📊 Plot Viewer ]`: High-DPI zoomable plot canvas with split-view comparison and direct PNG export.
   * `[ ⚡ Interactive Plots ]`: Instant 60 FPS analytical scaling, k-probing, and real-time sliders.
@@ -113,7 +112,7 @@ Switch to this viewport by clicking **`[ 📊 Plot Viewer ]`** on the central he
 * **Panning**: Click and drag with the **Left Mouse Button** to pan across momentum or frequency ranges.
 * **🔍 Fit Window**: Click the toolbar button to reset zoom and center the figure.
 * **⚏ Split View (Compare)**: Compare two calculation runs side-by-side.
-* **Exporting Figures**: Right-click or use toolbar to copy to clipboard (300 DPI) or save as vector `.pdf`, `.svg`, or `.png`.
+* **Exporting Figures**: Right-click or use toolbar to copy to clipboard (300 DPI) or save or copy the currently displayed publication PNG.
 
 ---
 
@@ -136,3 +135,11 @@ All generated simulation files are organized deterministically under the `result
 * **`results/cache/`**: Pre-computed, bit-groomed 1/8th IBZ foundation arrays (`sigma_base_*.npz`, `chi0_static_*.npz`, `chi0_dynamic_*.npz`).
 * **`results/plots/`**: High-resolution publication-ready figures (`.png`, `.pdf`, `.svg`).
 * **`results/data/`**: Full raw numerical NumPy datasets (`.npz`) for custom analysis.
+
+## Current Architecture Notes
+
+The left Navigator switches between the **Plot Gallery Browser** and **Interactive Modes**. The Plot Gallery Browser works with rendered PNG publication figures under `results/plots/`; the Interactive Plots viewport works from numerical `.npz` datasets and reusable caches.
+
+The queue UI is implemented by `widgets/job_queue.py`, while process execution and cancellation remain owned by `CalculationBridge` and the main-window orchestration. Study parameter forms are separated under `widgets/study_forms/`.
+
+The legacy Data Plotter/Figure Composer path has been removed. Generated `docs/HOW_TO_USE.html` is a derived artifact and is intentionally not updated by the debloat pass.

@@ -243,6 +243,24 @@ def update_bottom_dock_theme(owner, is_dark: bool):
                     btn.setStyleSheet(btn_style)
 
 
+def update_console_theme(owner, is_dark: bool):
+    """Apply the live console presentation without embedding QSS in the controller."""
+    if not hasattr(owner, "txt_console"):
+        return
+    owner.txt_console.setStyleSheet("""
+        QTextEdit {
+            background-color: #090d16;
+            color: #f8fafc;
+            font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            border: 1px solid #1e293b;
+            border-radius: 5px;
+            padding: 8px;
+        }
+    """)
+
+
 def update_statusbar_theme(owner, is_dark: bool):
             sb = owner.statusBar()
             if is_dark:

@@ -13,7 +13,6 @@ Modern, high-performance scientific desktop workbench for strongly correlated qu
 - **Integrated Dual Viewports & Plot Gallery**:
   - **Dual Viewports**: Switch instantaneously between CAD **Plot Viewer** (with pan/zoom, coordinate probing, and direct PNG export) and real-time **Interactive Plots**.
   - **Visual Gallery Browser**: Integrated in the left Navigator dock with grid and compact list views, metadata badges, parameter search, and instant file-system synchronization.
-  - *(Note: Standalone Figure Composer workspace has been scrapped in favor of direct integrated viewports).*
 
 ### 2. Full 6-Mode Modular Interactive Plots (Live Analytical Studio)
 - **Spectral Function $[A(\mathbf{k}, \omega)]$**:
@@ -73,3 +72,20 @@ Run the complete 40-test suite across Tiers 1–4:
 $env:QT_QPA_PLATFORM="offscreen"
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
 ```
+
+---
+
+## Current Code Organization
+
+The GUI is organized around a small application shell plus dedicated presentation modules:
+
+- `pyside6_studio/main_window.py` — application orchestration, study selection, bridge wiring, and viewport synchronization.
+- `pyside6_studio/main_window_theme.py` — main-window palette/theme propagation.
+- `pyside6_studio/core/metadata.py` — shared plot/dataset filename metadata parsing.
+- `pyside6_studio/widgets/study_forms/` — study-specific parameter form construction.
+- `pyside6_studio/widgets/job_queue.py` — queue presentation and row/status controls; execution remains in the main window and `CalculationBridge`.
+- `pyside6_studio/widgets/interactive_plot_controls.py` and `interactive_plot_theme.py` — Interactive Plots presentation helpers.
+- `pyside6_studio/widgets/interactive_modes/` — six analytical strategies; numerical kernels and physics behavior remain unchanged by the GUI debloat.
+- `pyside6_studio/widgets/gallery_browser.py` and `plot_card_base.py` — Plot Gallery Browser and shared card interaction mechanics.
+
+The obsolete `data_plotter.py`, `InteractiveDataCanvas`, `VectorExportDialog`, and standalone Figure Composer workspace are no longer part of the active GUI.

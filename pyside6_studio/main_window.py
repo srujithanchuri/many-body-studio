@@ -7,7 +7,6 @@ Features Unified Simulation Studio with Dual Analytical Viewports:
 2. [ ⚡ Interactive Plots ]:
    - Real-time 60 FPS Brillouin zone probe, Fermi surface slicing, and dispersion.
    - Dynamic parameter tuning with instant foundation caching.
-(Note: Legacy standalone Figure Composer workspace was scrapped in favor of direct analytical viewports).
 """
 
 import sys
@@ -44,7 +43,10 @@ from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget
 from pyside6_studio.widgets.job_queue import JobQueueWidget
 from pyside6_studio.core.metadata import parse_plot_metadata
 from pyside6_studio.widgets.cache_manager_dialog import CacheManagerDialog
-from pyside6_studio.main_window_theme import update_bottom_dock_theme, update_statusbar_theme, toggle_main_window_theme
+from pyside6_studio.main_window_theme import (
+    update_bottom_dock_theme, update_statusbar_theme, update_console_theme,
+    toggle_main_window_theme,
+)
 from pyside6_studio.widgets.study_forms.spectral_form import build_spectral_form
 from pyside6_studio.widgets.study_forms.self_energy_form import build_spectral_function_form
 from pyside6_studio.widgets.study_forms.phase_diagram_form import build_phase_diagram_form
@@ -1138,6 +1140,9 @@ class UnifiedWorkbenchWindow(QMainWindow):
     def _update_statusbar_theme(self, is_dark: bool):
         update_statusbar_theme(self, is_dark)
 
+    def _update_console_theme(self, is_dark: bool):
+        update_console_theme(self, is_dark)
+
     def _build_bottom_drawer_dock(self):
         self.dock_bottom = QDockWidget("⚡ Execution Center", self)
         self.dock_bottom.setAllowedAreas(Qt.BottomDockWidgetArea)
@@ -1208,18 +1213,7 @@ class UnifiedWorkbenchWindow(QMainWindow):
         self.txt_console = QTextEdit()
         self.txt_console.setReadOnly(True)
         self.txt_console.setMinimumHeight(60)
-        self.txt_console.setStyleSheet("""
-            QTextEdit {
-                background-color: #090d16;
-                color: #f8fafc;
-                font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
-                font-size: 11px;
-                line-height: 1.4;
-                border: 1px solid #1e293b;
-                border-radius: 5px;
-                padding: 8px;
-            }
-        """)
+        self._update_console_theme(self.is_dark)
         self.txt_console.append("<span style='color: #38bdf8; font-family: Consolas, monospace; font-weight: bold;'>Windows PowerShell [Studio Calculation Engine]</span>")
         hw = get_hardware_info()
         hw_label = hw["name"] if hw.get("is_gpu") else "Multi-Core CPU"
@@ -1280,8 +1274,6 @@ class UnifiedWorkbenchWindow(QMainWindow):
     # =========================================================================
     def set_perspective(self, mode="simulation"):
         """Ensures Simulation Studio active state.
-        (Note: Standalone Figure Composer workspace has been scrapped in favor of
-        integrated dual analytical viewports: Plot Viewer & Interactive Plots).
         """
         self.current_perspective = "simulation"
         self.action_run.setVisible(True)

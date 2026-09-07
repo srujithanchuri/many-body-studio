@@ -23,7 +23,6 @@
 ## 2. Complete File & Module Map
 
 ### 2.1 Root Entry Points & Launchers
-- [`run_studio.py`](run_studio.py) / [`run_studio.bat`](run_studio.bat): Windows entry point launchers. Forces line-buffered UTF-8 console (`PYTHONIOENCODING=utf-8`) to prevent `cp1252` encoding crashes on Greek symbols ($\Sigma$, $\chi$, $\omega$, $\mu$).
 - [`build_onedir_cpu.bat`](build_onedir_cpu.bat): One-click Windows batch builder for generating standalone CPU-only portable distribution folders.
 - [`AGENTS.md`](AGENTS.md): This file. Authoritative agent instructions automatically injected into agent system prompt.
 - [`README.md`](README.md): High-level overview of Beta v1 capabilities, 6 modular interactive modes, and caching architecture.
@@ -37,7 +36,7 @@
   - Hosts 5 distinct calculation studies (`STUDY_SE`, `STUDY_SPEC`, `STUDY_PD`, `STUDY_SUSC`, `STUDY_COND`).
   - Dynamically probes GPU/CPU hardware via `get_hardware_info()`.
   - Coordinates toolbar actions, traffic-light button synchronization, and `CalculationBridge` signal routing.
-  - Implements `CacheManagerDialog`, `ModernCard`, `ModernComboBox`, and `DynamicStackedWidget`.
+  - Uses extracted `CacheManagerDialog`, study-form builders, `JobQueueWidget`, and theme helpers while retaining the controller/orchestration contract.
 - [`pyside6_studio/theme.py`](pyside6_studio/theme.py): Centralized Fluent / Slate QSS stylesheet system. Contains `LIGHT_THEME_QSS`, `DARK_THEME_QSS`, and palette factories. Defines explicit `#ObjectName` selectors and widget rules.
 - [`pyside6_studio/canvas.py`](pyside6_studio/canvas.py): High-DPI interactive `QGraphicsView` canvas (`InteractivePlotCanvas`). Supports smooth subpixel zoom/pan, crosshair coordinate inspection, and side-by-side split comparison views.
 
@@ -87,7 +86,6 @@
 - [`pyside6_studio/widgets/compute_cache_dialog.py`](pyside6_studio/widgets/compute_cache_dialog.py) / [`foundation_cache_dialog.py`](pyside6_studio/widgets/foundation_cache_dialog.py): In-situ dialog spawned from `▶ Compute Cache` button in Interactive Plots.
 - [`pyside6_studio/widgets/gallery_browser.py`](pyside6_studio/widgets/gallery_browser.py): Left dock visual gallery browser (`PlotGalleryWidget`). Dual display modes (Cards vs Compact List) with search/filter.
 - [`pyside6_studio/widgets/dataset_explorer.py`](pyside6_studio/widgets/dataset_explorer.py): Left dock dataset inspector (`DatasetExplorerWidget`). Scans `results/data/`, displays metadata cards, and provides quick actions.
-- [`pyside6_studio/widgets/data_plotter.py`](pyside6_studio/widgets/data_plotter.py): Curve plotter and slice visualizer dialog (`VectorExportDialog`, `InteractiveDataCanvas`).
 
 ### 2.6 Physics Backend Packages (`masters_thesis/`)
 - **`self_energy`**:
@@ -110,6 +108,18 @@
 - [`tools/build_onedir_cpu.py`](tools/build_onedir_cpu.py): PyInstaller automation script generating a self-contained, CPU-only portable distribution in `dist/ManyBodyStudio/` (~350 MB).
 
 ---
+
+
+## Current Refactor Layout
+
+- `core/metadata.py` owns shared filename metadata parsing for Gallery and Dataset Explorer.
+- `widgets/study_forms/` owns study-specific inspector construction.
+- `widgets/job_queue.py` owns queue presentation; execution remains in `UnifiedWorkbenchWindow` and `CalculationBridge`.
+- `main_window_theme.py` owns main-window dynamic theme propagation.
+- `widgets/interactive_plot_controls.py` and `interactive_plot_theme.py` own Interactive Plots presentation helpers.
+- `widgets/plot_card_base.py` owns shared Plot Gallery card interaction mechanics.
+- `widgets/interactive_modes/` remains the numerical strategy layer; do not rewrite its physics kernels during UI debloating.
+- The legacy Data Plotter / Figure Composer path has been removed.
 
 ## 3. Critical Invariants & Fragile Rules (DO NOT BREAK)
 
