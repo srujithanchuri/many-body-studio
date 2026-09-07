@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from pyside6_studio.core.config import DEFAULT_RESULTS_DIR
 from pyside6_studio.core.cache_manager import normalize_results_dir
+from pyside6_studio.core.metadata import parse_filename_parameters
 
 
 def format_bytes(size: int) -> str:
@@ -30,75 +31,6 @@ def format_bytes(size: int) -> str:
         return f"{size / (1024 * 1024):.2f} MB"
 
 
-def parse_filename_parameters(filename: str) -> dict:
-    """Extracts physical parameters from standard filename conventions as fallback."""
-    params = {}
-    base = os.path.splitext(os.path.basename(filename))[0]
-
-    mu_m = re.search(r"mu[_=]?([0-9]+(?:\.[0-9]+)?)", base, re.IGNORECASE)
-    if mu_m:
-        try: params["mu"] = float(mu_m.group(1))
-        except ValueError: pass
-
-    t_m = re.search(r"(?:^|[^0-9a-zA-Z])t[_=]?([0-9]+(?:\.[0-9]+)?)", base)
-    if t_m:
-        try: params["t"] = float(t_m.group(1))
-        except ValueError: pass
-
-    t1_m = re.search(r"t1[_=]?([0-9]+(?:\.[0-9]+)?)", base, re.IGNORECASE)
-    if t1_m:
-        try: params["t1"] = float(t1_m.group(1))
-        except ValueError: pass
-
-    k_m = re.search(r"(?:^|[^0-9a-zA-Z])K[_=]?([0-9]+(?:\.[0-9]+)?)", base)
-    if k_m:
-        try: params["K"] = float(k_m.group(1))
-        except ValueError: pass
-
-    n_m = re.search(r"(?:^|[^0-9a-zA-Z])N[_=]?(\d+)", base)
-    if n_m:
-        try: params["N"] = int(n_m.group(1))
-        except ValueError: pass
-
-    nw_m = re.search(r"(?:Nw|num_omega|w)[_=]?(\d+)", base, re.IGNORECASE)
-    if nw_m:
-        try: params["num_omega"] = int(nw_m.group(1))
-        except ValueError: pass
-
-    eta_m = re.search(r"eta[_=]?([0-9]+(?:\.[0-9]+)?)", base, re.IGNORECASE)
-    if eta_m:
-        try: params["eta"] = float(eta_m.group(1))
-        except ValueError: pass
-
-    jp_m = re.search(r"(?:J_perp|Jperp|fixed_J)[_=]?([0-9]+(?:\.[0-9]+)?)", base, re.IGNORECASE)
-    if jp_m:
-        try:
-            val = float(jp_m.group(1))
-            params["fixed_jperp"] = val
-            params["jperp"] = val
-        except ValueError: pass
-
-    # Multi-value or single JK
-    jk_vals_m = re.search(r"(?:J_K|JK)_vals_([0-9._]+)", base, re.IGNORECASE)
-    if jk_vals_m:
-        raw = jk_vals_m.group(1).split('_Jperp')[0]
-        vals = []
-        for v in raw.split('_'):
-            try: vals.append(float(v))
-            except ValueError: pass
-        if vals:
-            params["jk"] = vals
-            params["fixed_jk"] = vals[0]
-    else:
-        jk_m = re.search(r"(?:J_K|JK|fixed_JK)[_=]?([0-9]+(?:\.[0-9]+)?)", base, re.IGNORECASE)
-        if jk_m:
-            try:
-                val = float(jk_m.group(1))
-                params["fixed_jk"] = val
-                params["jk"] = [val]
-            except ValueError: pass
-
-    return params
 
 
 def read_npz_metadata(npz_path: str) -> dict:
