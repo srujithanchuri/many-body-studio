@@ -31,8 +31,6 @@ def format_bytes(size: int) -> str:
         return f"{size / (1024 * 1024):.2f} MB"
 
 
-
-
 def read_npz_metadata(npz_path: str) -> dict:
     """Quickly extracts model parameters and array summary from a .npz file."""
     meta = parse_filename_parameters(npz_path)

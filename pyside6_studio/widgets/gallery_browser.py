@@ -12,7 +12,6 @@ import os
 import re
 import glob
 import time
-import datetime
 from typing import Optional, Dict, List, Tuple
 
 from PySide6.QtCore import Qt, Signal, QTimer, QSize, QThread, QObject
@@ -26,12 +25,13 @@ from PySide6.QtWidgets import (
 from pyside6_studio.core.config import DEFAULT_RESULTS_DIR
 from pyside6_studio.core.cache_manager import normalize_results_dir
 from pyside6_studio.core.metadata import parse_plot_metadata, parse_filename_parameters
-from pyside6_studio.widgets.dataset_explorer import parse_filename_parameters, SmartSearchMatcher
+from pyside6_studio.widgets.dataset_explorer import SmartSearchMatcher
+from pyside6_studio.widgets.plot_card_base import PlotCardInteractionMixin, card_timestamp
 
 
 
 
-class ThumbnailCard(QFrame):
+class ThumbnailCard(PlotCardInteractionMixin, QFrame):
     """Visual card displaying a plot thumbnail, physical observable title, and metadata badges."""
     sig_selected = Signal(str)
     sig_view_fullscreen = Signal(str)
@@ -50,12 +50,7 @@ class ThumbnailCard(QFrame):
 
         self.title, self.params_str, self.cat_tag, self.obs_type, self.fname = parse_plot_metadata(self.plot_path)
 
-        # Formatted timestamp
-        try:
-            mtime = os.path.getmtime(self.plot_path)
-            self.time_str = datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")
-        except Exception:
-            self.time_str = ""
+        self.time_str = card_timestamp(self.plot_path)
 
         self._build_ui()
         self.update_style()
@@ -186,30 +181,9 @@ class ThumbnailCard(QFrame):
             if hasattr(self, "lbl_cat"):
                 self.lbl_cat.setStyleSheet("font-size: 9px; color: #64748b;")
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.sig_selected.emit(self.plot_path)
-        super().mousePressEvent(event)
-
-    def contextMenuEvent(self, event):
-        menu = QMenu(self)
-        a_view = menu.addAction("👁️ View Fullscreen")
-        a_copy = menu.addAction("📋 Copy Image to Clipboard")
-        menu.addSeparator()
-        a_reveal = menu.addAction("📂 Reveal in File Explorer")
-
-        chosen = menu.exec(event.globalPos())
-        if chosen == a_view:
-            self.sig_view_fullscreen.emit(self.plot_path)
-        elif chosen == a_copy:
-            pix = QPixmap(self.plot_path)
-            if not pix.isNull():
-                QApplication.clipboard().setPixmap(pix)
-        elif chosen == a_reveal:
-            os.system(f'explorer /select,"{self.plot_path}"')
 
 
-class CompactRowCard(QFrame):
+class CompactRowCard(PlotCardInteractionMixin, QFrame):
     """Compact high-density row item (~42px) for scanning multiple plots without scrolling."""
     sig_selected = Signal(str)
     sig_view_fullscreen = Signal(str)
@@ -228,12 +202,7 @@ class CompactRowCard(QFrame):
 
         self.title, self.params_str, self.cat_tag, self.obs_type, self.fname = parse_plot_metadata(self.plot_path)
 
-        # Formatted timestamp
-        try:
-            mtime = os.path.getmtime(self.plot_path)
-            self.time_str = datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")
-        except Exception:
-            self.time_str = ""
+        self.time_str = card_timestamp(self.plot_path)
 
         self._build_ui()
         self.update_style()
@@ -362,27 +331,6 @@ class CompactRowCard(QFrame):
                 if self.lbl_time:
                     self.lbl_time.setStyleSheet("font-size: 9px; color: #94a3b8; font-weight: 500;")
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.sig_selected.emit(self.plot_path)
-        super().mousePressEvent(event)
-
-    def contextMenuEvent(self, event):
-        menu = QMenu(self)
-        a_view = menu.addAction("👁️ View Fullscreen")
-        a_copy = menu.addAction("📋 Copy Image to Clipboard")
-        menu.addSeparator()
-        a_reveal = menu.addAction("📂 Reveal in File Explorer")
-
-        chosen = menu.exec(event.globalPos())
-        if chosen == a_view:
-            self.sig_view_fullscreen.emit(self.plot_path)
-        elif chosen == a_copy:
-            pix = QPixmap(self.plot_path)
-            if not pix.isNull():
-                QApplication.clipboard().setPixmap(pix)
-        elif chosen == a_reveal:
-            os.system(f'explorer /select,"{self.plot_path}"')
 
 
 class PlotGalleryWidget(QWidget):
