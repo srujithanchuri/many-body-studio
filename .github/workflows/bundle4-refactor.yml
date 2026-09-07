@@ -1,0 +1,125 @@
+name: Bundle 4 Refactor
+
+on:
+  push:
+    paths:
+      - .bundle4-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.ref == 'refs/heads/experiment-debloat'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment-debloat
+          fetch-depth: 1
+      - name: Extract gallery card and vector export helpers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # Gallery: move duplicated card interaction/timestamp mechanics to a small mixin.
+          gallery = root / 'pyside6_studio/widgets/gallery_browser.py'
+          text = gallery.read_text(encoding='utf-8')
+          text = text.replace(
+              'from pyside6_studio.widgets.dataset_explorer import parse_filename_parameters, SmartSearchMatcher',
+              'from pyside6_studio.widgets.dataset_explorer import SmartSearchMatcher\nfrom pyside6_studio.widgets.plot_card_base import PlotCardInteractionMixin, card_timestamp'
+          )
+          text = text.replace('class ThumbnailCard(QFrame):', 'class ThumbnailCard(PlotCardInteractionMixin, QFrame):')
+          text = text.replace('class CompactRowCard(QFrame):', 'class CompactRowCard(PlotCardInteractionMixin, QFrame):')
+          timestamp_block = re.compile(
+              r'\n        # Formatted timestamp\n        try:\n'
+              r'            mtime = os\.path\.getmtime\(self\.plot_path\)\n'
+              r'            self\.time_str = datetime\.datetime\.fromtimestamp\(mtime\)\.strftime\("%b %d, %H:%M"\)\n'
+              r'        except Exception:\n'
+              r'            self\.time_str = ""\n'
+          )
+          text, n = timestamp_block.subn('\n        self.time_str = card_timestamp(self.plot_path)\n', text)
+          if n != 2:
+              raise SystemExit(f'expected 2 timestamp blocks, found {n}')
+          interaction_block = re.compile(
+              r'\n    def mousePressEvent\(self, event\):\n'
+              r'        if event\.button\(\) == Qt\.LeftButton:\n'
+              r'            self\.sig_selected\.emit\(self\.plot_path\)\n'
+              r'        super\(\)\.mousePressEvent\(event\)\n\n'
+              r'    def contextMenuEvent\(self, event\):\n'
+              r'        menu = QMenu\(self\)\n'
+              r'        a_view = menu\.addAction\("👁️ View Fullscreen"\)\n'
+              r'        a_copy = menu\.addAction\("📋 Copy Image to Clipboard"\)\n'
+              r'        menu\.addSeparator\(\)\n'
+              r'        a_reveal = menu\.addAction\("📂 Reveal in File Explorer"\)\n\n'
+              r'        chosen = menu\.exec\(event\.globalPos\(\)\)\n'
+              r'        if chosen == a_view:\n'
+              r'            self\.sig_view_fullscreen\.emit\(self\.plot_path\)\n'
+              r'        elif chosen == a_copy:\n'
+              r'            pix = QPixmap\(self\.plot_path\)\n'
+              r'            if not pix\.isNull\(\):\n'
+              r'                QApplication\.clipboard\(\)\.setPixmap\(pix\)\n'
+              r'        elif chosen == a_reveal:\n'
+              r'            os\.system\(f'explorer /select,"\{self\.plot_path\}"'\)\n'
+          )
+          text, n = interaction_block.subn('', text)
+          if n != 2:
+              raise SystemExit(f'expected 2 interaction blocks, found {n}')
+          # Remove the now-unused duplicate datetime import and parser import.
+          text = text.replace('import datetime\n', '')
+          text = text.replace('from PySide6.QtGui import QPixmap, QImage, QColor, QFont, QIcon, QPainter, QCursor',
+                              'from PySide6.QtGui import QPixmap, QImage, QColor, QFont, QIcon, QPainter, QCursor')
+          gallery.write_text(text, encoding='utf-8')
+
+          card_base = root / 'pyside6_studio/widgets/plot_card_base.py'
+          card_base.write_text('''"""Shared mechanics for Plot Gallery cards.\n\nKeeps thumbnail/list card behavior small while leaving each card's layout and\ntheme-specific presentation local to gallery_browser.py.\n"""\n\nimport datetime\nimport os\n\nfrom PySide6.QtCore import Qt\nfrom PySide6.QtGui import QPixmap\nfrom PySide6.QtWidgets import QApplication, QMenu\n\n\ndef card_timestamp(plot_path: str) -> str:\n    """Return the gallery timestamp for a plot, or an empty string if unavailable."""\n    try:\n        mtime = os.path.getmtime(plot_path)\n        return datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")\n    except Exception:\n        return ""\n\n\nclass PlotCardInteractionMixin:\n    """Shared click/context-menu behavior for thumbnail and compact plot cards."""\n\n    def mousePressEvent(self, event):\n        if event.button() == Qt.LeftButton:\n            self.sig_selected.emit(self.plot_path)\n        super().mousePressEvent(event)\n\n    def contextMenuEvent(self, event):\n        menu = QMenu(self)\n        a_view = menu.addAction("👁️ View Fullscreen")\n        a_copy = menu.addAction("📋 Copy Image to Clipboard")\n        menu.addSeparator()\n        a_reveal = menu.addAction("📂 Reveal in File Explorer")\n\n        chosen = menu.exec(event.globalPos())\n        if chosen == a_view:\n            self.sig_view_fullscreen.emit(self.plot_path)\n        elif chosen == a_copy:\n            pix = QPixmap(self.plot_path)\n            if not pix.isNull():\n                QApplication.clipboard().setPixmap(pix)\n        elif chosen == a_reveal:\n            os.system(f'explorer /select,"{self.plot_path}"')\n''', encoding='utf-8')
+
+          # Data plotter: extract the self-contained vector export dialog.
+          dp = root / 'pyside6_studio/widgets/data_plotter.py'
+          dtext = dp.read_text(encoding='utf-8')
+          start = dtext.index('class VectorExportDialog(QDialog):')
+          end = dtext.index('\n\nclass InteractiveDataCanvas', start)
+          dialog = dtext[start:end].rstrip() + '\n'
+          ve = root / 'pyside6_studio/widgets/vector_export_dialog.py'
+          ve.write_text('''"""Vector figure export dialog used by the interactive data canvas."""\n\nimport os\n\nfrom PySide6.QtWidgets import (\n    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,\n    QFrame, QFileDialog, QMessageBox, QTextEdit, QCheckBox\n)\n\nfrom matplotlib.figure import Figure\n\n'''+dialog, encoding='utf-8')
+          dtext = dtext[:start] + dtext[end+2:]
+          dtext = dtext.replace('    QMessageBox, QSplitter, QStackedWidget, QDialog, QTextEdit,\n    QCheckBox\n',
+                                '    QMessageBox, QSplitter, QStackedWidget\n')
+          dtext = dtext.replace('from PySide6.QtGui import QColor, QFont\n', 'from PySide6.QtGui import QColor, QFont\n\nfrom pyside6_studio.widgets.vector_export_dialog import VectorExportDialog\n')
+          dp.write_text(dtext, encoding='utf-8')
+
+          # Dataset explorer: remove only redundant whitespace; keep SmartSearchMatcher intact.
+          ds = root / 'pyside6_studio/widgets/dataset_explorer.py'
+          s = ds.read_text(encoding='utf-8')
+          s = s.replace('from pyside6_studio.core.metadata import parse_filename_parameters\n\n\ndef format_bytes',
+                        'from pyside6_studio.core.metadata import parse_filename_parameters\n\n\ndef format_bytes')
+          s = s.replace('''\n\n\n\ndef read_npz_metadata''', '''\n\ndef read_npz_metadata''')
+          ds.write_text(s, encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          python -m compileall -q pyside6_studio
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          for p in [
+              Path('pyside6_studio/widgets/gallery_browser.py'),
+              Path('pyside6_studio/widgets/plot_card_base.py'),
+              Path('pyside6_studio/widgets/data_plotter.py'),
+              Path('pyside6_studio/widgets/vector_export_dialog.py'),
+              Path('pyside6_studio/widgets/dataset_explorer.py'),
+          ]:
+              ast.parse(p.read_text(encoding='utf-8'))
+              print('AST OK:', p)
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add pyside6_studio/widgets
+          git diff --cached --check
+          git commit -m "refactor: extract gallery cards and vector export helpers"
+          git push origin experiment-debloat
