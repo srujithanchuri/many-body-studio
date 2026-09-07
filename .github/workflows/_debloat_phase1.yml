@@ -43,20 +43,17 @@ jobs:
           module_path.parent.mkdir(parents=True, exist_ok=True)
           module_path.write_text(header + block, encoding='utf-8')
 
-          # Import the extracted dialog and remove its old nested definition.
           import_line = 'from pyside6_studio.widgets.cache_manager_dialog import CacheManagerDialog\n'
           anchor = 'from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget\n'
           if import_line not in text:
               if anchor not in text:
                   raise SystemExit('Could not find stable import anchor in main_window.py')
               text = text.replace(anchor, anchor + import_line, 1)
-          text = text[:start] + text[end + 2:]  # retain one blank line before UnifiedWorkbenchWindow
+          text = text[:start] + text[end + 2:]
 
-          # QDialog/QAbstractItemView are no longer needed by main_window after extraction.
           text = text.replace('    QDialog, QAbstractItemView\n', '')
           main_path.write_text(text, encoding='utf-8')
 
-          # Idempotence check: the extracted class must exist only in the new module.
           main_after = main_path.read_text(encoding='utf-8')
           if 'class CacheManagerDialog' in main_after:
               raise SystemExit('Extraction failed: class still present in main_window.py')
