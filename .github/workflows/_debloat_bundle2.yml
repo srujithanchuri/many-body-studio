@@ -1,0 +1,473 @@
+name: Debloat Bundle 2 - Queue Widget
+
+on:
+  push:
+    branches:
+      - experiment-debloat
+
+permissions:
+  contents: write
+
+jobs:
+  extract-queue-widget:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout debloat branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment-debloat
+          fetch-depth: 0
+
+      - name: Extract queue widget
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp pyside6_studio/main_window.py /tmp/main_window.py.bundle2.backup
+          test -f /tmp/main_window.py.bundle2.backup
+
+          cat > /tmp/modify_bundle2.py <<'PY'
+          from pathlib import Path
+          import ast
+
+          root = Path('.')
+          main_path = root / 'pyside6_studio' / 'main_window.py'
+          widget_path = root / 'pyside6_studio' / 'widgets' / 'job_queue.py'
+          text = main_path.read_text(encoding='utf-8')
+
+          if 'from pyside6_studio.widgets.job_queue import JobQueueWidget' in text:
+              print('Bundle 2 already applied; nothing to do.')
+              raise SystemExit(0)
+
+          widget_code = r'''"""Execution queue presentation widget.
+
+          The widget owns queue-table presentation and queue-specific controls.
+          Batch execution state and CalculationBridge orchestration remain in
+          UnifiedWorkbenchWindow.
+          """
+
+          from __future__ import annotations
+
+          from typing import Callable
+
+          from PySide6.QtCore import Qt
+          from PySide6.QtGui import QColor
+          from PySide6.QtWidgets import (
+              QFrame,
+              QHBoxLayout,
+              QHeaderView,
+              QLabel,
+              QMenu,
+              QProgressBar,
+              QPushButton,
+              QTableWidget,
+              QTableWidgetItem,
+              QVBoxLayout,
+              QWidget,
+          )
+
+          from pyside6_studio.core.hardware import get_hardware_info
+
+
+          class JobQueueWidget(QWidget):
+              """Owns the execution-queue table and its presentation controls.
+
+              The parent window still owns the CalculationBridge, queued parameter
+              records, and execution state. Callbacks are deliberately explicit so
+              this widget does not become a generic job-runner abstraction.
+              """
+
+              def __init__(
+                  self,
+                  parent: QWidget | None = None,
+                  *,
+                  on_start: Callable[[], None] | None = None,
+                  on_pause: Callable[[], None] | None = None,
+                  on_add: Callable[[], None] | None = None,
+                  on_clear: Callable[[], None] | None = None,
+                  on_clear_pending: Callable[[], None] | None = None,
+                  on_cancel_all: Callable[[], None] | None = None,
+                  on_cancel_active: Callable[[], None] | None = None,
+                  on_remove_row: Callable[[int], None] | None = None,
+                  on_resize: Callable[[], None] | None = None,
+              ) -> None:
+                  super().__init__(parent)
+                  self._on_start = on_start
+                  self._on_pause = on_pause
+                  self._on_add = on_add
+                  self._on_clear = on_clear
+                  self._on_clear_pending = on_clear_pending
+                  self._on_cancel_all = on_cancel_all
+                  self._on_cancel_active = on_cancel_active
+                  self._on_remove_row = on_remove_row
+                  self._on_resize = on_resize
+                  self._build_ui()
+
+              def _build_ui(self) -> None:
+                  layout = QVBoxLayout(self)
+                  layout.setContentsMargins(6, 6, 6, 6)
+                  layout.setSpacing(6)
+
+                  row = QHBoxLayout()
+                  row.setContentsMargins(0, 0, 0, 0)
+                  row.setSpacing(6)
+
+                  self.btn_start = QPushButton("▶ Run All Pending")
+                  self.btn_start.setObjectName("PrimaryBtn")
+                  self.btn_start.setToolTip("Start running all pending calculation jobs in sequential batch queue")
+                  self.btn_start.setStyleSheet("""
+                      QPushButton {
+                          padding: 4px 13px;
+                          background: #2563eb;
+                          border: 1px solid #1d4ed8;
+                          border-radius: 5px;
+                          font-size: 11px;
+                          font-weight: 700;
+                          color: #ffffff;
+                      }
+                      QPushButton:hover { background: #1d4ed8; }
+                      QPushButton:pressed { background: #1e40af; }
+                  """)
+                  if self._on_start:
+                      self.btn_start.clicked.connect(self._on_start)
+                  row.addWidget(self.btn_start)
+
+                  self.btn_pause = QPushButton("⏸ Pause")
+                  self.btn_pause.setToolTip("Pause batch execution after current step")
+                  if self._on_pause:
+                      self.btn_pause.clicked.connect(self._on_pause)
+                  row.addWidget(self.btn_pause)
+
+                  self.btn_add_to_queue = QPushButton("➕ Add Active Study")
+                  self.btn_add_to_queue.setToolTip("Enqueue current study and parameter snapshot into the batch list")
+                  if self._on_add:
+                      self.btn_add_to_queue.clicked.connect(self._on_add)
+                  row.addWidget(self.btn_add_to_queue)
+
+                  self.btn_clear = QPushButton("🗑 Clear Finished")
+                  self.btn_clear.setToolTip("Remove all completed or cancelled entries from the queue")
+                  if self._on_clear:
+                      self.btn_clear.clicked.connect(self._on_clear)
+                  row.addWidget(self.btn_clear)
+
+                  self.btn_clear_pending = QPushButton("🗑 Clear Pending")
+                  self.btn_clear_pending.setToolTip("Remove all unstarted and queued entries waiting in batch queue")
+                  if self._on_clear_pending:
+                      self.btn_clear_pending.clicked.connect(self._on_clear_pending)
+                  row.addWidget(self.btn_clear_pending)
+
+                  self.btn_cancel_all = QPushButton("⏹ Cancel All")
+                  self.btn_cancel_all.setObjectName("BtnCancelAll")
+                  self.btn_cancel_all.setToolTip("Immediately stop active calculation and cancel all queued jobs")
+                  self.btn_cancel_all.setStyleSheet("""
+                      QPushButton {
+                          padding: 4px 11px;
+                          background: #fef2f2;
+                          border: 1px solid #fca5a5;
+                          border-radius: 5px;
+                          font-size: 11px;
+                          font-weight: 600;
+                          color: #b91c1c;
+                      }
+                      QPushButton:hover {
+                          background: #fee2e2;
+                          border-color: #ef4444;
+                          color: #991b1b;
+                      }
+                  """)
+                  if self._on_cancel_all:
+                      self.btn_cancel_all.clicked.connect(self._on_cancel_all)
+                  row.addWidget(self.btn_cancel_all)
+                  row.addStretch(1)
+
+                  self.lbl_queue_badge = QLabel("0 Jobs Queued")
+                  row.addWidget(self.lbl_queue_badge)
+                  layout.addLayout(row)
+
+                  self.table_queue = QTableWidget(0, 6)
+                  self.table_queue.setObjectName("QueueTable")
+                  self.table_queue.setHorizontalHeaderLabels(
+                      ["#", "Study", "Parameters Snapshot", "Solver", "Progress", "Status"]
+                  )
+                  self.table_queue.setContextMenuPolicy(Qt.CustomContextMenu)
+                  self.table_queue.customContextMenuRequested.connect(self._on_context_menu)
+
+                  original_key_press = self.table_queue.keyPressEvent
+
+                  def queue_key_press(event):
+                      if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+                          selected_rows = sorted(
+                              set(idx.row() for idx in self.table_queue.selectedIndexes()),
+                              reverse=True,
+                          )
+                          for row_index in selected_rows:
+                              self.remove_row(row_index)
+                      else:
+                          original_key_press(event)
+
+                  self.table_queue.keyPressEvent = queue_key_press
+
+                  header = self.table_queue.horizontalHeader()
+                  header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                  header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+                  header.setSectionResizeMode(2, QHeaderView.Stretch)
+                  header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+                  header.setSectionResizeMode(4, QHeaderView.Fixed)
+                  self.table_queue.setColumnWidth(4, 130)
+                  header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+                  self.table_queue.verticalHeader().setDefaultSectionSize(26)
+                  self.table_queue.verticalHeader().setVisible(False)
+                  self.table_queue.setShowGrid(True)
+                  self.table_queue.setAlternatingRowColors(True)
+                  layout.addWidget(self.table_queue)
+
+              def create_row(
+                  self,
+                  study_name: str,
+                  summary: str,
+                  solver_choice: str,
+                  status: str = "⏳ Queued",
+              ) -> int:
+                  """Create a standardized queue row and return its row index."""
+                  row = self.table_queue.rowCount()
+                  self.table_queue.insertRow(row)
+
+                  item_num = QTableWidgetItem(str(row + 1))
+                  item_num.setTextAlignment(Qt.AlignCenter)
+                  self.table_queue.setItem(row, 0, item_num)
+
+                  item_study = QTableWidgetItem(study_name)
+                  font_study = item_study.font()
+                  font_study.setBold(True)
+                  item_study.setFont(font_study)
+                  item_study.setForeground(QColor("#60a5fa") if self.is_dark else QColor("#2563eb"))
+                  self.table_queue.setItem(row, 1, item_study)
+
+                  item_snap = QTableWidgetItem(summary)
+                  item_snap.setTextAlignment(Qt.AlignCenter)
+                  item_snap.setForeground(QColor("#94a3b8") if self.is_dark else QColor("#475569"))
+                  self.table_queue.setItem(row, 2, item_snap)
+
+                  hw = get_hardware_info()
+                  gpu_name = hw.get("name", "CUDA GPU")
+                  solver_str = f"{gpu_name} (GPU)" if solver_choice == "gpu" else "CPU (Multi-Core)"
+                  item_solver = QTableWidgetItem(solver_str)
+                  item_solver.setTextAlignment(Qt.AlignCenter)
+                  self.table_queue.setItem(row, 3, item_solver)
+
+                  prog = QProgressBar()
+                  prog.setStyleSheet("""
+                      QProgressBar {
+                          border: 1px solid #cbd5e1;
+                          border-radius: 4px;
+                          text-align: center;
+                          background: #f1f5f9;
+                          font-size: 10px;
+                          font-weight: 600;
+                          color: #0f172a;
+                          height: 16px;
+                      }
+                      QProgressBar::chunk {
+                          background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #2563eb);
+                          border-radius: 3px;
+                      }
+                  """)
+                  if status.startswith("🔄"):
+                      prog.setRange(0, 0)
+                  else:
+                      prog.setRange(0, 100)
+                      prog.setValue(0)
+                  self.table_queue.setCellWidget(row, 4, prog)
+
+                  item_status = QTableWidgetItem(status)
+                  item_status.setTextAlignment(Qt.AlignCenter)
+                  self.table_queue.setItem(row, 5, item_status)
+                  self.request_resize()
+                  return row
+
+              def remove_row(self, row: int) -> None:
+                  """Request row removal while retaining execution ownership in the main window."""
+                  if 0 <= row < self.table_queue.rowCount() and self._on_remove_row:
+                      self._on_remove_row(row)
+
+              def _on_context_menu(self, pos) -> None:
+                  row = self.table_queue.rowAt(pos.y())
+                  menu = QMenu(self)
+
+                  if 0 <= row < self.table_queue.rowCount():
+                      item = self.table_queue.item(row, 5)
+                      status = item.text() if item else ""
+                      if any(k in status for k in ["Running", "Solving", "🔄"]):
+                          action = menu.addAction("⏹ Cancel Active Calculation")
+                          if self._on_cancel_active:
+                              action.triggered.connect(self._on_cancel_active)
+                      elif any(k in status for k in ["Queued", "Pending", "⏳"]):
+                          action = menu.addAction("🗑 Remove from Queue")
+                          action.triggered.connect(lambda: self.remove_row(row))
+                      else:
+                          action = menu.addAction("🗑 Remove Entry")
+                          action.triggered.connect(lambda: self.remove_row(row))
+                      menu.addSeparator()
+
+                  action = menu.addAction("🗑 Clear All Pending")
+                  if self._on_clear_pending:
+                      action.triggered.connect(self._on_clear_pending)
+                  action = menu.addAction("🗑 Clear All Finished / Cancelled")
+                  if self._on_clear:
+                      action.triggered.connect(self._on_clear)
+                  action = menu.addAction("⏹ Cancel All Calculations")
+                  if self._on_cancel_all:
+                      action.triggered.connect(self._on_cancel_all)
+                  menu.exec(self.table_queue.viewport().mapToGlobal(pos))
+
+              def clear_finished(self, queued_param_list: list, active_queue_row: int) -> tuple[list, int, int]:
+                  """Remove completed/failed/cancelled rows and return updated queue state."""
+                  row = 0
+                  removed = 0
+                  while row < self.table_queue.rowCount():
+                      item = self.table_queue.item(row, 5)
+                      status = item.text() if item else ""
+                      if any(tag in status for tag in ["Completed", "Failed", "Cancelled", "Error", "⏹", "✅", "❌"]):
+                          self.table_queue.removeRow(row)
+                          removed += 1
+                          if active_queue_row > row:
+                              active_queue_row -= 1
+                          for job in queued_param_list:
+                              if job.get("row_idx", 0) > row:
+                                  job["row_idx"] -= 1
+                      else:
+                          row += 1
+                  self.renumber()
+                  self.request_resize()
+                  return queued_param_list, active_queue_row, removed
+
+              def clear_pending(self, queued_param_list: list, active_queue_row: int) -> tuple[list, int, int]:
+                  """Remove unstarted jobs while preserving active and finished records."""
+                  queued_param_list.clear()
+                  row = 0
+                  removed = 0
+                  while row < self.table_queue.rowCount():
+                      item = self.table_queue.item(row, 5)
+                      status = item.text() if item else ""
+                      if any(tag in status for tag in ["Running", "Solving", "🔄"]):
+                          row += 1
+                      elif any(tag in status for tag in ["Completed", "Failed", "Cancelled", "Error", "⏹", "✅", "❌"]):
+                          row += 1
+                      else:
+                          self.table_queue.removeRow(row)
+                          removed += 1
+                          if active_queue_row > row:
+                              active_queue_row -= 1
+                  self.renumber()
+                  self.request_resize()
+                  return queued_param_list, active_queue_row, removed
+
+              def renumber(self) -> None:
+                  for row in range(self.table_queue.rowCount()):
+                      self.table_queue.setItem(row, 0, QTableWidgetItem(str(row + 1)))
+
+              def request_resize(self) -> None:
+                  if self._on_resize:
+                      self._on_resize()
+
+              def update_badge(self) -> None:
+                  count = self.table_queue.rowCount()
+                  self.lbl_queue_badge.setText(
+                      "0 Jobs Queued" if count == 0 else f"{count} Job{'s' if count != 1 else ''} Total"
+                  )
+
+              @property
+              def is_dark(self) -> bool:
+                  parent = self.parentWidget()
+                  return bool(getattr(parent, "is_dark", False))
+          '''
+
+          widget_path.parent.mkdir(parents=True, exist_ok=True)
+          widget_path.write_text(widget_code + '\n', encoding='utf-8')
+
+          # Replace only the queue-tab construction inside _build_bottom_drawer_dock.
+          start_marker = '        # Tab 1: Batch Queue\n'
+          end_marker = '        # Tab 2: Console\n'
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          replacement = '''        # Tab 1: Batch Queue\n        self.queue_widget = JobQueueWidget(\n            self,\n            on_start=self.start_queue,\n            on_pause=self.pause_queue,\n            on_add=self.add_to_queue,\n            on_clear=self.clear_queue,\n            on_clear_pending=self.clear_pending_queue,\n            on_cancel_all=self.cancel_all_queue,\n            on_cancel_active=self.cancel_simulation_ui,\n            on_remove_row=self._remove_queued_row,\n            on_resize=self._adjust_bottom_dock_height,\n        )\n\n        # Compatibility aliases preserve the existing main-window/test contract.\n        self.btn_start = self.queue_widget.btn_start\n        self.btn_pause = self.queue_widget.btn_pause\n        self.btn_add_to_queue = self.queue_widget.btn_add_to_queue\n        self.btn_clear = self.queue_widget.btn_clear\n        self.btn_clear_pending = self.queue_widget.btn_clear_pending\n        self.btn_cancel_all = self.queue_widget.btn_cancel_all\n        self.lbl_queue_badge = self.queue_widget.lbl_queue_badge\n        self.table_queue = self.queue_widget.table_queue\n        self.bottom_tabs.addTab(self.queue_widget, "📋 Queue (0)")\n\n'''
+          text = text[:start] + replacement + text[end:]
+
+          # Add import alongside other widget imports.
+          import_marker = 'from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget\n'
+          if import_marker not in text:
+              raise RuntimeError('Could not find stable widget import marker')
+          text = text.replace(import_marker, import_marker + 'from pyside6_studio.widgets.job_queue import JobQueueWidget\n', 1)
+
+          # Replace the old queue presentation helpers with thin compatibility wrappers.
+          def replace_method(src: str, method_name: str, new_method: str) -> str:
+              marker = f'    def {method_name}'
+              begin = src.index(marker)
+              next_def = src.find('\n    def ', begin + len(marker))
+              if next_def == -1:
+                  raise RuntimeError(f'No next method found after {method_name}')
+              return src[:begin] + new_method.rstrip() + '\n' + src[next_def + 1:]
+
+          text = replace_method(text, '_create_queue_row', '''    def _create_queue_row(self, study_name: str, summary: str, solver_choice: str, status: str = "⏳ Queued") -> int:\n        """Compatibility wrapper; row presentation lives in JobQueueWidget."""\n        return self.queue_widget.create_row(study_name, summary, solver_choice, status)\n''')
+
+          text = replace_method(text, '_on_queue_table_context_menu', '''    def _on_queue_table_context_menu(self, pos):\n        """Compatibility wrapper for the queue widget context menu."""\n        self.queue_widget._on_context_menu(pos)\n''')
+
+          text = replace_method(text, '_remove_queued_row', '''    def _remove_queued_row(self, row: int):\n        """Remove a queue row while preserving execution-state ownership in the main window."""\n        if 0 <= row < self.table_queue.rowCount():\n            item = self.table_queue.item(row, 5)\n            status = item.text() if item else ""\n            if any(k in status for k in ["Running", "Solving", "🔄"]):\n                self.cancel_simulation_ui()\n                return\n            if hasattr(self, "queued_param_list"):\n                self.queued_param_list = [job for job in self.queued_param_list if job.get("row_idx") != row]\n                for job in self.queued_param_list:\n                    if job.get("row_idx", 0) > row:\n                        job["row_idx"] -= 1\n            self.table_queue.removeRow(row)\n            if hasattr(self, "active_queue_row") and self.active_queue_row > row:\n                self.active_queue_row -= 1\n            self.queue_widget.renumber()\n            self._adjust_bottom_dock_height()\n''')
+
+          text = replace_method(text, 'clear_queue', '''    def clear_queue(self):\n        """Removes all finished entries; queue presentation is owned by JobQueueWidget."""\n        jobs = getattr(self, "queued_param_list", [])\n        active = getattr(self, "active_queue_row", -1)\n        self.queued_param_list, self.active_queue_row, removed = self.queue_widget.clear_finished(jobs, active)\n        if removed > 0:\n            self.lbl_status.setText(f"Cleared {removed} finished job(s) from batch queue.")\n        else:\n            self.lbl_status.setText("No finished jobs to clear from batch queue.")\n''')
+
+          text = replace_method(text, 'clear_pending_queue', '''    def clear_pending_queue(self):\n        """Clears pending queue entries while preserving active and finished records."""\n        jobs = getattr(self, "queued_param_list", [])\n        active = getattr(self, "active_queue_row", -1)\n        self.queued_param_list, self.active_queue_row, removed = self.queue_widget.clear_pending(jobs, active)\n        if removed > 0:\n            self.lbl_status.setText(f"Cleared {removed} pending job(s) from batch queue.")\n        else:\n            self.lbl_status.setText("No pending jobs to clear from batch queue.")\n''')
+
+          # Keep dock sizing in main because it is a MainWindow concern; delegate badge/tab presentation.
+          old_adjust_start = text.index('    def _adjust_bottom_dock_height')
+          old_adjust_end = text.index('\n    def start_queue', old_adjust_start)
+          new_adjust = '''    def _adjust_bottom_dock_height(self):\n        """Resize Execution Center and refresh queue widget presentation state."""\n        n_rows = self.table_queue.rowCount()\n        base_h = 165\n        row_h = 30\n        max_allowed = min(420, int(self.height() * 0.50))\n        desired_h = min(max_allowed, base_h + max(1, n_rows) * row_h)\n        self.dock_bottom.setMaximumHeight(max_allowed + 30)\n        self.resizeDocks([self.dock_bottom], [desired_h], Qt.Vertical)\n        if hasattr(self, "queue_widget"):\n            self.queue_widget.update_badge()\n            self.bottom_tabs.setTabText(0, f"📋 Queue ({n_rows})")\n'''
+          text = text[:old_adjust_start] + new_adjust + text[old_adjust_end:]
+
+          # The queue widget now owns the context-menu signal. Keep the old method only as a compatibility wrapper.
+          # Ensure no stale connection remains from the extracted build code.
+          text = text.replace('self.table_queue.customContextMenuRequested.connect(self._on_queue_table_context_menu)\n\n', '', 1)
+
+          # Validate before writing.
+          ast.parse(widget_code)
+          ast.parse(text)
+          main_path.write_text(text, encoding='utf-8')
+          print('Bundle 2 transformation completed and AST validated.')
+          PY
+
+          python /tmp/modify_bundle2.py
+
+          python -m py_compile pyside6_studio/main_window.py pyside6_studio/widgets/job_queue.py
+          python - <<'PY'
+          from pathlib import Path
+          main = Path('pyside6_studio/main_window.py').read_text(encoding='utf-8')
+          widget = Path('pyside6_studio/widgets/job_queue.py').read_text(encoding='utf-8')
+          required_main = [
+              'from pyside6_studio.widgets.job_queue import JobQueueWidget',
+              'self.queue_widget = JobQueueWidget(',
+              'self.table_queue = self.queue_widget.table_queue',
+          ]
+          required_widget = [
+              'class JobQueueWidget',
+              'def create_row(',
+              'def clear_finished(',
+              'def clear_pending(',
+              'def _on_context_menu(',
+          ]
+          assert all(x in main for x in required_main), 'main_window queue integration incomplete'
+          assert all(x in widget for x in required_widget), 'job_queue extraction incomplete'
+          assert 'class CacheManagerDialog' not in main
+          assert 'def parse_filename_parameters' not in main
+          assert 'def parse_plot_metadata' not in main
+          print('Structural Bundle 2 checks passed.')
+          PY
+
+          git diff --check
+          git status --short
+          git diff --stat
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyside6_studio/main_window.py pyside6_studio/widgets/job_queue.py
+          git commit -m "refactor: extract execution queue widget"
+          git push origin HEAD:experiment-debloat
