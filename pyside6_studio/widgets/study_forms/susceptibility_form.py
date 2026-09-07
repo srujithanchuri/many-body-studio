@@ -47,5 +47,4 @@ def build_susceptibility_form(window):
     self.lbl_susc_fixed_desc.setWordWrap(True)
     gsusc.addWidget(self.lbl_susc_fixed_desc)
 
-    self.param_stack.addWidget(grp_susc)
-    return addWidget
+    return grp_susc

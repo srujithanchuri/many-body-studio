@@ -55,5 +55,4 @@ def build_conductivity_form(window):
     h_cond_cut.addWidget(self.spin_cond_wactive)
     gcond.addLayout(h_cond_cut)
 
-    self.param_stack.addWidget(grp_cond)
-    return addWidget
+    return grp_cond

@@ -38,5 +38,4 @@ def build_spectral_form(window):
     self.lbl_se_fixed_desc.setStyleSheet("color: #64748b; font-size: 11px;")
     self.lbl_se_fixed_desc.setWordWrap(True)
     gse.addWidget(self.lbl_se_fixed_desc)
-    self.param_stack.addWidget(grp_se)
-    return addWidget
+    return grp_se

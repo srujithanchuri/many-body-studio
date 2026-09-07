@@ -70,5 +70,4 @@ def build_spectral_function_form(window):
         "Spectral Function Only A(k, ω) [1 Panel]"
     ])
     gsp.addWidget(self.cb_layout)
-    self.param_stack.addWidget(grp_spec)
-    return addWidget
+    return grp_spec

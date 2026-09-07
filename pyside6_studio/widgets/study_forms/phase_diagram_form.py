@@ -16,5 +16,4 @@ def build_phase_diagram_form(window):
     btn_pre = QPushButton("⚡ Precompute Bare χ₀ (Bubble)")
     btn_pre.clicked.connect(self._on_precompute_bubble)
     gpd.addWidget(btn_pre)
-    self.param_stack.addWidget(grp_pd)
-    return addWidget
+    return grp_pd
