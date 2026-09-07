@@ -51,7 +51,7 @@ jobs:
               'import os\n'
               'import re\n'
               'from typing import Tuple\n\n\n'
-              + parse_params + '\n\n\n' + parse_plot + '\n',
+              + parse_params + '\n\n\n' + parse_plot,
               encoding='utf-8',
           )
 
@@ -63,12 +63,10 @@ jobs:
                   if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
                       start = node.lineno - 1
                       end = node.end_lineno
-                      new = ''.join(lines[:start] + lines[end:])
-                      path.write_text(new, encoding='utf-8')
+                      path.write_text(''.join(lines[:start] + lines[end:]), encoding='utf-8')
                       return
               raise SystemExit(f'{name} not found in {path}')
 
-          # Remove the duplicate definitions while preserving all callers via imports.
           remove_top_level_function(dataset, 'parse_filename_parameters')
           remove_top_level_function(gallery, 'parse_plot_metadata')
 
@@ -80,31 +78,14 @@ jobs:
                   raise SystemExit(f'Import anchor not found in {path}: {anchor}')
               path.write_text(text.replace(anchor, anchor + import_line, 1), encoding='utf-8')
 
-          ensure_import(
-              dataset,
-              'from pyside6_studio.core.metadata import parse_filename_parameters\n',
-              'from pyside6_studio.core.cache_manager import normalize_results_dir\n',
-          )
-          ensure_import(
-              gallery,
-              'from pyside6_studio.core.metadata import parse_plot_metadata, parse_filename_parameters\n',
-              'from pyside6_studio.core.cache_manager import normalize_results_dir\n',
-          )
-          ensure_import(
-              main,
-              'from pyside6_studio.core.metadata import parse_plot_metadata\n',
-              'from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget\n',
-          )
+          ensure_import(dataset, 'from pyside6_studio.core.metadata import parse_filename_parameters\n', 'from pyside6_studio.core.cache_manager import normalize_results_dir\n')
+          ensure_import(gallery, 'from pyside6_studio.core.metadata import parse_plot_metadata, parse_filename_parameters\n', 'from pyside6_studio.core.cache_manager import normalize_results_dir\n')
+          ensure_import(main, 'from pyside6_studio.core.metadata import parse_plot_metadata\n', 'from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget\n')
 
-          # main_window no longer needs the parser imported through gallery_browser.
           text = main.read_text(encoding='utf-8')
-          text = text.replace(
-              'from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot_metadata\n',
-              'from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget\n',
-          )
+          text = text.replace('from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget, parse_plot_metadata\n', 'from pyside6_studio.widgets.gallery_browser import PlotGalleryWidget\n')
           main.write_text(text, encoding='utf-8')
 
-          # Validate syntax and ensure only the shared module defines these parsers.
           for path in (metadata, dataset, gallery, main):
               ast.parse(path.read_text(encoding='utf-8'))
           assert 'def parse_filename_parameters' in metadata.read_text(encoding='utf-8')
