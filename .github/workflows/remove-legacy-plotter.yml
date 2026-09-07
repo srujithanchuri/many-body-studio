@@ -14,6 +14,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           def replace(path, old, new):
               p = Path(path)
@@ -27,7 +28,6 @@ jobs:
               'from pyside6_studio.widgets.data_plotter import InteractiveDataCanvas, VectorExportDialog\n',
               ''
           )
-
           replace(
               'pyside6_studio/widgets/__init__.py',
               '- InteractiveDataCanvas: Dynamic multi-curve dataset slice plotter.\n',
@@ -44,7 +44,6 @@ jobs:
               ''
           )
 
-          # The dedicated visualizer test covered the deleted legacy widget.
           p = Path('tests/test_dataset_explorer.py')
           s = p.read_text(encoding='utf-8')
           s = s.replace(' and InteractiveDataCanvas', '')
@@ -55,27 +54,23 @@ jobs:
           s = s.replace('test_06_smart_parameter_search_matrix', 'test_05_smart_parameter_search_matrix')
           p.write_text(s, encoding='utf-8')
 
-          # Remove stale documentation statements about the already-scrapped workspace.
-          for path in ['README.md', 'docs/HOW_TO_USE.md', 'STUDIO_ARCHITECTURE_PLAN.md', 'tools/build_user_guide.py', 'AGENTS.md']:
+          for path in ['README.md', 'docs/HOW_TO_USE.md', 'STUDIO_ARCHITECTURE_PLAN.md', 'tools/build_user_guide.py', 'AGENTS.md', 'pyside6_studio/main_window.py']:
               p = Path(path)
               s = p.read_text(encoding='utf-8')
               lines = s.splitlines(keepends=True)
               kept = [line for line in lines if 'Figure Composer' not in line and 'FigureComposer' not in line]
               p.write_text(''.join(kept), encoding='utf-8')
 
-          # Remove stale Data Plotter documentation entry.
           p = Path('AGENTS.md')
-          s = p.read_text(encoding='utf-8')
-          s = '\n'.join(line for line in s.split('\n') if 'widgets/data_plotter.py' not in line and 'InteractiveDataCanvas' not in line)
+          s = '\n'.join(line for line in p.read_text(encoding='utf-8').split('\n') if 'widgets/data_plotter.py' not in line and 'InteractiveDataCanvas' not in line)
           p.write_text(s, encoding='utf-8')
 
-          # Generated HTML user guide is derived from the Markdown source; remove the stale note here too.
           p = Path('docs/HOW_TO_USE.html')
           if p.exists():
               s = p.read_text(encoding='utf-8')
-              import re
               s = re.sub(r'<[^>]*>[^<]*Standalone Figure Composer workspace plan was scrapped[^<]*</[^>]*>', '', s)
               s = re.sub(r'[^<]*Standalone Figure Composer workspace plan was scrapped[^<]*', '', s)
+              s = '\n'.join(line.rstrip() for line in s.splitlines()) + '\n'
               p.write_text(s, encoding='utf-8')
           PY
 
