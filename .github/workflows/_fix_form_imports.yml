@@ -1,0 +1,44 @@
+name: Fix Study Form Imports
+
+on:
+  push:
+    branches: [experiment-debloat]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment-debloat
+          fetch-depth: 1
+      - name: Fix imports
+        shell: python
+        run: |
+          from pathlib import Path
+          import ast
+          p=Path('pyside6_studio/main_window.py')
+          text=p.read_text(encoding='utf-8')
+          replacements={
+            'pyside6_studio.widgets.study_forms.spectral import build_spectral_form':'pyside6_studio.widgets.study_forms.spectral_form import build_spectral_form',
+            'pyside6_studio.widgets.study_forms.self_energy import build_spectral_function_form':'pyside6_studio.widgets.study_forms.self_energy_form import build_spectral_function_form',
+            'pyside6_studio.widgets.study_forms.phase_diagram import build_phase_diagram_form':'pyside6_studio.widgets.study_forms.phase_diagram_form import build_phase_diagram_form',
+            'pyside6_studio.widgets.study_forms.susceptibility import build_susceptibility_form':'pyside6_studio.widgets.study_forms.susceptibility_form import build_susceptibility_form',
+            'pyside6_studio.widgets.study_forms.conductivity import build_conductivity_form':'pyside6_studio.widgets.study_forms.conductivity_form import build_conductivity_form',
+          }
+          for old,new in replacements.items(): text=text.replace(old,new)
+          p.write_text(text,encoding='utf-8')
+          ast.parse(text)
+          for f in ['spectral_form.py','self_energy_form.py','phase_diagram_form.py','susceptibility_form.py','conductivity_form.py','form_helpers.py']:
+              ast.parse((Path('pyside6_studio/widgets/study_forms')/f).read_text(encoding='utf-8'))
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyside6_studio/main_window.py
+          git diff --cached --check
+          git commit -m "fix: correct study form module imports"
+          git push origin HEAD:experiment-debloat
