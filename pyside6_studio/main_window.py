@@ -44,11 +44,11 @@ from pyside6_studio.widgets.interactive_plots import InteractivePlotsWidget
 from pyside6_studio.widgets.interactive_mode_nav import InteractiveModeNavWidget
 from pyside6_studio.core.metadata import parse_plot_metadata
 from pyside6_studio.widgets.cache_manager_dialog import CacheManagerDialog
-from pyside6_studio.widgets.study_forms.spectral import build_spectral_form
-from pyside6_studio.widgets.study_forms.self_energy import build_spectral_function_form
-from pyside6_studio.widgets.study_forms.phase_diagram import build_phase_diagram_form
-from pyside6_studio.widgets.study_forms.susceptibility import build_susceptibility_form
-from pyside6_studio.widgets.study_forms.conductivity import build_conductivity_form
+from pyside6_studio.widgets.study_forms.spectral_form import build_spectral_form
+from pyside6_studio.widgets.study_forms.self_energy_form import build_spectral_function_form
+from pyside6_studio.widgets.study_forms.phase_diagram_form import build_phase_diagram_form
+from pyside6_studio.widgets.study_forms.susceptibility_form import build_susceptibility_form
+from pyside6_studio.widgets.study_forms.conductivity_form import build_conductivity_form
 
 if getattr(sys, 'frozen', False):
     DEFAULT_RESULTS_DIR = os.path.join(os.path.dirname(sys.executable), "results")
