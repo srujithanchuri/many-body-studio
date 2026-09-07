@@ -37,38 +37,26 @@ jobs:
           def extract_method(path, method_name, next_name):
               text = path.read_text(encoding='utf-8')
               lines, start, end = method_span(text, method_name, next_name)
-              method = ''.join(lines[start:end])
               body = ''.join(lines[start+1:end])
               if not body:
                   raise RuntimeError(f'empty body for {method_name} in {path}')
               return text, lines, start, end, body
 
-          # ------------------------------------------------------------------
-          # Interactive plot controls: move the large widget-construction body
-          # into a dedicated builder while preserving the owner/self contract.
-          # ------------------------------------------------------------------
+          # Interactive plot controls.
           ip = root / 'pyside6_studio/widgets/interactive_plots.py'
           text, lines, start, end, body = extract_method(ip, '_build_ui', 'set_output_dir')
           body_owner = re.sub(r'\bself\b', 'owner', body)
 
-          helper = '''"""UI construction helpers for the Interactive Plots viewport.\n\nThe builder deliberately receives the owning InteractivePlotsWidget so the\ncontroller keeps its existing attributes, callbacks, object names and public\ncompatibility aliases. Physics/state logic remains in interactive_plots.py.\n"""\n\nimport numpy as np\nfrom matplotlib.figure import Figure\nfrom matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT\n\nfrom PySide6.QtCore import Qt, QSize\nfrom PySide6.QtWidgets import (\n    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,\n    QComboBox, QSlider, QFrame, QDoubleSpinBox, QSizePolicy,\n)\n\n\ndef build_interactive_plot_ui(owner):\n'''
-          helper += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
-          (root / 'pyside6_studio/widgets/interactive_plot_controls.py').write_text(helper, encoding='utf-8')
+          helper = '''"""UI construction helpers for the Interactive Plots viewport.\n\nThe builder deliberately receives the owning InteractivePlotsWidget so the\ncontroller keeps its existing attributes, callbacks, object names and public\ncompatibility aliases. Physics/state logic remains in interactive_plots.py.\n"""\n\nimport numpy as np\nfrom matplotlib.figure import Figure\nfrom matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT\n\nfrom PySide6.QtCore import Qt, QSize\nfrom PySide6.QtWidgets import (\n    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,\n    QComboBox, QSlider, QFrame, QDoubleSpinBox, QSizePolicy,\n)\n\n\n'''
 
-          # ModernComboBox lives with the controls it services. Keep a re-export
-          # in interactive_plots.py so any existing external import remains valid.
           class_start = text.index('class ModernComboBox(')
           class_end = text.index('\n\nclass InteractivePlotsWidget(', class_start)
           combo_class = text[class_start:class_end]
-          helper_text = (root / 'pyside6_studio/widgets/interactive_plot_controls.py').read_text(encoding='utf-8')
-          insert_at = helper_text.index('\n\ndef build_interactive_plot_ui')
-          helper_text = helper_text[:insert_at] + '\n\n' + combo_class + helper_text[insert_at:]
-          (root / 'pyside6_studio/widgets/interactive_plot_controls.py').write_text(helper_text, encoding='utf-8')
+          helper += combo_class + '\n\n\ndef build_interactive_plot_ui(owner):\n'
+          helper += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
+          (root / 'pyside6_studio/widgets/interactive_plot_controls.py').write_text(helper, encoding='utf-8')
 
-          # Replace the old class and _build_ui body with compatibility imports/wrapper.
-          new_lines = lines[:class_start if False else 0]
           text2 = text[:class_start] + 'from pyside6_studio.widgets.interactive_plot_controls import ModernComboBox, build_interactive_plot_ui\n\n\n' + text[class_end+2:]
-          # Recompute _build_ui span after class extraction.
           lines2 = text2.splitlines(True)
           s2 = next(i for i, line in enumerate(lines2) if line.startswith('    def _build_ui(self):'))
           e2 = next(i for i in range(s2 + 1, len(lines2)) if lines2[i].startswith('    def set_output_dir('))
@@ -76,21 +64,17 @@ jobs:
           text2 = ''.join(lines2[:s2]) + replacement + ''.join(lines2[e2:])
           ip.write_text(text2, encoding='utf-8')
 
-          # ------------------------------------------------------------------
-          # Interactive plot theme: extract the large dynamic QSS/artist styling
-          # method. The public set_theme method remains as a stable wrapper.
-          # ------------------------------------------------------------------
-          ip = root / 'pyside6_studio/widgets/interactive_plots.py'
+          # Interactive plot theme.
           text = ip.read_text(encoding='utf-8')
           lines = text.splitlines(True)
           s = next(i for i, line in enumerate(lines) if line.startswith('    def set_theme(self, is_dark: bool):'))
           e = next(i for i in range(s + 1, len(lines)) if lines[i].startswith('    @property'))
           body = ''.join(lines[s+1:e])
           body_owner = re.sub(r'\bself\b', 'owner', body)
-          theme_helper = '''"""Theme helpers for the Interactive Plots viewport.\n\nThis module owns presentation-only colors/QSS. It intentionally does not\ncontain numerical or cache/physics logic.\n"""\n\n\ndef apply_interactive_plot_theme(owner, is_dark: bool):\n    owner.is_dark = is_dark\n'''
-          # Original method assigns self.is_dark at the top; skip that duplicate.\n          # Remove the first assignment if present after extraction.\n          body_lines = body_owner.splitlines(True)
+          body_lines = body_owner.splitlines(True)
           if body_lines and body_lines[0].strip() == 'owner.is_dark = is_dark':
               body_owner = ''.join(body_lines[1:])
+          theme_helper = '''"""Theme helpers for the Interactive Plots viewport.\n\nThis module owns presentation-only colors/QSS. It intentionally does not\ncontain numerical or cache/physics logic.\n"""\n\n\ndef apply_interactive_plot_theme(owner, is_dark: bool):\n    owner.is_dark = is_dark\n'''
           theme_helper += ''.join('    ' + line if line.strip() else line for line in body_owner.splitlines(True))
           (root / 'pyside6_studio/widgets/interactive_plot_theme.py').write_text(theme_helper, encoding='utf-8')
 
@@ -100,19 +84,14 @@ jobs:
           new_text = new_text.replace(import_marker, import_marker + 'from pyside6_studio.widgets.interactive_plot_theme import apply_interactive_plot_theme\n')
           ip.write_text(new_text, encoding='utf-8')
 
-          # ------------------------------------------------------------------
-          # Main-window theme: move the large dynamic theme application method
-          # into a focused helper. The public method remains unchanged.
-          # ------------------------------------------------------------------
+          # Main-window theme.
           mw = root / 'pyside6_studio/main_window.py'
           text = mw.read_text(encoding='utf-8')
           lines = text.splitlines(True)
           s = next(i for i, line in enumerate(lines) if line.startswith('    def set_theme(self, is_dark: bool):'))
-          # Find next class-level method; set_theme is followed by another def.
           e = next(i for i in range(s + 1, len(lines)) if lines[i].startswith('    def ') and not lines[i].startswith('    def set_theme('))
           body = ''.join(lines[s+1:e])
           body_owner = re.sub(r'\bself\b', 'owner', body)
-          # Avoid duplicate state assignment in helper signature/body only if exact first line.
           body_lines = body_owner.splitlines(True)
           if body_lines and body_lines[0].strip() == 'owner.is_dark = is_dark':
               body_owner = ''.join(body_lines[1:])
@@ -125,12 +104,11 @@ jobs:
           new_mw = new_mw.replace(marker, marker + 'from pyside6_studio.main_window_theme import apply_main_window_theme\n')
           mw.write_text(new_mw, encoding='utf-8')
 
-          # Syntax validation without importing GUI dependencies.
           for p in [ip, mw, root / 'pyside6_studio/widgets/interactive_plot_controls.py', root / 'pyside6_studio/widgets/interactive_plot_theme.py', root / 'pyside6_studio/main_window_theme.py']:
               ast.parse(p.read_text(encoding='utf-8'), filename=str(p))
 
           print('Bundle 3 extraction complete; AST validation passed.')
-      
+
       - name: Verify and commit
         shell: bash
         run: |
