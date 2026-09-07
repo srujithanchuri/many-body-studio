@@ -49,8 +49,9 @@ jobs:
               if anchor not in text:
                   raise SystemExit('Could not find stable import anchor in main_window.py')
               text = text.replace(anchor, anchor + import_line, 1)
-          text = text[:start] + text[end + 2:]
 
+          # Remove the class as a complete top-level block, preserving the surrounding class indentation.
+          text = text[:start] + '\n\n' + text[end + 2:]
           text = text.replace('    QDialog, QAbstractItemView\n', '')
           main_path.write_text(text, encoding='utf-8')
 
