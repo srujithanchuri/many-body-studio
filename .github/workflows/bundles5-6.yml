@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure git identity
+        run: |
+          git config user.name "Srujith Anchuri"
+          git config user.email "srujithanchuri@gmail.com"
       - name: Apply Bundles 5 and 6
         shell: bash
         run: |
@@ -23,8 +27,6 @@ jobs:
                   raise SystemExit(f'Expected text not found in {path}: {old!r}')
               p.write_text(s.replace(old, new), encoding='utf-8')
 
-          # Bundle 5: move the remaining main-window console styling behind the
-          # existing theme helper module without changing its visual behavior.
           main = Path('pyside6_studio/main_window.py')
           s = main.read_text(encoding='utf-8')
           s = s.replace(
@@ -43,14 +45,10 @@ jobs:
           if old_console not in s:
               raise SystemExit('Console stylesheet block not found in main_window.py')
           s = s.replace(old_console, '        self._update_console_theme(self.is_dark)\n')
-          s = s.replace(
-              '(Note: Legacy standalone Figure Composer workspace was scrapped in favor of direct analytical viewports).\n',
-              ''
-          )
+          s = s.replace('(Note: Legacy standalone Figure Composer workspace was scrapped in favor of direct analytical viewports).\n', '')
           s = s.replace(
               '        (Note: Standalone Figure Composer workspace has been scrapped in favor of\n'
-              '        integrated dual analytical viewports: Plot Viewer & Interactive Plots).\n',
-              ''
+              '        integrated dual analytical viewports: Plot Viewer & Interactive Plots).\n', ''
           )
           main.write_text(s, encoding='utf-8')
 
@@ -64,8 +62,7 @@ jobs:
               t = t.replace(marker, console_fn + marker, 1)
           theme.write_text(t, encoding='utf-8')
 
-          # Bundle 6: refresh the four tracked Markdown documents only.
-          # Generated HTML is intentionally not touched.
+          # Bundle 6: update all tracked Markdown documentation; never touch generated HTML.
           p = Path('README.md')
           r = p.read_text(encoding='utf-8')
           r = r.replace('  - *(Note: Standalone Figure Composer workspace has been scrapped in favor of direct integrated viewports).*\n', '')
