@@ -1,16 +1,13 @@
 name: Bundle 4 Refactor
 
-on:
-  push:
-    paths:
-      - .bundle4-trigger-3
+on: push
 
 permissions:
   contents: write
 
 jobs:
   refactor:
-    if: github.ref == 'refs/heads/experiment-debloat'
+    if: github.ref == 'refs/heads/experiment-debloat' && github.event.head_commit.message != 'refactor: extract gallery cards and vector export helpers'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +20,6 @@ jobs:
           from pathlib import Path
 
           root = Path('.')
-
           gallery = root / 'pyside6_studio/widgets/gallery_browser.py'
           text = gallery.read_text(encoding='utf-8')
           old_import = 'from pyside6_studio.widgets.dataset_explorer import parse_filename_parameters, SmartSearchMatcher'
@@ -33,19 +29,17 @@ jobs:
           text = text.replace(old_import, new_import, 1)
           text = text.replace('class ThumbnailCard(QFrame):', 'class ThumbnailCard(PlotCardInteractionMixin, QFrame):', 1)
           text = text.replace('class CompactRowCard(QFrame):', 'class CompactRowCard(PlotCardInteractionMixin, QFrame):', 1)
-
           timestamp = '''
         # Formatted timestamp
-        try:
+        try
             mtime = os.path.getmtime(self.plot_path)
             self.time_str = datetime.datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")
         except Exception:
             self.time_str = ""
-'''
+'''.replace('try\n', 'try:\n')
           if text.count(timestamp) != 2:
               raise SystemExit(f'expected 2 timestamp blocks, found {text.count(timestamp)}')
           text = text.replace(timestamp, '\n        self.time_str = card_timestamp(self.plot_path)\n', 2)
-
           interaction = '''
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
